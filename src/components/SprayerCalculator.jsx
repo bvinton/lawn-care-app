@@ -99,7 +99,7 @@ export default function SprayerCalculator() {
     const saved = localStorage.getItem('lawnPackSelectedSprinkler');
     return saved && SPRINKLER_OPTIONS[saved] ? saved : 'OSCILLATING';
   });
-  const [showConfig, setShowConfig] = useState(false);
+  const [activeScreen, setActiveScreen] = useState(/** @type {'main' | 'settings'} */ ('main'));
 
   const [userLogs, setUserLogs] = useState(() =>
     /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {}))
@@ -326,27 +326,8 @@ export default function SprayerCalculator() {
         ? '🌧️ Rain Forecasted - Watering Paused'
         : '☀️ Dry Week Predicted - Timers Active';
 
-  return (
-    <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-3xl m-4 p-6 border border-green-100">
-      <div className="flex justify-between items-center mb-6 border-b pb-4">
-        <div>
-          <h2 className="text-xl font-black text-green-800">📋 Lawn Pack Workflow</h2>
-          <p className="text-sm text-green-700 mt-1">
-            <span className="font-black">{sqm} SQM</span>
-            <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowConfig((open) => !open)}
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
-        >
-          {showConfig ? '⚙️ Hide Setup' : '⚙️ Show Setup'}
-        </button>
-      </div>
-
-      {showConfig && (
-        <div className="bg-green-50 p-4 rounded-lg mb-6 space-y-4 border border-green-100">
+  const settingsPanel = (
+    <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-green-900 mb-1">
               Lawn Length: <span className="font-bold text-green-700">{length}m</span>
@@ -442,8 +423,49 @@ export default function SprayerCalculator() {
               })}
             </div>
           </div>
-        </div>
-      )}
+    </div>
+  );
+
+  return (
+    <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-3xl m-4 p-6 border border-green-100">
+      {activeScreen === 'settings' ? (
+        <>
+          <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <div>
+              <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
+              <p className="text-sm text-green-700 mt-1">
+                Dimensions, application tools, and irrigation profile
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveScreen('main')}
+              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+            >
+              ← Back
+            </button>
+          </div>
+
+          <div className="bg-green-50 p-4 rounded-lg border border-green-100">{settingsPanel}</div>
+        </>
+      ) : (
+        <>
+          <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <div>
+              <h2 className="text-xl font-black text-green-800">📋 Lawn Pack Workflow</h2>
+              <p className="text-sm text-green-700 mt-1">
+                <span className="font-black">{sqm} SQM</span>
+                <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveScreen('settings')}
+              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+            >
+              ⚙️ Settings
+            </button>
+          </div>
 
       <section className="mb-6 rounded-xl border border-sky-100 bg-sky-50/40 p-4">
         <h3 className="text-sm font-bold text-gray-800 mb-3">🔧 Maintenance Panel</h3>
@@ -810,6 +832,8 @@ export default function SprayerCalculator() {
             </div>
           </div>
         </section>
+      )}
+        </>
       )}
 
       {enlargedSprinkler && (
