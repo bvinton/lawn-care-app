@@ -65,6 +65,90 @@ function formatInputDate(date) {
   return `${year}-${month}-${day}`;
 }
 
+/** @param {string} dateString ISO YYYY-MM-DD */
+function formatUkPickerDate(dateString) {
+  const [year, month, day] = dateString.split('-');
+  return `${day}/${month}/${year}`;
+}
+
+/** @param {string} text DD/MM/YYYY */
+function parseUkPickerDate(text) {
+  const match = text.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  const candidate = new Date(year, month - 1, day);
+  if (
+    candidate.getFullYear() !== year ||
+    candidate.getMonth() !== month - 1 ||
+    candidate.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return formatInputDate(candidate);
+}
+
+/**
+ * @param {{
+ *   id: string;
+ *   value: string;
+ *   onChange: (isoDate: string) => void;
+ *   max?: string;
+ *   disabled?: boolean;
+ *   className?: string;
+ * }} props
+ */
+function UkDateInput({ id, value, onChange, max, disabled, className }) {
+  const [draft, setDraft] = useState(() => (value ? formatUkPickerDate(value) : ''));
+
+  useEffect(() => {
+    setDraft(value ? formatUkPickerDate(value) : '');
+  }, [value]);
+
+  const commitDraft = () => {
+    if (!draft.trim()) {
+      setDraft(value ? formatUkPickerDate(value) : '');
+      return;
+    }
+
+    const parsed = parseUkPickerDate(draft);
+    if (!parsed || (max && parsed > max)) {
+      setDraft(value ? formatUkPickerDate(value) : '');
+      return;
+    }
+
+    onChange(parsed);
+    setDraft(formatUkPickerDate(parsed));
+  };
+
+  return (
+    <input
+      id={id}
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder="DD/MM/YYYY"
+      lang="en-GB"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commitDraft}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commitDraft();
+        }
+      }}
+      disabled={disabled}
+      className={className}
+    />
+  );
+}
+
 /** @param {import('../data/LawnPackData').SEASONS[string]['steps'][number]} step @param {number} sqm */
 function getStepAmounts(step, sqm) {
   if (step.rates) {
@@ -503,12 +587,11 @@ export default function SprayerCalculator() {
                 >
                   Log Date
                 </label>
-                <input
+                <UkDateInput
                   id="mow-log-date"
-                  type="date"
                   value={pendingMowLogDate}
                   max={todayStr}
-                  onChange={(e) => setPendingMowLogDate(e.target.value)}
+                  onChange={setPendingMowLogDate}
                   disabled={isWinterSeason || seedEstablishmentActive}
                   className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
@@ -572,12 +655,11 @@ export default function SprayerCalculator() {
                 >
                   Log Date
                 </label>
-                <input
+                <UkDateInput
                   id="water-log-date"
-                  type="date"
                   value={pendingWaterLogDate}
                   max={todayStr}
-                  onChange={(e) => setPendingWaterLogDate(e.target.value)}
+                  onChange={setPendingWaterLogDate}
                   disabled={isWinterSeason || isRainForecasted}
                   className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
@@ -753,11 +835,10 @@ export default function SprayerCalculator() {
                     >
                       Target Date
                     </label>
-                    <input
+                    <UkDateInput
                       id={`date-${stepKey}`}
-                      type="date"
                       value={dateInputValue}
-                      onChange={(e) => handlePendingDateChange(step.id, e.target.value)}
+                      onChange={(isoDate) => handlePendingDateChange(step.id, isoDate)}
                       className="w-full bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
