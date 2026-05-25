@@ -310,6 +310,7 @@ export default function SprayerCalculator() {
   );
   const [pendingMowLogDate, setPendingMowLogDate] = useState(() => formatInputDate(new Date()));
   const [pendingWaterLogDate, setPendingWaterLogDate] = useState(() => formatInputDate(new Date()));
+  const [pendingGypsumLogDate, setPendingGypsumLogDate] = useState(() => formatInputDate(new Date()));
 
   const [isRainForecasted, setIsRainForecasted] = useState(false);
   const [forecastedRainSum, setForecastedRainSum] = useState(0);
@@ -1157,18 +1158,38 @@ export default function SprayerCalculator() {
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              setUserLogs((prev) => ({
-                ...prev,
-                [GYPSUM_LOG_KEY]: todayStr,
-              }))
-            }
-            className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 transition-all"
-          >
-            Log Liquid Gypsum Application
-          </button>
+          <div className="space-y-2">
+            <div>
+              <label
+                htmlFor="gypsum-log-date"
+                className="block text-xs font-semibold text-gray-600 mb-1"
+              >
+                Log Date (DD/MM/YYYY)
+              </label>
+              <UkDateInput
+                id="gypsum-log-date"
+                value={pendingGypsumLogDate}
+                max={todayStr}
+                onChange={setPendingGypsumLogDate}
+                className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!pendingGypsumLogDate) return;
+                setUserLogs((prev) => ({
+                  ...prev,
+                  [GYPSUM_LOG_KEY]: pendingGypsumLogDate,
+                }));
+                setPendingGypsumLogDate(todayStr);
+              }}
+              disabled={!pendingGypsumLogDate}
+              className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              Log Liquid Gypsum Application
+            </button>
+          </div>
         </div>
 
         {summerGranularRepeat && (
