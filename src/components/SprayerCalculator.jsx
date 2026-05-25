@@ -19,7 +19,8 @@ const MOWING_DUE_DAYS = 5;
 const WATERING_DUE_DAYS = 3;
 const SEED_ESTABLISHMENT_DAYS = 21;
 const GYPSUM_CYCLE_DAYS = 28;
-const SEED_GERMINATION_SOIL_TEMP_C = 9;
+const SEED_GERMINATION_SOIL_TEMP_MIN_C = 10;
+const SEED_GERMINATION_SOIL_TEMP_MAX_C = 25;
 const GYPSUM_LOG_KEY = 'lastGypsumDate';
 const RAIN_THRESHOLD_MM = 5.0;
 
@@ -39,6 +40,17 @@ function getTodayMaxSoilTemp(data) {
   return hourlyTemps.slice(0, 24).reduce((max, temp) => {
     if (temp == null) return max;
     return max === null ? temp : Math.max(max, temp);
+  }, null);
+}
+
+/** @param {Record<string, unknown>} data */
+function getTodayMinSoilTemp(data) {
+  const hourlyTemps = data?.hourly?.soil_temperature_6cm;
+  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
+
+  return hourlyTemps.slice(0, 24).reduce((min, temp) => {
+    if (temp == null) return min;
+    return min === null ? temp : Math.min(min, temp);
   }, null);
 }
 
@@ -317,6 +329,9 @@ export default function SprayerCalculator() {
   const [currentSoilTemp, setCurrentSoilTemp] = useState(
     /** @type {number | null} */ (null)
   );
+  const [currentSoilTempMin, setCurrentSoilTempMin] = useState(
+    /** @type {number | null} */ (null)
+  );
   const [weatherStatus, setWeatherStatus] = useState('loading');
   const [enlargedSprinkler, setEnlargedSprinkler] = useState(
     /** @type {{ image: string, name: string } | null} */ (null)
@@ -366,10 +381,20 @@ export default function SprayerCalculator() {
       ? GYPSUM_CYCLE_DAYS - daysSinceGypsum
       : 0;
 
+  const soilTempMinForCheck = currentSoilTempMin ?? currentSoilTemp;
+  const soilTempMaxForCheck = currentSoilTemp ?? currentSoilTempMin;
+
   const isSoilTooColdForSeed =
-    currentSoilTemp !== null && currentSoilTemp < SEED_GERMINATION_SOIL_TEMP_C;
-  const isSoilWarmEnoughForSeed =
-    currentSoilTemp !== null && currentSoilTemp >= SEED_GERMINATION_SOIL_TEMP_C;
+    soilTempMinForCheck !== null &&
+    soilTempMinForCheck < SEED_GERMINATION_SOIL_TEMP_MIN_C;
+  const isSoilTooHotForSeed =
+    soilTempMaxForCheck !== null &&
+    soilTempMaxForCheck > SEED_GERMINATION_SOIL_TEMP_MAX_C;
+  const isSoilPrimeForSeed =
+    soilTempMinForCheck !== null &&
+    soilTempMaxForCheck !== null &&
+    !isSoilTooColdForSeed &&
+    !isSoilTooHotForSeed;
 
   const isWinterSeason = currentSeason === 'WINTER';
 
@@ -527,10 +552,12 @@ export default function SprayerCalculator() {
           ? precipitationTotals.reduce((sum, mm) => sum + (mm ?? 0), 0)
           : 0;
         const todaySoilTemp = getTodayMaxSoilTemp(data);
+        const todaySoilTempMin = getTodayMinSoilTemp(data);
 
         if (!cancelled) {
           setForecastedRainSum(totalRain);
           setCurrentSoilTemp(todaySoilTemp);
+          setCurrentSoilTempMin(todaySoilTempMin);
           setIsRainForecasted(totalRain >= RAIN_THRESHOLD_MM);
           setWeatherStatus('ready');
         }
@@ -877,15 +904,18 @@ export default function SprayerCalculator() {
         <div
           id="environmental-status-card"
           data-current-soil-temp={currentSoilTemp ?? ''}
-          data-soil-seed-ready={isSoilWarmEnoughForSeed ? 'true' : 'false'}
+          data-current-soil-temp-min={currentSoilTempMin ?? ''}
+          data-soil-seed-ready={isSoilPrimeForSeed ? 'true' : 'false'}
           className={`mb-3 rounded-lg border p-3 ${
             weatherStatus === 'loading'
               ? 'bg-gray-50 border-gray-200'
               : isSoilTooColdForSeed
                 ? 'bg-red-50 border-red-200'
-                : isSoilWarmEnoughForSeed
-                  ? 'bg-emerald-50 border-emerald-200'
-                  : 'bg-white border-gray-200'
+                : isSoilTooHotForSeed
+                  ? 'bg-amber-50 border-amber-200'
+                  : isSoilPrimeForSeed
+                    ? 'bg-emerald-50 border-emerald-200'
+                    : 'bg-white border-gray-200'
           }`}
         >
           <p className="text-xs font-bold text-gray-800 mb-2">🌡️ Environmental Status</p>
@@ -893,23 +923,36 @@ export default function SprayerCalculator() {
             <p className="text-xs font-medium text-gray-600 leading-snug">
               Fetching 10cm soil temperature…
             </p>
-          ) : currentSoilTemp === null ? (
+          ) : currentSoilTemp === null && currentSoilTempMin === null ? (
             <p className="text-xs font-medium text-gray-600 leading-snug">
               Soil temperature unavailable. Check your connection and refresh.
             </p>
           ) : (
             <>
-              <p className="text-xs font-semibold text-gray-700 mb-2">
-                Today&apos;s 10cm soil max:{' '}
-                <span className="font-black text-gray-900">{currentSoilTemp.toFixed(1)}°C</span>
-              </p>
+              {currentSoilTemp !== null && (
+                <p className="text-xs font-semibold text-gray-700 mb-1">
+                  Today&apos;s 10cm soil max:{' '}
+                  <span className="font-black text-gray-900">{currentSoilTemp.toFixed(1)}°C</span>
+                </p>
+              )}
+              {currentSoilTempMin !== null && (
+                <p className="text-xs font-semibold text-gray-700 mb-2">
+                  Today&apos;s 10cm soil min:{' '}
+                  <span className="font-black text-gray-900">{currentSoilTempMin.toFixed(1)}°C</span>
+                </p>
+              )}
               {isSoilTooColdForSeed ? (
                 <p className="text-xs font-bold text-red-800 leading-snug">
-                  🔴 Soil too cold for seed germination (Wait for 9°C+)
+                  🔴 Too cold — wait for {SEED_GERMINATION_SOIL_TEMP_MIN_C}°C+
+                </p>
+              ) : isSoilTooHotForSeed ? (
+                <p className="text-xs font-bold text-amber-900 leading-snug">
+                  🟠 Too warm — outside ideal range (max {SEED_GERMINATION_SOIL_TEMP_MAX_C}°C)
                 </p>
               ) : (
                 <p className="text-xs font-bold text-emerald-800 leading-snug">
-                  🟢 Prime seed germination window active
+                  🟢 Prime germination window ({SEED_GERMINATION_SOIL_TEMP_MIN_C}–
+                  {SEED_GERMINATION_SOIL_TEMP_MAX_C}°C)
                 </p>
               )}
             </>
