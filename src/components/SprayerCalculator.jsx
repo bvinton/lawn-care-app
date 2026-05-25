@@ -18,10 +18,13 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const MOWING_DUE_DAYS = 5;
 const WATERING_DUE_DAYS = 3;
 const SEED_ESTABLISHMENT_DAYS = 21;
+const GYPSUM_CYCLE_DAYS = 28;
+const SEED_GERMINATION_SOIL_TEMP_C = 9;
+const GYPSUM_LOG_KEY = 'lastGypsumDate';
 const RAIN_THRESHOLD_MM = 5.0;
 
 const OPEN_METEO_URL =
-  'https://api.open-meteo.com/v1/forecast?latitude=54.98&longitude=-1.53&daily=rain_sum&timezone=Europe%2FLondon&forecast_days=7';
+  'https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum,soil_temperature_10cm_max&timezone=Europe%2FLondon';
 
 const SOAK_DEPTH_MM = 10;
 
@@ -61,6 +64,31 @@ const LEVELLING_GUIDE_METHODS = [
 const PET_SAFETY_CLASS =
   'bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs p-3 rounded-lg flex items-center gap-2 mb-2';
 
+const UK_WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const UK_WEEKDAYS_LONG = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+const UK_MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
 /** @param {string | Date} date */
 function startOfDay(date) {
   if (typeof date === 'string') {
@@ -80,13 +108,42 @@ function daysBetween(fromDate, toDate) {
 }
 
 /** @param {string} dateString */
+function formatUkDate(dateString) {
+  if (!dateString) return '';
+  const normalized = startOfDay(dateString);
+  const day = String(normalized.getDate()).padStart(2, '0');
+  const month = String(normalized.getMonth() + 1).padStart(2, '0');
+  const year = normalized.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+/** @param {string} input */
+function parseUkDate(input) {
+  const match = input.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return formatInputDate(date);
+}
+
+/** @param {string} dateString */
 function formatDisplayDate(dateString) {
-  return startOfDay(dateString).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  const normalized = startOfDay(dateString);
+  const weekday = UK_WEEKDAYS_SHORT[normalized.getDay()];
+  const month = UK_MONTHS_SHORT[normalized.getMonth()];
+  return `${weekday}, ${normalized.getDate()} ${month} ${normalized.getFullYear()}`;
 }
 
 /** @param {Date} date */
@@ -96,6 +153,40 @@ function formatInputDate(date) {
   const month = String(normalized.getMonth() + 1).padStart(2, '0');
   const day = String(normalized.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/** @param {{ id?: string, value: string, onChange: (value: string) => void, max?: string, disabled?: boolean, className?: string }} props */
+function UkDateInput({ id, value, onChange, max, disabled, className }) {
+  const [text, setText] = useState(() => formatUkDate(value));
+
+  useEffect(() => {
+    setText(formatUkDate(value));
+  }, [value]);
+
+  const handleBlur = () => {
+    const parsed = parseUkDate(text);
+    if (!parsed || (max && parsed > max)) {
+      setText(formatUkDate(value));
+      return;
+    }
+    onChange(parsed);
+    setText(formatUkDate(parsed));
+  };
+
+  return (
+    <input
+      id={id}
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder="DD/MM/YYYY"
+      value={text}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={handleBlur}
+      disabled={disabled}
+      className={className}
+    />
+  );
 }
 
 /** @param {import('../data/LawnPackData').SEASONS[string]['steps'][number]} step @param {number} sqm */
@@ -165,6 +256,9 @@ export default function SprayerCalculator() {
 
   const [isRainForecasted, setIsRainForecasted] = useState(false);
   const [forecastedRainSum, setForecastedRainSum] = useState(0);
+  const [currentSoilTemp, setCurrentSoilTemp] = useState(
+    /** @type {number | null} */ (null)
+  );
   const [weatherStatus, setWeatherStatus] = useState('loading');
   const [enlargedSprinkler, setEnlargedSprinkler] = useState(
     /** @type {{ image: string, name: string } | null} */ (null)
@@ -204,6 +298,21 @@ export default function SprayerCalculator() {
   const daysSinceMow = lastMowedDate ? daysBetween(lastMowedDate, today) : null;
   const daysSinceWater = lastWateredDate ? daysBetween(lastWateredDate, today) : null;
 
+  const lastGypsumDate = userLogs[GYPSUM_LOG_KEY] ?? null;
+  const daysSinceGypsum = lastGypsumDate ? daysBetween(lastGypsumDate, today) : null;
+  const gypsumDue =
+    lastGypsumDate === null ||
+    (daysSinceGypsum !== null && daysSinceGypsum >= GYPSUM_CYCLE_DAYS);
+  const gypsumDaysRemaining =
+    lastGypsumDate && daysSinceGypsum !== null && daysSinceGypsum < GYPSUM_CYCLE_DAYS
+      ? GYPSUM_CYCLE_DAYS - daysSinceGypsum
+      : 0;
+
+  const isSoilTooColdForSeed =
+    currentSoilTemp !== null && currentSoilTemp < SEED_GERMINATION_SOIL_TEMP_C;
+  const isSoilWarmEnoughForSeed =
+    currentSoilTemp !== null && currentSoilTemp >= SEED_GERMINATION_SOIL_TEMP_C;
+
   const isWinterSeason = currentSeason === 'WINTER';
 
   /** @param {string | null | undefined} lastDateString @param {number} daysToAdd */
@@ -211,7 +320,7 @@ export default function SprayerCalculator() {
     if (!lastDateString) return null;
     const dueDateStr = addDaysToDateString(lastDateString, daysToAdd);
     const dueDate = startOfDay(dueDateStr);
-    const weekday = dueDate.toLocaleDateString('en-GB', { weekday: 'long' });
+    const weekday = UK_WEEKDAYS_LONG[dueDate.getDay()];
     const day = String(dueDate.getDate()).padStart(2, '0');
     const month = String(dueDate.getMonth() + 1).padStart(2, '0');
     const year = dueDate.getFullYear();
@@ -260,6 +369,10 @@ export default function SprayerCalculator() {
     wateringMinutes: dynamicMinutes,
     forecastedRainSum,
     netWaterNeeded,
+    currentSoilTemp,
+    lastGypsumDate,
+    gypsumDaysRemaining,
+    gypsumDue,
     mowerModel,
     lawnSurface,
     recommendedSetting,
@@ -351,18 +464,22 @@ export default function SprayerCalculator() {
         if (!response.ok) throw new Error('Forecast unavailable');
 
         const data = await response.json();
-        const rainTotals = data?.daily?.rain_sum ?? [];
-        const totalRain = rainTotals.reduce((sum, mm) => sum + (mm ?? 0), 0);
+        const precipitationTotals = data?.daily?.precipitation_sum;
+        const totalRain = Array.isArray(precipitationTotals)
+          ? precipitationTotals.reduce((sum, mm) => sum + (mm ?? 0), 0)
+          : 0;
+        const soilTemps = data?.daily?.soil_temperature_10cm_max;
+        const todaySoilTemp =
+          Array.isArray(soilTemps) && soilTemps[0] != null ? soilTemps[0] : null;
 
         if (!cancelled) {
           setForecastedRainSum(totalRain);
+          setCurrentSoilTemp(todaySoilTemp);
           setIsRainForecasted(totalRain >= RAIN_THRESHOLD_MM);
           setWeatherStatus('ready');
         }
       } catch {
         if (!cancelled) {
-          setForecastedRainSum(0);
-          setIsRainForecasted(false);
           setWeatherStatus('error');
         }
       }
@@ -701,6 +818,48 @@ export default function SprayerCalculator() {
           🌦️ 7-Day Weather Radar: {weatherStatusText}
         </div>
 
+        <div
+          id="environmental-status-card"
+          data-current-soil-temp={currentSoilTemp ?? ''}
+          data-soil-seed-ready={isSoilWarmEnoughForSeed ? 'true' : 'false'}
+          className={`mb-3 rounded-lg border p-3 ${
+            weatherStatus === 'loading'
+              ? 'bg-gray-50 border-gray-200'
+              : isSoilTooColdForSeed
+                ? 'bg-red-50 border-red-200'
+                : isSoilWarmEnoughForSeed
+                  ? 'bg-emerald-50 border-emerald-200'
+                  : 'bg-white border-gray-200'
+          }`}
+        >
+          <p className="text-xs font-bold text-gray-800 mb-2">🌡️ Environmental Status</p>
+          {weatherStatus === 'loading' ? (
+            <p className="text-xs font-medium text-gray-600 leading-snug">
+              Fetching 10cm soil temperature…
+            </p>
+          ) : currentSoilTemp === null ? (
+            <p className="text-xs font-medium text-gray-600 leading-snug">
+              Soil temperature unavailable. Check your connection and refresh.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-gray-700 mb-2">
+                Today&apos;s 10cm soil max:{' '}
+                <span className="font-black text-gray-900">{currentSoilTemp.toFixed(1)}°C</span>
+              </p>
+              {isSoilTooColdForSeed ? (
+                <p className="text-xs font-bold text-red-800 leading-snug">
+                  🔴 Soil too cold for seed germination (Wait for 9°C+)
+                </p>
+              ) : (
+                <p className="text-xs font-bold text-emerald-800 leading-snug">
+                  🟢 Prime seed germination window active
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2 sm:items-stretch">
           <div
             id="maintenance-mowing-tracker"
@@ -783,14 +942,13 @@ export default function SprayerCalculator() {
                   htmlFor="mow-log-date"
                   className="block text-xs font-semibold text-gray-600 mb-1"
                 >
-                  Log Date
+                  Log Date (DD/MM/YYYY)
                 </label>
-                <input
+                <UkDateInput
                   id="mow-log-date"
-                  type="date"
                   value={pendingMowLogDate}
                   max={todayStr}
-                  onChange={(e) => setPendingMowLogDate(e.target.value)}
+                  onChange={setPendingMowLogDate}
                   disabled={isWinterSeason || seedEstablishmentActive}
                   className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
@@ -887,14 +1045,13 @@ export default function SprayerCalculator() {
                   htmlFor="water-log-date"
                   className="block text-xs font-semibold text-gray-600 mb-1"
                 >
-                  Log Date
+                  Log Date (DD/MM/YYYY)
                 </label>
-                <input
+                <UkDateInput
                   id="water-log-date"
-                  type="date"
                   value={pendingWaterLogDate}
                   max={todayStr}
-                  onChange={(e) => setPendingWaterLogDate(e.target.value)}
+                  onChange={setPendingWaterLogDate}
                   disabled={isWinterSeason || isNatureProvidingFullSoak}
                   className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
@@ -913,6 +1070,50 @@ export default function SprayerCalculator() {
               </button>
             </div>
           </div>
+        </div>
+
+        <div
+          id="soil-treatments-tracker"
+          data-last-gypsum-date={lastGypsumDate ?? ''}
+          data-gypsum-days-remaining={gypsumDaysRemaining}
+          data-gypsum-due={gypsumDue ? 'true' : 'false'}
+          className={`mt-3 rounded-lg border p-3 ${
+            gypsumDue ? 'bg-amber-50 border-amber-300' : 'bg-white border-gray-200'
+          }`}
+        >
+          <p className="text-xs font-bold text-gray-800 mb-2">🧪 Soil Treatments</p>
+
+          <div className="mb-3 min-h-[2.75rem]">
+            {lastGypsumDate && (
+              <p className="text-xs text-gray-600 leading-snug mb-2">
+                Last Liquid Gypsum: {formatDisplayDate(lastGypsumDate)}
+                {daysSinceGypsum !== null && ` (${daysSinceGypsum} days ago)`}
+              </p>
+            )}
+            {gypsumDue ? (
+              <p className="text-xs font-bold text-amber-900 leading-snug">
+                🟠 Liquid Gypsum due: Maintain soil drainage
+              </p>
+            ) : (
+              <p className="text-xs font-bold text-emerald-800 leading-snug">
+                ✅ Soil draining well (Next dose in {gypsumDaysRemaining} day
+                {gypsumDaysRemaining !== 1 ? 's' : ''})
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setUserLogs((prev) => ({
+                ...prev,
+                [GYPSUM_LOG_KEY]: todayStr,
+              }))
+            }
+            className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 transition-all"
+          >
+            Log Liquid Gypsum Application
+          </button>
         </div>
 
         {summerGranularRepeat && (
@@ -1068,13 +1269,12 @@ export default function SprayerCalculator() {
                       htmlFor={`date-${stepKey}`}
                       className="block text-xs font-semibold text-gray-600 mb-1"
                     >
-                      Target Date
+                      Target Date (DD/MM/YYYY)
                     </label>
-                    <input
+                    <UkDateInput
                       id={`date-${stepKey}`}
-                      type="date"
-                      value={dateInputValue}
-                      onChange={(e) => handlePendingDateChange(step.id, e.target.value)}
+                      value={dateInputValue ?? ''}
+                      onChange={(nextValue) => handlePendingDateChange(step.id, nextValue)}
                       className="w-full bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
