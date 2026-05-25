@@ -25,6 +25,39 @@ const OPEN_METEO_URL =
 
 const SOAK_DEPTH_MM = 10;
 
+const MOWER_OPTIONS = {
+  RYOBI_33: {
+    id: 'RYOBI_33',
+    name: 'Ryobi 18V ONE+ 33cm (5-Height System)',
+  },
+};
+
+const LAWN_SURFACE_OPTIONS = {
+  UNEVEN: {
+    id: 'UNEVEN',
+    label: 'Uneven / Bumpy',
+  },
+  FLAT: {
+    id: 'FLAT',
+    label: 'Perfectly Flat / Smooth',
+  },
+};
+
+const LEVELLING_GUIDE_METHODS = [
+  {
+    title: '1. Light Topdressing (Minor bumps up to 20mm)',
+    text: 'Spread a 50/50 mix of sharp sand and screened topsoil across low areas during active growth (spring or early autumn). Work the mix in with a lawn lute or stiff rake, keeping grass tips visible. Water lightly and repeat in thin layers rather than one deep dump.',
+  },
+  {
+    title: '2. Deep Spot Filling (Medium dips)',
+    text: 'Remove debris from the hollow, fill with topsoil in layers, and firm each layer with your heel or a tamper until level with the surrounding turf. Over-seed the patch or lay fresh turf sods, then keep the area moist until roots establish.',
+  },
+  {
+    title: '3. Turf Lifting (Severe hollows)',
+    text: 'Cut an H-shape through the turf around the sunken area. Peel back both flaps carefully, add and compact topsoil underneath until the surface matches the surrounding lawn, then fold the grass flaps back down. Water thoroughly and avoid heavy traffic until re-rooted.',
+  },
+];
+
 const PET_SAFETY_CLASS =
   'bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs p-3 rounded-lg flex items-center gap-2 mb-2';
 
@@ -99,7 +132,16 @@ export default function SprayerCalculator() {
     const saved = localStorage.getItem('lawnPackSelectedSprinkler');
     return saved && SPRINKLER_OPTIONS[saved] ? saved : 'OSCILLATING';
   });
-  const [showConfig, setShowConfig] = useState(false);
+  const [mowerModel, setMowerModel] = useState(() => {
+    const saved = localStorage.getItem('lawnPackMowerModel');
+    return saved && MOWER_OPTIONS[saved] ? saved : 'RYOBI_33';
+  });
+  const [lawnSurface, setLawnSurface] = useState(() => {
+    const saved = localStorage.getItem('lawnPackLawnSurface');
+    return saved && LAWN_SURFACE_OPTIONS[saved] ? saved : 'UNEVEN';
+  });
+  const [activeScreen, setActiveScreen] = useState('main');
+  const [showLevellingGuide, setShowLevellingGuide] = useState(false);
 
   const [userLogs, setUserLogs] = useState(() =>
     /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {}))
@@ -122,6 +164,7 @@ export default function SprayerCalculator() {
   const [pendingWaterLogDate, setPendingWaterLogDate] = useState(() => formatInputDate(new Date()));
 
   const [isRainForecasted, setIsRainForecasted] = useState(false);
+  const [forecastedRainSum, setForecastedRainSum] = useState(0);
   const [weatherStatus, setWeatherStatus] = useState('loading');
   const [enlargedSprinkler, setEnlargedSprinkler] = useState(
     /** @type {{ image: string, name: string } | null} */ (null)
@@ -129,9 +172,11 @@ export default function SprayerCalculator() {
 
   const activeEquipment = EQUIPMENT_OPTIONS[selectedEquipment];
   const activeSprinkler = SPRINKLER_OPTIONS[selectedSprinkler];
-  const irrigationRuntimeMinutes = Math.round(
-    (SOAK_DEPTH_MM / activeSprinkler.ratePerHour) * 60
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - forecastedRainSum);
+  const dynamicMinutes = Math.round(
+    (netWaterNeeded / SPRINKLER_OPTIONS[selectedSprinkler].ratePerHour) * 60
   );
+  const isNatureProvidingFullSoak = netWaterNeeded === 0;
   const activeSeason = SEASONS[currentSeason];
   const today = startOfDay(new Date());
   const todayStr = formatInputDate(today);
@@ -160,13 +205,78 @@ export default function SprayerCalculator() {
   const daysSinceWater = lastWateredDate ? daysBetween(lastWateredDate, today) : null;
 
   const isWinterSeason = currentSeason === 'WINTER';
+
+  /** @param {string | null | undefined} lastDateString @param {number} daysToAdd */
+  const getNextDueDate = (lastDateString, daysToAdd) => {
+    if (!lastDateString) return null;
+    const dueDateStr = addDaysToDateString(lastDateString, daysToAdd);
+    const dueDate = startOfDay(dueDateStr);
+    const weekday = dueDate.toLocaleDateString('en-GB', { weekday: 'long' });
+    const day = String(dueDate.getDate()).padStart(2, '0');
+    const month = String(dueDate.getMonth() + 1).padStart(2, '0');
+    const year = dueDate.getFullYear();
+    return `${weekday}, ${day}/${month}/${year}`;
+  };
+
+  const mowingNextDueIso = lastMowedDate
+    ? addDaysToDateString(lastMowedDate, MOWING_DUE_DAYS)
+    : null;
+  const wateringNextDueIso = lastWateredDate
+    ? addDaysToDateString(lastWateredDate, WATERING_DUE_DAYS)
+    : null;
+  const mowingLockedUntilIso =
+    seedEstablishmentActive && springSeedDate
+      ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS)
+      : null;
+
+  const mowingNextDate = getNextDueDate(lastMowedDate, MOWING_DUE_DAYS);
+  const wateringNextDate = getNextDueDate(lastWateredDate, WATERING_DUE_DAYS);
+  const seedLockEndDate = getNextDueDate(springSeedDate, SEED_ESTABLISHMENT_DAYS);
+
+  const activeSeasonStep =
+    activeSeason.steps.find((step) => !userLogs[makeStepKey(currentSeason, step.id)]) ?? null;
+  const isOnScarificationPrepStep =
+    currentSeason === 'AUTUMN' && activeSeasonStep?.id === 'prep';
+
+  let recommendedSetting =
+    'Height: Setting 3 (45mm) - Standard safe maintenance cut to prevent scalping';
+  if (currentSeason === 'WINTER') {
+    recommendedSetting = 'Height: N/A - Growth Dormant';
+  } else if (currentSeason === 'SPRING' && seedEstablishmentActive) {
+    recommendedSetting = 'Height: 🚫 LOCKED - Do not mow fresh seed';
+  } else if (isOnScarificationPrepStep) {
+    recommendedSetting = 'Height: Setting 1 (25mm) - Scalp for renovation';
+  } else if (lawnSurface === 'FLAT') {
+    recommendedSetting = 'Height: Setting 2 (35mm) - Standard low maintenance cut';
+  } else if (lawnSurface === 'UNEVEN') {
+    recommendedSetting =
+      'Height: Setting 3 (45mm) - Standard safe maintenance cut to prevent scalping';
+  }
+
+  const maintenanceDueDates = {
+    mowingNextDue: mowingNextDueIso,
+    mowingLockedUntil: mowingLockedUntilIso,
+    wateringNextDue: wateringNextDueIso,
+    wateringMinutes: dynamicMinutes,
+    forecastedRainSum,
+    netWaterNeeded,
+    mowerModel,
+    lawnSurface,
+    recommendedSetting,
+    mowingStatus: isWinterSeason ? 'dormant' : seedEstablishmentActive ? 'locked' : 'active',
+    wateringStatus: isWinterSeason
+      ? 'dormant'
+      : isNatureProvidingFullSoak
+        ? 'paused'
+        : 'active',
+  };
   const mowingDue =
     !isWinterSeason &&
     !seedEstablishmentActive &&
     (daysSinceMow === null || daysSinceMow >= MOWING_DUE_DAYS);
   const wateringDue =
     !isWinterSeason &&
-    !isRainForecasted &&
+    !isNatureProvidingFullSoak &&
     (daysSinceWater === null || daysSinceWater >= WATERING_DUE_DAYS);
 
   const summerGranularRepeat = getGranularRepeatDate('SUMMER', userLogs);
@@ -224,6 +334,14 @@ export default function SprayerCalculator() {
   }, [selectedSprinkler]);
 
   useEffect(() => {
+    localStorage.setItem('lawnPackMowerModel', mowerModel);
+  }, [mowerModel]);
+
+  useEffect(() => {
+    localStorage.setItem('lawnPackLawnSurface', lawnSurface);
+  }, [lawnSurface]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function fetchRainForecast() {
@@ -237,11 +355,13 @@ export default function SprayerCalculator() {
         const totalRain = rainTotals.reduce((sum, mm) => sum + (mm ?? 0), 0);
 
         if (!cancelled) {
+          setForecastedRainSum(totalRain);
           setIsRainForecasted(totalRain >= RAIN_THRESHOLD_MM);
           setWeatherStatus('ready');
         }
       } catch {
         if (!cancelled) {
+          setForecastedRainSum(0);
           setIsRainForecasted(false);
           setWeatherStatus('error');
         }
@@ -328,124 +448,245 @@ export default function SprayerCalculator() {
 
   return (
     <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-3xl m-4 p-6 border border-green-100">
-      <div className="flex justify-between items-center mb-6 border-b pb-4">
-        <div>
-          <h2 className="text-xl font-black text-green-800">📋 Lawn Pack Workflow</h2>
-          <p className="text-sm text-green-700 mt-1">
-            <span className="font-black">{sqm} SQM</span>
-            <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowConfig((open) => !open)}
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
-        >
-          {showConfig ? '⚙️ Hide Setup' : '⚙️ Show Setup'}
-        </button>
-      </div>
-
-      {showConfig && (
-        <div className="bg-green-50 p-4 rounded-lg mb-6 space-y-4 border border-green-100">
-          <div>
-            <label className="block text-sm font-medium text-green-900 mb-1">
-              Lawn Length: <span className="font-bold text-green-700">{length}m</span>
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="30"
-              value={length}
-              onChange={(e) => setLength(parseInt(e.target.value, 10))}
-              className="w-full accent-green-600"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-green-900 mb-1">
-              Lawn Width: <span className="font-bold text-green-700">{width}m</span>
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="30"
-              value={width}
-              onChange={(e) => setWidth(parseInt(e.target.value, 10))}
-              className="w-full accent-green-600"
-            />
-          </div>
-          <div>
-            <label htmlFor="equipment-select" className="block text-sm font-bold text-gray-700 mb-1.5">
-              Application Tool Profile:
-            </label>
-            <select
-              id="equipment-select"
-              value={selectedEquipment}
-              onChange={(e) => setSelectedEquipment(e.target.value)}
-              className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+      {activeScreen === 'settings' ? (
+        <>
+          <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <div>
+              <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
+              <p className="text-sm text-green-700 mt-1">
+                Configure your lawn size, equipment, and surface profile.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveScreen('main')}
+              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
             >
-              {Object.values(EQUIPMENT_OPTIONS).map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.name}
-                </option>
-              ))}
-            </select>
+              ← Back to Workflow
+            </button>
           </div>
 
-          <div>
-            <p className="block text-sm font-bold text-gray-700 mb-1">
-              Irrigation Profile — Select Your Primary Sprinkler:
-            </p>
-            <p className="text-[11px] text-gray-500 mb-2 leading-snug">
-              Match the photo and description to the sprinkler you own. Tap a photo to enlarge it.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {Object.values(SPRINKLER_OPTIONS).map((sprinkler) => {
-                const isSelected = selectedSprinkler === sprinkler.id;
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-green-900 mb-1">
+                Lawn Length: <span className="font-bold text-green-700">{length}m</span>
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="30"
+                value={length}
+                onChange={(e) => setLength(parseInt(e.target.value, 10))}
+                className="w-full accent-green-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-green-900 mb-1">
+                Lawn Width: <span className="font-bold text-green-700">{width}m</span>
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="30"
+                value={width}
+                onChange={(e) => setWidth(parseInt(e.target.value, 10))}
+                className="w-full accent-green-600"
+              />
+            </div>
+            <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-sm text-green-800">
+              <span className="font-black">{sqm} SQM</span>
+              <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
+            </div>
+            <div>
+              <label htmlFor="mower-select" className="block text-sm font-medium text-green-900 mb-1">
+                Lawnmower Model
+              </label>
+              <select
+                id="mower-select"
+                value={mowerModel}
+                onChange={(e) => setMowerModel(e.target.value)}
+                className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+              >
+                {Object.values(MOWER_OPTIONS).map((mower) => (
+                  <option key={mower.id} value={mower.id}>
+                    {mower.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mb-2">
+                <p className="text-sm font-medium text-green-900">Lawn Surface Condition</p>
+                <button
+                  type="button"
+                  onClick={() => setShowLevellingGuide((open) => !open)}
+                  aria-expanded={showLevellingGuide}
+                  className="ml-2 text-emerald-600 hover:text-emerald-800 text-xs underline font-medium"
+                >
+                  ℹ️ How to fix a bumpy lawn
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {Object.values(LAWN_SURFACE_OPTIONS).map((option) => {
+                  const isSelected = lawnSurface === option.id;
 
-                return (
-                  <button
-                    key={sprinkler.id}
-                    type="button"
-                    onClick={() => setSelectedSprinkler(sprinkler.id)}
-                    className={`text-left rounded-lg border p-3 transition-all ${
-                      isSelected
-                        ? 'border-green-600 bg-green-100/80 shadow-sm ring-1 ring-green-500/30'
-                        : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
-                    }`}
-                  >
-                    <img
-                      src={sprinkler.image}
-                      alt={sprinkler.name}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setEnlargedSprinkler({
-                          image: sprinkler.image,
-                          name: sprinkler.name,
-                        });
-                      }}
-                      className="w-16 h-16 object-cover rounded-md mb-2 mx-auto border border-gray-200 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
-                    />
-                    <span className="text-xs font-bold text-gray-900 leading-snug block">
-                      {sprinkler.name}
-                    </span>
-                    <span className="text-[10px] font-semibold text-green-700 block mb-1.5">
-                      ~{sprinkler.ratePerHour}mm / hour
-                    </span>
-                    <p className="text-[10px] text-gray-700 leading-snug mb-1">
-                      {sprinkler.description}
-                    </p>
-                    <p className="text-[10px] text-gray-500 leading-snug italic">
-                      {sprinkler.identification}
-                    </p>
-                  </button>
-                );
-              })}
+                  return (
+                    <label
+                      key={option.id}
+                      className={`flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer text-sm font-medium transition-all ${
+                        isSelected
+                          ? 'border-green-600 bg-green-100/80 text-green-900 ring-1 ring-green-500/30'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50/50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="lawn-surface"
+                        value={option.id}
+                        checked={isSelected}
+                        onChange={(e) => setLawnSurface(e.target.value)}
+                        className="accent-green-600"
+                      />
+                      {option.label}
+                    </label>
+                  );
+                })}
+              </div>
+              <div
+                className={`grid transition-all duration-300 ease-in-out ${
+                  showLevellingGuide
+                    ? 'grid-rows-[1fr] opacity-100 mt-3'
+                    : 'grid-rows-[0fr] opacity-0 mt-0'
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-emerald-900">Lawn Levelling Guide</h4>
+                        <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                          Choose the method that matches your dip depth. Once levelled, switch your
+                          surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut
+                          height recommendation.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowLevellingGuide(false)}
+                        className="shrink-0 text-xs font-bold text-gray-400 hover:text-gray-600"
+                        aria-label="Close levelling guide"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {LEVELLING_GUIDE_METHODS.map((method) => (
+                        <div
+                          key={method.title}
+                          className="rounded-lg border border-green-100 bg-green-50/40 p-3.5"
+                        >
+                          <p className="text-xs font-bold text-green-900 mb-1.5">{method.title}</p>
+                          <p className="text-xs text-gray-600 leading-relaxed">{method.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="equipment-select" className="block text-sm font-bold text-gray-700 mb-1.5">
+                Application Tool Profile:
+              </label>
+              <select
+                id="equipment-select"
+                value={selectedEquipment}
+                onChange={(e) => setSelectedEquipment(e.target.value)}
+                className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+              >
+                {Object.values(EQUIPMENT_OPTIONS).map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <p className="block text-sm font-bold text-gray-700 mb-1">
+                Irrigation Profile — Select Your Primary Sprinkler:
+              </p>
+              <p className="text-[11px] text-gray-500 mb-2 leading-snug">
+                Match the photo and description to the sprinkler you own. Tap a photo to enlarge it.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {Object.values(SPRINKLER_OPTIONS).map((sprinkler) => {
+                  const isSelected = selectedSprinkler === sprinkler.id;
+
+                  return (
+                    <button
+                      key={sprinkler.id}
+                      type="button"
+                      onClick={() => setSelectedSprinkler(sprinkler.id)}
+                      className={`text-left rounded-lg border p-3 transition-all ${
+                        isSelected
+                          ? 'border-green-600 bg-green-100/80 shadow-sm ring-1 ring-green-500/30'
+                          : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
+                      }`}
+                    >
+                      <img
+                        src={sprinkler.image}
+                        alt={sprinkler.name}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEnlargedSprinkler({
+                            image: sprinkler.image,
+                            name: sprinkler.name,
+                          });
+                        }}
+                        className="w-16 h-16 object-cover rounded-md mb-2 mx-auto border border-gray-200 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
+                      />
+                      <span className="text-xs font-bold text-gray-900 leading-snug block">
+                        {sprinkler.name}
+                      </span>
+                      <span className="text-[10px] font-semibold text-green-700 block mb-1.5">
+                        ~{sprinkler.ratePerHour}mm / hour
+                      </span>
+                      <p className="text-[10px] text-gray-700 leading-snug mb-1">
+                        {sprinkler.description}
+                      </p>
+                      <p className="text-[10px] text-gray-500 leading-snug italic">
+                        {sprinkler.identification}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
-      <section className="mb-6 rounded-xl border border-sky-100 bg-sky-50/40 p-4">
+        </>
+      ) : (
+        <>
+          <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <div>
+              <h2 className="text-xl font-black text-green-800">📋 Lawn Pack Workflow</h2>
+              <p className="text-sm text-green-700 mt-1">
+                <span className="font-black">{sqm} SQM</span>
+                <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveScreen('settings')}
+              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+            >
+              ⚙️ Setup
+            </button>
+          </div>
+      <section
+        id="maintenance-panel"
+        data-maintenance-due-dates={JSON.stringify(maintenanceDueDates)}
+        className="mb-6 rounded-xl border border-sky-100 bg-sky-50/40 p-4"
+      >
         <h3 className="text-sm font-bold text-gray-800 mb-3">🔧 Maintenance Panel</h3>
 
         <div
@@ -462,6 +703,14 @@ export default function SprayerCalculator() {
 
         <div className="grid gap-3 sm:grid-cols-2 sm:items-stretch">
           <div
+            id="maintenance-mowing-tracker"
+            data-maintenance-due-dates={JSON.stringify(maintenanceDueDates)}
+            data-next-mow-due={mowingNextDueIso ?? ''}
+            data-mow-locked-until={mowingLockedUntilIso ?? ''}
+            data-mow-status={maintenanceDueDates.mowingStatus}
+            data-mower-model={mowerModel}
+            data-lawn-surface={lawnSurface}
+            data-recommended-mower-setting={recommendedSetting}
             className={`flex flex-col rounded-lg border p-3 ${
               isWinterSeason
                 ? 'bg-gray-100 border-gray-300 text-gray-500'
@@ -476,23 +725,56 @@ export default function SprayerCalculator() {
 
             <div className="min-h-[2.75rem] mb-3">
               {isWinterSeason ? (
-                <p className="text-xs font-medium leading-snug">
-                  ❄️ WINTER DORMANT: Mowing suspended for the season.
-                </p>
+                <>
+                  <p className="text-xs font-medium leading-snug">
+                    ❄️ WINTER DORMANT: Mowing suspended for the season.
+                  </p>
+                  <p className="mt-2 text-xs font-semibold text-gray-600">
+                    Next Due: N/A (Dormant)
+                  </p>
+                </>
               ) : seedEstablishmentActive ? (
-                <p className="text-xs font-bold text-red-900 leading-snug">
-                  🌱 SEED ESTABLISHING: Absolutely NO mowing for 21 days! ({seedDaysRemaining}{' '}
-                  day{seedDaysRemaining !== 1 ? 's' : ''} remaining)
-                </p>
+                <>
+                  <p className="text-xs font-bold text-red-900 leading-snug">
+                    🌱 SEED ESTABLISHING: Absolutely NO mowing for 21 days! ({seedDaysRemaining}{' '}
+                    day{seedDaysRemaining !== 1 ? 's' : ''} remaining)
+                  </p>
+                  <p className="mt-2 text-xs font-semibold text-red-800">
+                    Next Due: Locked until {seedLockEndDate}
+                  </p>
+                </>
               ) : mowingDue ? (
                 <p className="text-xs font-bold text-amber-900 leading-snug">
                   🚨 MOWING DUE: It has been {daysSinceMow ?? '∞'} days since your last cut.
                 </p>
               ) : (
-                <p className="text-xs text-gray-600 leading-snug">
-                  Last cut: {formatDisplayDate(lastMowedDate)} ({daysSinceMow} days ago)
-                </p>
+                <>
+                  <p className="text-xs text-gray-600 leading-snug">
+                    Last cut: {formatDisplayDate(lastMowedDate)} ({daysSinceMow} days ago)
+                  </p>
+                  {mowingNextDate && (
+                    <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-800 font-semibold">
+                      📅 Next Cut Due: {mowingNextDate}
+                    </div>
+                  )}
+                </>
               )}
+            </div>
+
+            <div className="mb-3">
+              <p
+                className={`text-xs leading-snug ${
+                  currentSeason === 'SPRING' && seedEstablishmentActive
+                    ? 'font-bold text-red-800'
+                    : isOnScarificationPrepStep
+                      ? 'font-bold text-amber-900'
+                      : currentSeason === 'WINTER'
+                        ? 'font-medium text-gray-500'
+                        : 'font-medium text-gray-600'
+                }`}
+              >
+                {recommendedSetting}
+              </p>
             </div>
 
             <div className="mt-auto space-y-2">
@@ -529,10 +811,16 @@ export default function SprayerCalculator() {
           </div>
 
           <div
+            id="maintenance-watering-tracker"
+            data-next-water-due={wateringNextDueIso ?? ''}
+            data-water-minutes={dynamicMinutes}
+            data-forecasted-rain-sum={forecastedRainSum}
+            data-net-water-needed={netWaterNeeded}
+            data-water-status={maintenanceDueDates.wateringStatus}
             className={`flex flex-col rounded-lg border p-3 ${
               isWinterSeason
                 ? 'bg-gray-100 border-gray-300 text-gray-500'
-                : isRainForecasted
+                : isNatureProvidingFullSoak
                   ? 'bg-sky-100 border-sky-300 text-sky-900'
                   : wateringDue
                     ? 'bg-amber-50 border-amber-300'
@@ -543,24 +831,53 @@ export default function SprayerCalculator() {
 
             <div className={`mb-3 ${wateringDue ? 'min-h-[6rem]' : 'min-h-[2.75rem]'}`}>
               {isWinterSeason ? (
-                <p className="text-xs font-medium leading-snug">
-                  ❄️ WINTER: Watering suspended to prevent frost expansion.
-                </p>
-              ) : isRainForecasted ? (
-                <p className="text-xs font-bold leading-snug">
-                  🌧️ NATURE HAS IT: Heavy rain inbound. Timers paused.
-                </p>
+                <>
+                  <p className="text-xs font-medium leading-snug">
+                    ❄️ WINTER: Watering suspended to prevent frost expansion.
+                  </p>
+                  <p className="mt-2 text-xs font-semibold text-gray-600">Next Due: N/A</p>
+                </>
+              ) : isNatureProvidingFullSoak ? (
+                <>
+                  <p className="text-xs font-bold leading-snug">
+                    🌧️ NATURE HAS IT: Heavy rain inbound. Timers paused.
+                  </p>
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800 font-semibold">
+                    🌧️ Next Water: Paused (Nature is providing a full 10mm+ soak this week!)
+                  </div>
+                </>
               ) : wateringDue ? (
-                <p className="text-xs font-bold text-amber-900 leading-snug">
-                  🚰 IRRIGATION DUE: The soil needs a heavy 10mm soak. Based on your location&apos;s
-                  weather, turn on your {activeSprinkler.name} for exactly{' '}
-                  {irrigationRuntimeMinutes} minutes to achieve optimal root depth without wasting
-                  water.
-                </p>
+                <>
+                  <p className="text-xs font-bold text-amber-900 leading-snug">
+                    🚰 IRRIGATION DUE: The soil needs a {netWaterNeeded.toFixed(1)}mm soak. Based on
+                    your location&apos;s weather, turn on your {activeSprinkler.name} for exactly{' '}
+                    {dynamicMinutes} minutes to achieve optimal root depth without wasting water.
+                  </p>
+                  {wateringNextDate && (
+                    <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
+                      🚰 Next Water Due: {wateringNextDate} ({dynamicMinutes} min soak).{' '}
+                      <span className="font-medium italic">
+                        *Adjusted for {forecastedRainSum.toFixed(1)}mm of forecasted rain over the
+                        next 7 days.*
+                      </span>
+                    </div>
+                  )}
+                </>
               ) : (
-                <p className="text-xs text-gray-600 leading-snug">
-                  Last water: {formatDisplayDate(lastWateredDate)} ({daysSinceWater} days ago)
-                </p>
+                <>
+                  <p className="text-xs text-gray-600 leading-snug">
+                    Last water: {formatDisplayDate(lastWateredDate)} ({daysSinceWater} days ago)
+                  </p>
+                  {wateringNextDate && (
+                    <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
+                      🚰 Next Water Due: {wateringNextDate} ({dynamicMinutes} min soak).{' '}
+                      <span className="font-medium italic">
+                        *Adjusted for {forecastedRainSum.toFixed(1)}mm of forecasted rain over the
+                        next 7 days.*
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -578,7 +895,7 @@ export default function SprayerCalculator() {
                   value={pendingWaterLogDate}
                   max={todayStr}
                   onChange={(e) => setPendingWaterLogDate(e.target.value)}
-                  disabled={isWinterSeason || isRainForecasted}
+                  disabled={isWinterSeason || isNatureProvidingFullSoak}
                   className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
@@ -589,7 +906,7 @@ export default function SprayerCalculator() {
                   setLastWateredDate(pendingWaterLogDate);
                   setPendingWaterLogDate(todayStr);
                 }}
-                disabled={isWinterSeason || isRainForecasted || !pendingWaterLogDate}
+                disabled={isWinterSeason || isNatureProvidingFullSoak || !pendingWaterLogDate}
                 className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 💦 Log Watered
@@ -810,6 +1127,8 @@ export default function SprayerCalculator() {
             </div>
           </div>
         </section>
+      )}
+        </>
       )}
 
       {enlargedSprinkler && (
