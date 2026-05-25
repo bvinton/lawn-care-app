@@ -13,6 +13,13 @@ import {
   getGranularRepeatDate,
   addDaysToDateString,
 } from '../data/LawnPackData';
+import {
+  syncLawnTasksToSupabase,
+  fetchLawnTasksFromSupabase,
+  LAWN_APP_SOURCE,
+} from '../services/lawnTasks';
+import { formatSupabaseSyncError } from '../lib/supabase';
+import { compileLawnTasks } from '../utils/compileLawnTasks';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const MS_PER_HOUR = 1000 * 60 * 60;
@@ -25,37 +32,42 @@ const SEED_GERMINATION_SOIL_TEMP_MAX_C = 25;
 const GYPSUM_LOG_KEY = 'lastGypsumDate';
 const PET_LOCKOUT_KEY = 'petLockoutUntil';
 const PET_LOCKOUT_HOURS = 24;
-const LAWN_TASKS_EXPORT_KEY = 'lawn_tasks_export';
 const RAIN_THRESHOLD_MM = 5.0;
 
 const OPEN_METEO_URL =
   'https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum&hourly=soil_temperature_6cm&timezone=Europe%2FLondon&forecast_days=7';
 
-/** @param {Record<string, unknown>} data */
+/**
+ * @typedef {Object} OpenMeteoForecast
+ * @property {{ soil_temperature_10cm_max?: Array<number | null>, precipitation_sum?: Array<number | null> } | undefined} [daily]
+ * @property {{ soil_temperature_6cm?: Array<number | null> } | undefined} [hourly]
+ */
+
+/** @param {OpenMeteoForecast} data */
 function getTodayMaxSoilTemp(data) {
-  const dailyMax = data?.daily?.soil_temperature_10cm_max;
+  const dailyMax = data.daily?.soil_temperature_10cm_max;
   if (Array.isArray(dailyMax) && dailyMax[0] != null) {
     return dailyMax[0];
   }
 
-  const hourlyTemps = data?.hourly?.soil_temperature_6cm;
+  const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
 
   return hourlyTemps.slice(0, 24).reduce((max, temp) => {
     if (temp == null) return max;
     return max === null ? temp : Math.max(max, temp);
-  }, null);
+  }, /** @type {number | null} */ (null));
 }
 
-/** @param {Record<string, unknown>} data */
+/** @param {OpenMeteoForecast} data */
 function getTodayMinSoilTemp(data) {
-  const hourlyTemps = data?.hourly?.soil_temperature_6cm;
+  const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
 
   return hourlyTemps.slice(0, 24).reduce((min, temp) => {
     if (temp == null) return min;
     return min === null ? temp : Math.min(min, temp);
-  }, null);
+  }, /** @type {number | null} */ (null));
 }
 
 const SOAK_DEPTH_MM = 10;
@@ -313,6 +325,15 @@ export default function SprayerCalculator() {
   const [activeScreen, setActiveScreen] = useState('main');
   const [showLevellingGuide, setShowLevellingGuide] = useState(false);
   const [jsonCopied, setJsonCopied] = useState(false);
+  const [lawnTasksSnapshot, setLawnTasksSnapshot] = useState(
+    /** @type {Array<{ id: string, title: string, dueDate: string, status: string, module: 'lawn' }>} */ ([])
+  );
+  const [supabaseSyncError, setSupabaseSyncError] = useState(
+    /** @type {string | null} */ (null)
+  );
+  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState(
+    /** @type {'idle' | 'syncing' | 'synced' | 'error'} */ ('idle')
+  );
 
   const [userLogs, setUserLogs] = useState(() =>
     /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {}))
@@ -508,93 +529,80 @@ export default function SprayerCalculator() {
     []
   );
 
-  const compileLawnTasksExport = useCallback(() => {
-    /** @param {string} dueDateIso */
-    const taskStatusFromDue = (dueDateIso) =>
-      daysBetween(dueDateIso, todayStr) >= 0 ? 'urgent' : 'pending';
+  const compileLawnTasksExport = useCallback(
+    (overrides = {}) => {
+      const nextLastMowedDate =
+        overrides.lastMowedDate !== undefined ? overrides.lastMowedDate : lastMowedDate;
+      const nextLastWateredDate =
+        overrides.lastWateredDate !== undefined ? overrides.lastWateredDate : lastWateredDate;
+      const nextLastGypsumDate =
+        overrides.lastGypsumDate !== undefined ? overrides.lastGypsumDate : lastGypsumDate;
 
-    /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn' }>} */
-    const compiledTasks = [];
+      const nextMowingNextDueIso = nextLastMowedDate
+        ? addDaysToDateString(nextLastMowedDate, MOWING_DUE_DAYS)
+        : null;
+      const nextWateringNextDueIso = nextLastWateredDate
+        ? addDaysToDateString(nextLastWateredDate, WATERING_DUE_DAYS)
+        : null;
 
-    if (isWinterSeason) {
-      compiledTasks.push({
-        id: 'lawn-mow',
-        title: 'Mow lawn',
-        dueDate: todayStr,
-        status: 'completed',
-        module: 'lawn',
+      return compileLawnTasks({
+        todayStr,
+        isWinterSeason,
+        isNatureProvidingFullSoak,
+        seedEstablishmentActive,
+        mowingLockedUntilIso,
+        mowingNextDueIso: nextMowingNextDueIso,
+        wateringNextDueIso: nextWateringNextDueIso,
+        lastGypsumDate: nextLastGypsumDate,
       });
-    } else if (seedEstablishmentActive && mowingLockedUntilIso) {
-      compiledTasks.push({
-        id: 'lawn-mow',
-        title: 'Mow lawn',
-        dueDate: mowingLockedUntilIso,
-        status: 'pending',
-        module: 'lawn',
-      });
-    } else {
-      const mowDueDate = mowingNextDueIso ?? todayStr;
-      compiledTasks.push({
-        id: 'lawn-mow',
-        title: 'Mow lawn',
-        dueDate: mowDueDate,
-        status: taskStatusFromDue(mowDueDate),
-        module: 'lawn',
-      });
-    }
+    },
+    [
+      lastMowedDate,
+      lastWateredDate,
+      lastGypsumDate,
+      todayStr,
+      isWinterSeason,
+      isNatureProvidingFullSoak,
+      seedEstablishmentActive,
+      mowingLockedUntilIso,
+    ]
+  );
 
-    if (isWinterSeason || isNatureProvidingFullSoak) {
-      compiledTasks.push({
-        id: 'lawn-water',
-        title: 'Water lawn',
-        dueDate: todayStr,
-        status: 'completed',
-        module: 'lawn',
-      });
-    } else {
-      const waterDueDate = wateringNextDueIso ?? todayStr;
-      compiledTasks.push({
-        id: 'lawn-water',
-        title: 'Water lawn',
-        dueDate: waterDueDate,
-        status: taskStatusFromDue(waterDueDate),
-        module: 'lawn',
-      });
-    }
+  const pushLawnTasksToSupabase = useCallback(
+    async (overrides = {}) => {
+      const compiledTasks = compileLawnTasksExport(overrides);
+      setLawnTasksSnapshot(compiledTasks);
+      setSupabaseSyncStatus('syncing');
 
-    const gypsumDueDate = lastGypsumDate
-      ? addDaysToDateString(lastGypsumDate, GYPSUM_CYCLE_DAYS)
-      : todayStr;
-    compiledTasks.push({
-      id: 'lawn-gypsum',
-      title: 'Apply Liquid Gypsum',
-      dueDate: gypsumDueDate,
-      status: taskStatusFromDue(gypsumDueDate),
-      module: 'lawn',
-    });
-
-    return compiledTasks;
-  }, [
-    isWinterSeason,
-    isNatureProvidingFullSoak,
-    seedEstablishmentActive,
-    mowingLockedUntilIso,
-    mowingNextDueIso,
-    wateringNextDueIso,
-    lastGypsumDate,
-    todayStr,
-  ]);
+      try {
+        await syncLawnTasksToSupabase(compiledTasks);
+        setSupabaseSyncError(null);
+        setSupabaseSyncStatus('synced');
+      } catch (error) {
+        const message = formatSupabaseSyncError(error);
+        console.error('[Lawn Care] Supabase sync failed:', error);
+        setSupabaseSyncError(message);
+        setSupabaseSyncStatus('error');
+      }
+    },
+    [compileLawnTasksExport]
+  );
 
   const handleCopyTasksJson = async () => {
-    const payload =
-      window.lawnTasksExport ??
-      compileLawnTasksExport();
     try {
+      const payload = await fetchLawnTasksFromSupabase();
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       setJsonCopied(true);
       setTimeout(() => setJsonCopied(false), 2000);
     } catch {
-      setJsonCopied(false);
+      const fallback = lawnTasksSnapshot.length > 0 ? lawnTasksSnapshot : compileLawnTasksExport();
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(fallback, null, 2));
+        setJsonCopied(true);
+        setTimeout(() => setJsonCopied(false), 2000);
+      } catch {
+        setJsonCopied(false);
+      }
     }
   };
 
@@ -646,14 +654,18 @@ export default function SprayerCalculator() {
   }, [lawnSurface]);
 
   useEffect(() => {
-    const compiledTasks = compileLawnTasksExport();
-    localStorage.setItem(LAWN_TASKS_EXPORT_KEY, JSON.stringify(compiledTasks));
-    window.lawnTasksExport = compiledTasks;
-
-    return () => {
-      delete window.lawnTasksExport;
-    };
-  }, [compileLawnTasksExport]);
+    pushLawnTasksToSupabase();
+  }, [
+    pushLawnTasksToSupabase,
+    lastMowedDate,
+    lastWateredDate,
+    lastGypsumDate,
+    currentSeason,
+    isWinterSeason,
+    isNatureProvidingFullSoak,
+    seedEstablishmentActive,
+    forecastedRainSum,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -737,6 +749,7 @@ export default function SprayerCalculator() {
     }
 
     setUserLogs(nextLogs);
+    void pushLawnTasksToSupabase();
 
     if (isFirstStep) {
       recascadeSeason(currentSeason, dateValue, nextLogs);
@@ -993,6 +1006,9 @@ export default function SprayerCalculator() {
 
             <div className="border-t border-green-200 pt-4 mt-2">
               <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
+              {supabaseSyncError && (
+                <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
+              )}
               <button
                 type="button"
                 onClick={handleCopyTasksJson}
@@ -1005,6 +1021,16 @@ export default function SprayerCalculator() {
         </>
       ) : (
         <>
+          {supabaseSyncError && (
+            <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-xs font-semibold text-red-800">
+              Supabase sync failed: {supabaseSyncError}
+            </div>
+          )}
+          {supabaseSyncStatus === 'syncing' && !supabaseSyncError && (
+            <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-2 text-[11px] font-medium text-sky-800">
+              Syncing tasks to Supabase…
+            </div>
+          )}
           {petLockoutActive && (
             <div className="mb-4 rounded-lg border border-orange-300 bg-gradient-to-r from-red-50 to-orange-50 p-3 text-sm font-bold text-orange-900 shadow-sm">
               🚫 PAWS OFF: Chemical drying in progress. Safe in {petLockoutHoursRemaining} hour
@@ -1030,7 +1056,7 @@ export default function SprayerCalculator() {
       <section
         id="maintenance-panel"
         data-maintenance-due-dates={JSON.stringify(maintenanceDueDates)}
-        data-lawn-tasks-export-key={LAWN_TASKS_EXPORT_KEY}
+        data-app-source={LAWN_APP_SOURCE}
         data-pet-lockout-until={petLockoutUntil ?? ''}
         className="mb-6 rounded-xl border border-sky-100 bg-sky-50/40 p-4"
       >
@@ -1203,8 +1229,10 @@ export default function SprayerCalculator() {
                 type="button"
                 onClick={() => {
                   if (!pendingMowLogDate) return;
-                  setLastMowedDate(pendingMowLogDate);
+                  const loggedDate = pendingMowLogDate;
+                  setLastMowedDate(loggedDate);
                   setPendingMowLogDate(todayStr);
+                  void pushLawnTasksToSupabase({ lastMowedDate: loggedDate });
                 }}
                 disabled={isWinterSeason || seedEstablishmentActive || !pendingMowLogDate}
                 className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1308,8 +1336,10 @@ export default function SprayerCalculator() {
                 type="button"
                 onClick={() => {
                   if (!pendingWaterLogDate) return;
-                  setLastWateredDate(pendingWaterLogDate);
+                  const loggedDate = pendingWaterLogDate;
+                  setLastWateredDate(loggedDate);
                   setPendingWaterLogDate(todayStr);
+                  void pushLawnTasksToSupabase({ lastWateredDate: loggedDate });
                 }}
                 disabled={isWinterSeason || isNatureProvidingFullSoak || !pendingWaterLogDate}
                 className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1370,11 +1400,13 @@ export default function SprayerCalculator() {
               type="button"
               onClick={() => {
                 if (!pendingGypsumLogDate) return;
+                const loggedDate = pendingGypsumLogDate;
                 setUserLogs((prev) => ({
                   ...prev,
-                  [GYPSUM_LOG_KEY]: pendingGypsumLogDate,
+                  [GYPSUM_LOG_KEY]: loggedDate,
                 }));
                 setPendingGypsumLogDate(todayStr);
+                void pushLawnTasksToSupabase({ lastGypsumDate: loggedDate });
               }}
               disabled={!pendingGypsumLogDate}
               className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
