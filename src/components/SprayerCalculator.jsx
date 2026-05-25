@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   INITIAL_LAWN_CONFIG,
   SEASONS,
@@ -24,7 +24,23 @@ const GYPSUM_LOG_KEY = 'lastGypsumDate';
 const RAIN_THRESHOLD_MM = 5.0;
 
 const OPEN_METEO_URL =
-  'https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum,soil_temperature_10cm_max&timezone=Europe%2FLondon';
+  'https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum&hourly=soil_temperature_6cm&timezone=Europe%2FLondon&forecast_days=7';
+
+/** @param {Record<string, unknown>} data */
+function getTodayMaxSoilTemp(data) {
+  const dailyMax = data?.daily?.soil_temperature_10cm_max;
+  if (Array.isArray(dailyMax) && dailyMax[0] != null) {
+    return dailyMax[0];
+  }
+
+  const hourlyTemps = data?.hourly?.soil_temperature_6cm;
+  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
+
+  return hourlyTemps.slice(0, 24).reduce((max, temp) => {
+    if (temp == null) return max;
+    return max === null ? temp : Math.max(max, temp);
+  }, null);
+}
 
 const SOAK_DEPTH_MM = 10;
 
@@ -158,6 +174,7 @@ function formatInputDate(date) {
 /** @param {{ id?: string, value: string, onChange: (value: string) => void, max?: string, disabled?: boolean, className?: string }} props */
 function UkDateInput({ id, value, onChange, max, disabled, className }) {
   const [text, setText] = useState(() => formatUkDate(value));
+  const nativeInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   useEffect(() => {
     setText(formatUkDate(value));
@@ -173,19 +190,59 @@ function UkDateInput({ id, value, onChange, max, disabled, className }) {
     setText(formatUkDate(parsed));
   };
 
+  const handleNativeChange = (event) => {
+    const iso = event.target.value;
+    if (!iso) return;
+    if (max && iso > max) return;
+    onChange(iso);
+    setText(formatUkDate(iso));
+  };
+
+  const openCalendar = () => {
+    const input = nativeInputRef.current;
+    if (!input || disabled) return;
+    if (typeof input.showPicker === 'function') {
+      input.showPicker();
+    } else {
+      input.click();
+    }
+  };
+
   return (
-    <input
-      id={id}
-      type="text"
-      inputMode="numeric"
-      autoComplete="off"
-      placeholder="DD/MM/YYYY"
-      value={text}
-      onChange={(event) => setText(event.target.value)}
-      onBlur={handleBlur}
-      disabled={disabled}
-      className={className}
-    />
+    <div className="relative">
+      <input
+        id={id}
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="DD/MM/YYYY"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onBlur={handleBlur}
+        disabled={disabled}
+        className={`${className ?? ''} pr-9`.trim()}
+      />
+      <button
+        type="button"
+        onClick={openCalendar}
+        disabled={disabled}
+        aria-label="Open calendar"
+        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-sm text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        📅
+      </button>
+      <input
+        ref={nativeInputRef}
+        type="date"
+        value={value || ''}
+        max={max}
+        onChange={handleNativeChange}
+        disabled={disabled}
+        tabIndex={-1}
+        aria-hidden="true"
+        className="sr-only"
+      />
+    </div>
   );
 }
 
@@ -468,9 +525,7 @@ export default function SprayerCalculator() {
         const totalRain = Array.isArray(precipitationTotals)
           ? precipitationTotals.reduce((sum, mm) => sum + (mm ?? 0), 0)
           : 0;
-        const soilTemps = data?.daily?.soil_temperature_10cm_max;
-        const todaySoilTemp =
-          Array.isArray(soilTemps) && soilTemps[0] != null ? soilTemps[0] : null;
+        const todaySoilTemp = getTodayMaxSoilTemp(data);
 
         if (!cancelled) {
           setForecastedRainSum(totalRain);
