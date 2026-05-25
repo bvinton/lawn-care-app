@@ -15,13 +15,17 @@ import {
 } from '../data/LawnPackData';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
+const MS_PER_HOUR = 1000 * 60 * 60;
 const MOWING_DUE_DAYS = 5;
 const WATERING_DUE_DAYS = 3;
 const SEED_ESTABLISHMENT_DAYS = 21;
-const GYPSUM_CYCLE_DAYS = 28;
+const GYPSUM_CYCLE_DAYS = 182;
 const SEED_GERMINATION_SOIL_TEMP_MIN_C = 10;
 const SEED_GERMINATION_SOIL_TEMP_MAX_C = 25;
 const GYPSUM_LOG_KEY = 'lastGypsumDate';
+const PET_LOCKOUT_KEY = 'petLockoutUntil';
+const PET_LOCKOUT_HOURS = 24;
+const LAWN_TASKS_EXPORT_KEY = 'lawn_tasks_export';
 const RAIN_THRESHOLD_MM = 5.0;
 
 const OPEN_METEO_URL =
@@ -91,6 +95,12 @@ const LEVELLING_GUIDE_METHODS = [
 
 const PET_SAFETY_CLASS =
   'bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs p-3 rounded-lg flex items-center gap-2 mb-2';
+
+const DECKING_EDGE_WATERING_SUBTASK = (
+  <p className="mt-2 text-[11px] font-medium text-sky-900 bg-sky-50/80 border border-sky-100 rounded p-2 leading-snug">
+    🚰 Secondary Task: 2-minute manual hose blast for the decking edges and blind spots.
+  </p>
+);
 
 const UK_WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const UK_WEEKDAYS_LONG = [
@@ -302,6 +312,7 @@ export default function SprayerCalculator() {
   });
   const [activeScreen, setActiveScreen] = useState('main');
   const [showLevellingGuide, setShowLevellingGuide] = useState(false);
+  const [jsonCopied, setJsonCopied] = useState(false);
 
   const [userLogs, setUserLogs] = useState(() =>
     /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {}))
@@ -372,6 +383,13 @@ export default function SprayerCalculator() {
   const daysSinceWater = lastWateredDate ? daysBetween(lastWateredDate, today) : null;
 
   const lastGypsumDate = userLogs[GYPSUM_LOG_KEY] ?? null;
+  const petLockoutUntil = userLogs[PET_LOCKOUT_KEY] ?? null;
+  const petLockoutUntilMs = petLockoutUntil ? new Date(petLockoutUntil).getTime() : null;
+  const petLockoutActive =
+    petLockoutUntilMs !== null && !Number.isNaN(petLockoutUntilMs) && petLockoutUntilMs > Date.now();
+  const petLockoutHoursRemaining = petLockoutActive
+    ? Math.max(1, Math.ceil((petLockoutUntilMs - Date.now()) / MS_PER_HOUR))
+    : 0;
   const daysSinceGypsum = lastGypsumDate ? daysBetween(lastGypsumDate, today) : null;
   const gypsumDue =
     lastGypsumDate === null ||
@@ -490,6 +508,96 @@ export default function SprayerCalculator() {
     []
   );
 
+  const compileLawnTasksExport = useCallback(() => {
+    /** @param {string} dueDateIso */
+    const taskStatusFromDue = (dueDateIso) =>
+      daysBetween(dueDateIso, todayStr) >= 0 ? 'urgent' : 'pending';
+
+    /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn' }>} */
+    const compiledTasks = [];
+
+    if (isWinterSeason) {
+      compiledTasks.push({
+        id: 'lawn-mow',
+        title: 'Mow lawn',
+        dueDate: todayStr,
+        status: 'completed',
+        module: 'lawn',
+      });
+    } else if (seedEstablishmentActive && mowingLockedUntilIso) {
+      compiledTasks.push({
+        id: 'lawn-mow',
+        title: 'Mow lawn',
+        dueDate: mowingLockedUntilIso,
+        status: 'pending',
+        module: 'lawn',
+      });
+    } else {
+      const mowDueDate = mowingNextDueIso ?? todayStr;
+      compiledTasks.push({
+        id: 'lawn-mow',
+        title: 'Mow lawn',
+        dueDate: mowDueDate,
+        status: taskStatusFromDue(mowDueDate),
+        module: 'lawn',
+      });
+    }
+
+    if (isWinterSeason || isNatureProvidingFullSoak) {
+      compiledTasks.push({
+        id: 'lawn-water',
+        title: 'Water lawn',
+        dueDate: todayStr,
+        status: 'completed',
+        module: 'lawn',
+      });
+    } else {
+      const waterDueDate = wateringNextDueIso ?? todayStr;
+      compiledTasks.push({
+        id: 'lawn-water',
+        title: 'Water lawn',
+        dueDate: waterDueDate,
+        status: taskStatusFromDue(waterDueDate),
+        module: 'lawn',
+      });
+    }
+
+    const gypsumDueDate = lastGypsumDate
+      ? addDaysToDateString(lastGypsumDate, GYPSUM_CYCLE_DAYS)
+      : todayStr;
+    compiledTasks.push({
+      id: 'lawn-gypsum',
+      title: 'Apply Liquid Gypsum',
+      dueDate: gypsumDueDate,
+      status: taskStatusFromDue(gypsumDueDate),
+      module: 'lawn',
+    });
+
+    return compiledTasks;
+  }, [
+    isWinterSeason,
+    isNatureProvidingFullSoak,
+    seedEstablishmentActive,
+    mowingLockedUntilIso,
+    mowingNextDueIso,
+    wateringNextDueIso,
+    lastGypsumDate,
+    todayStr,
+  ]);
+
+  const handleCopyTasksJson = async () => {
+    const payload =
+      window.lawnTasksExport ??
+      compileLawnTasksExport();
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setJsonCopied(true);
+      setTimeout(() => setJsonCopied(false), 2000);
+    } catch {
+      setJsonCopied(false);
+    }
+  };
+
   useEffect(() => {
     setSqm(length * width);
   }, [length, width]);
@@ -536,6 +644,16 @@ export default function SprayerCalculator() {
   useEffect(() => {
     localStorage.setItem('lawnPackLawnSurface', lawnSurface);
   }, [lawnSurface]);
+
+  useEffect(() => {
+    const compiledTasks = compileLawnTasksExport();
+    localStorage.setItem(LAWN_TASKS_EXPORT_KEY, JSON.stringify(compiledTasks));
+    window.lawnTasksExport = compiledTasks;
+
+    return () => {
+      delete window.lawnTasksExport;
+    };
+  }, [compileLawnTasksExport]);
 
   useEffect(() => {
     let cancelled = false;
@@ -595,11 +713,15 @@ export default function SprayerCalculator() {
     });
   };
 
+  const stepTriggersPetLockout = (step) =>
+    step?.type === 'chemical' || step?.type === 'liquid';
+
   const handleLogTask = (stepId) => {
     const dateValue = pendingDates[currentSeason]?.[stepId];
     if (!dateValue) return;
 
     const steps = SEASONS[currentSeason].steps;
+    const step = steps.find((s) => s.id === stepId);
     const stepIndex = steps.findIndex((s) => s.id === stepId);
     const isFirstStep = stepIndex === 0;
 
@@ -607,6 +729,12 @@ export default function SprayerCalculator() {
       ...userLogs,
       [makeStepKey(currentSeason, stepId)]: dateValue,
     };
+
+    if (step && stepTriggersPetLockout(step)) {
+      nextLogs[PET_LOCKOUT_KEY] = new Date(
+        Date.now() + PET_LOCKOUT_HOURS * MS_PER_HOUR
+      ).toISOString();
+    }
 
     setUserLogs(nextLogs);
 
@@ -862,10 +990,27 @@ export default function SprayerCalculator() {
                 })}
               </div>
             </div>
+
+            <div className="border-t border-green-200 pt-4 mt-2">
+              <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
+              <button
+                type="button"
+                onClick={handleCopyTasksJson}
+                className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+              >
+                {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
+              </button>
+            </div>
           </div>
         </>
       ) : (
         <>
+          {petLockoutActive && (
+            <div className="mb-4 rounded-lg border border-orange-300 bg-gradient-to-r from-red-50 to-orange-50 p-3 text-sm font-bold text-orange-900 shadow-sm">
+              🚫 PAWS OFF: Chemical drying in progress. Safe in {petLockoutHoursRemaining} hour
+              {petLockoutHoursRemaining !== 1 ? 's' : ''}.
+            </div>
+          )}
           <div className="flex justify-between items-center mb-6 border-b pb-4">
             <div>
               <h2 className="text-xl font-black text-green-800">📋 Lawn Pack Workflow</h2>
@@ -885,6 +1030,8 @@ export default function SprayerCalculator() {
       <section
         id="maintenance-panel"
         data-maintenance-due-dates={JSON.stringify(maintenanceDueDates)}
+        data-lawn-tasks-export-key={LAWN_TASKS_EXPORT_KEY}
+        data-pet-lockout-until={petLockoutUntil ?? ''}
         className="mb-6 rounded-xl border border-sky-100 bg-sky-50/40 p-4"
       >
         <h3 className="text-sm font-bold text-gray-800 mb-3">🔧 Maintenance Panel</h3>
@@ -1110,6 +1257,7 @@ export default function SprayerCalculator() {
                     your location&apos;s weather, turn on your {activeSprinkler.name} for exactly{' '}
                     {dynamicMinutes} minutes to achieve optimal root depth without wasting water.
                   </p>
+                  {DECKING_EDGE_WATERING_SUBTASK}
                   {wateringNextDate && (
                     <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
                       🚰 Next Water Due: {wateringNextDate} ({dynamicMinutes} min soak).{' '}
@@ -1134,6 +1282,7 @@ export default function SprayerCalculator() {
                       </span>
                     </div>
                   )}
+                  {DECKING_EDGE_WATERING_SUBTASK}
                 </>
               )}
             </div>
@@ -1195,7 +1344,7 @@ export default function SprayerCalculator() {
               </p>
             ) : (
               <p className="text-xs font-bold text-emerald-800 leading-snug">
-                ✅ Soil draining well (Next dose in {gypsumDaysRemaining} day
+                ✅ Soil structure stable (Next dose due in {gypsumDaysRemaining} day
                 {gypsumDaysRemaining !== 1 ? 's' : ''})
               </p>
             )}
