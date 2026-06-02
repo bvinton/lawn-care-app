@@ -355,18 +355,12 @@ export default function SprayerCalculator() {
   const [supabaseSyncError, setSupabaseSyncError] = useState(
     /** @type {string | null} */ (null)
   );
-  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState(
-    /** @type {'idle' | 'syncing' | 'synced' | 'error'} */ ('idle')
-  );
   const [maintenanceHydrated, setMaintenanceHydrated] = useState(false);
   const [maintenanceHints, setMaintenanceHints] = useState(
     /** @type {{ mow: string | null, water: string | null }} */ ({ mow: null, water: null })
   );
   const syncInFlightRef = useRef(false);
   const lastSyncFingerprintRef = useRef('');
-  const syncedBannerTimerRef = useRef(
-    /** @type {ReturnType<typeof setTimeout> | null} */ (null)
-  );
 
   const [pendingDates, setPendingDates] = useState(() =>
     /** @type {Record<string, Record<string, string>>} */ (
@@ -713,30 +707,14 @@ export default function SprayerCalculator() {
       syncInFlightRef.current = true;
       setLawnTasksSnapshot(compiledTasks);
 
-      if (!quiet) {
-        setSupabaseSyncStatus('syncing');
-      }
-
       try {
         await syncLawnTasksToSupabase(compiledTasks);
         lastSyncFingerprintRef.current = fingerprint;
         setSupabaseSyncError(null);
-        if (!quiet) {
-          setSupabaseSyncStatus('synced');
-          if (syncedBannerTimerRef.current) {
-            clearTimeout(syncedBannerTimerRef.current);
-          }
-          syncedBannerTimerRef.current = setTimeout(() => {
-            setSupabaseSyncStatus('idle');
-          }, 2500);
-        } else {
-          setSupabaseSyncStatus('idle');
-        }
       } catch (error) {
         const message = formatSupabaseSyncError(error);
         console.error('[Lawn Care] Supabase sync failed:', error);
         setSupabaseSyncError(message);
-        setSupabaseSyncStatus('error');
       } finally {
         syncInFlightRef.current = false;
       }
@@ -845,7 +823,11 @@ export default function SprayerCalculator() {
               : null,
         });
       } catch (error) {
-        console.warn('[Lawn Care] Maintenance hydrate skipped:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn('[Lawn Care] Maintenance hydrate failed:', error);
+        setSupabaseSyncError(
+          `Could not load mow/water history from Tasks app: ${message}`
+        );
       } finally {
         if (!cancelled) {
           setMaintenanceHydrated(true);
@@ -880,15 +862,6 @@ export default function SprayerCalculator() {
     forecastedRainSum,
     compileLawnTasksExport,
   ]);
-
-  useEffect(
-    () => () => {
-      if (syncedBannerTimerRef.current) {
-        clearTimeout(syncedBannerTimerRef.current);
-      }
-    },
-    []
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -972,7 +945,7 @@ export default function SprayerCalculator() {
     }
 
     setUserLogs(nextLogs);
-    void pushLawnTasksToSupabase();
+    void pushLawnTasksToSupabase({}, { quiet: true });
 
     if (isFirstStep) {
       recascadeSeason(currentSeason, dateValue, nextLogs);
@@ -1251,16 +1224,6 @@ export default function SprayerCalculator() {
           {supabaseSyncError && (
             <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-xs font-semibold text-red-800">
               Supabase sync failed: {supabaseSyncError}
-            </div>
-          )}
-          {supabaseSyncStatus === 'syncing' && !supabaseSyncError && (
-            <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-2 text-[11px] font-medium text-sky-800">
-              Updating tasks in Supabase…
-            </div>
-          )}
-          {supabaseSyncStatus === 'synced' && !supabaseSyncError && (
-            <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-[11px] font-medium text-emerald-800">
-              Tasks updated in Supabase.
             </div>
           )}
           {petLockoutActive && (
@@ -1546,7 +1509,7 @@ export default function SprayerCalculator() {
                   const loggedDate = pendingMowLogDate;
                   setLastMowedDate(loggedDate);
                   setPendingMowLogDate(todayStr);
-                  void pushLawnTasksToSupabase({ lastMowedDate: loggedDate }, { quiet: false });
+                  void pushLawnTasksToSupabase({ lastMowedDate: loggedDate }, { quiet: true });
                   setMaintenanceHints((prev) => ({ ...prev, mow: null }));
                 }}
                 disabled={isDormantSeason || seedEstablishmentActive || !pendingMowLogDate}
@@ -1688,7 +1651,7 @@ export default function SprayerCalculator() {
                   const loggedDate = pendingWaterLogDate;
                   setLastWateredDate(loggedDate);
                   setPendingWaterLogDate(todayStr);
-                  void pushLawnTasksToSupabase({ lastWateredDate: loggedDate }, { quiet: false });
+                  void pushLawnTasksToSupabase({ lastWateredDate: loggedDate }, { quiet: true });
                   setMaintenanceHints((prev) => ({ ...prev, water: null }));
                 }}
                 disabled={isDormantSeason || isNatureProvidingFullSoak || !pendingWaterLogDate}
@@ -1756,7 +1719,7 @@ export default function SprayerCalculator() {
                   [GYPSUM_LOG_KEY]: loggedDate,
                 }));
                 setPendingGypsumLogDate(todayStr);
-                void pushLawnTasksToSupabase({ lastGypsumDate: loggedDate });
+                void pushLawnTasksToSupabase({ lastGypsumDate: loggedDate }, { quiet: true });
               }}
               disabled={!pendingGypsumLogDate}
               className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"

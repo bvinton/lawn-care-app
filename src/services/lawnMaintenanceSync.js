@@ -33,7 +33,37 @@ export function pickLatestIsoDate(...dates) {
  * @property {string} due_date
  * @property {boolean} is_completed
  * @property {string | null} [updated_at]
+ * @property {string | null} [created_at]
  */
+
+/**
+ * One row per maintenance task (handles duplicate Supabase rows).
+ * @param {LawnMaintenanceRow[]} rows
+ * @returns {LawnMaintenanceRow[]}
+ */
+export function dedupeMaintenanceRows(rows) {
+  /** @type {Map<string, LawnMaintenanceRow>} */
+  const best = new Map();
+
+  for (const row of rows) {
+    const existing = best.get(row.task_name);
+    if (!existing) {
+      best.set(row.task_name, row);
+      continue;
+    }
+
+    const preferThis =
+      (row.is_completed && !existing.is_completed) ||
+      (row.is_completed === existing.is_completed &&
+        row.due_date > existing.due_date);
+
+    if (preferThis) {
+      best.set(row.task_name, row);
+    }
+  }
+
+  return Array.from(best.values());
+}
 
 /**
  * @returns {Promise<LawnMaintenanceRow[]>}
@@ -49,17 +79,26 @@ export async function fetchLawnMaintenanceRows() {
     throw new Error('Supabase client could not be initialised.');
   }
 
-  const { data, error } = await supabase
+  // updated_at may not exist on older Supabase projects — try without it first.
+  let result = await supabase
     .from('tasks')
-    .select('task_name, due_date, is_completed, updated_at')
+    .select('task_name, due_date, is_completed, created_at')
     .eq('app_source', LAWN_APP_SOURCE)
     .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME]);
 
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
+  if (result.error?.code === '42703') {
+    result = await supabase
+      .from('tasks')
+      .select('task_name, due_date, is_completed')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME]);
   }
 
-  return data ?? [];
+  if (result.error) {
+    throw new Error(formatSupabaseSyncError(result.error));
+  }
+
+  return result.data ?? [];
 }
 
 /**
@@ -69,27 +108,24 @@ export async function fetchLawnMaintenanceRows() {
  */
 export function inferMaintenanceDatesFromRows(rows, todayStr) {
   let lastMowedDate = null;
-  let lastWateredDate = null;
+  let pastWateredDate = null;
+  let todayWateredDate = null;
   let mowFromTasksApp = false;
   let waterFromTasksApp = false;
 
   for (const row of rows) {
     const dueDate = row.due_date;
     const updatedDate = isoDateFromTimestamp(row.updated_at);
+    const createdDate = isoDateFromTimestamp(row.created_at);
 
     if (row.task_name === MOW_TASK_NAME) {
-      if (row.is_completed) {
-        const candidate = pickLatestIsoDate(
-          dueDate <= todayStr ? dueDate : null,
-          updatedDate
-        );
+      if (row.is_completed && dueDate <= todayStr) {
+        const candidate = pickLatestIsoDate(dueDate, updatedDate, createdDate);
         if (candidate) {
           lastMowedDate = pickLatestIsoDate(lastMowedDate, candidate);
           mowFromTasksApp = true;
         }
-      } else if (dueDate < todayStr && updatedDate && updatedDate >= dueDate) {
-        // Tasks app records completion by setting due_date to completion day; row may
-        // already be marked incomplete again after lawn sync recalculated the schedule.
+      } else if (!row.is_completed && dueDate < todayStr) {
         const candidate = pickLatestIsoDate(dueDate, updatedDate);
         if (candidate) {
           lastMowedDate = pickLatestIsoDate(lastMowedDate, candidate);
@@ -99,26 +135,26 @@ export function inferMaintenanceDatesFromRows(rows, todayStr) {
     }
 
     if (row.task_name === WATER_TASK_NAME) {
-      if (row.is_completed && dueDate < todayStr) {
-        const candidate = pickLatestIsoDate(dueDate, updatedDate);
-        if (candidate) {
-          lastWateredDate = pickLatestIsoDate(lastWateredDate, candidate);
-          waterFromTasksApp = true;
+      if (row.is_completed && dueDate <= todayStr) {
+        const candidate = pickLatestIsoDate(dueDate, updatedDate, createdDate);
+        if (!candidate) continue;
+        if (dueDate < todayStr) {
+          pastWateredDate = pickLatestIsoDate(pastWateredDate, candidate);
+        } else {
+          todayWateredDate = pickLatestIsoDate(todayWateredDate, candidate);
         }
-      } else if (
-        !row.is_completed &&
-        dueDate < todayStr &&
-        updatedDate &&
-        updatedDate >= dueDate
-      ) {
+        waterFromTasksApp = true;
+      } else if (!row.is_completed && dueDate < todayStr) {
         const candidate = pickLatestIsoDate(dueDate, updatedDate);
         if (candidate) {
-          lastWateredDate = pickLatestIsoDate(lastWateredDate, candidate);
+          pastWateredDate = pickLatestIsoDate(pastWateredDate, candidate);
           waterFromTasksApp = true;
         }
       }
     }
   }
+
+  const lastWateredDate = pastWateredDate ?? todayWateredDate;
 
   return {
     lastMowedDate,
