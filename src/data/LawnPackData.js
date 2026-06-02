@@ -37,6 +37,41 @@ export function getCalendarSeasonForDate(isoDate) {
 /** @type {CalendarSeasonKey[]} */
 export const SEASON_ORDER = ['SPRING', 'SUMMER', 'AUTUMN', 'WINTER'];
 
+/** @param {{ type?: string }} step */
+export function stepTriggersPetLockout(step) {
+  return step?.type === 'chemical' || step?.type === 'liquid';
+}
+
+/**
+ * True only if a chemical/liquid pack step was logged on todayStr (YYYY-MM-DD).
+ * @param {Record<string, string>} userLogs
+ * @param {string} todayStr
+ */
+export function hasChemicalApplicationToday(userLogs, todayStr) {
+  for (const seasonKey of SEASON_ORDER) {
+    for (const step of SEASONS[seasonKey].steps) {
+      if (!stepTriggersPetLockout(step)) continue;
+      if (userLogs[makeStepKey(seasonKey, step.id)] === todayStr) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Remove stale 24h pet lockout when no chemical was applied today.
+ * @param {Record<string, string>} userLogs
+ * @param {string} todayStr
+ */
+export function stripStalePetLockout(userLogs, todayStr) {
+  if (!userLogs.petLockoutUntil) return userLogs;
+  if (hasChemicalApplicationToday(userLogs, todayStr)) return userLogs;
+  const next = { ...userLogs };
+  delete next.petLockoutUntil;
+  return next;
+}
+
 /**
  * @param {CalendarSeasonKey} seasonKey
  * @param {Record<string, string>} userLogs

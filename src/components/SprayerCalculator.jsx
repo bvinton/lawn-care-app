@@ -15,6 +15,9 @@ import {
   getSeasonAnchorDate,
   getGranularRepeatDate,
   addDaysToDateString,
+  stepTriggersPetLockout,
+  hasChemicalApplicationToday,
+  stripStalePetLockout,
 } from '../data/LawnPackData';
 import {
   syncLawnTasksToSupabase,
@@ -28,8 +31,14 @@ import {
   probeLastCompletedColumn,
   isMissingLastCompletedColumnError,
 } from '../services/lawnMaintenanceSync';
+import {
+  fetchLawnUserLogsFromSupabase,
+  saveLawnUserLogsToSupabase,
+  mergeLawnUserLogs,
+  getLawnAppStateSetupHint,
+} from '../services/lawnAppState';
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
-import { compileLawnTasks } from '../utils/compileLawnTasks';
+import { compileAllLawnTasks } from '../utils/compileLawnTasks';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const MS_PER_HOUR = 1000 * 60 * 60;
@@ -325,14 +334,18 @@ export default function SprayerCalculator() {
   const [width, setWidth] = useState(INITIAL_LAWN_CONFIG.defaultWidth);
   const [sqm, setSqm] = useState(INITIAL_LAWN_CONFIG.defaultSqm);
   const [userLogs, setUserLogs] = useState(() =>
-    /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {}))
-  );
-  const [currentSeason, setCurrentSeason] = useState(() =>
-    getWorkflowSeasonForDate(
-      formatInputDate(new Date()),
-      /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {}))
+    stripStalePetLockout(
+      /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {})),
+      formatInputDate(new Date())
     )
   );
+  const [currentSeason, setCurrentSeason] = useState(() => {
+    const logs = stripStalePetLockout(
+      /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {})),
+      formatInputDate(new Date())
+    );
+    return getWorkflowSeasonForDate(formatInputDate(new Date()), logs);
+  });
   const [seasonManuallySelected, setSeasonManuallySelected] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState('BIRCHMEIER');
   const [selectedSprinkler, setSelectedSprinkler] = useState(() => {
@@ -357,6 +370,8 @@ export default function SprayerCalculator() {
     /** @type {string | null} */ (null)
   );
   const [maintenanceHydrated, setMaintenanceHydrated] = useState(false);
+  const [userLogsHydrated, setUserLogsHydrated] = useState(false);
+  const userLogsSaveTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
   const [maintenanceHints, setMaintenanceHints] = useState(
     /** @type {{ mow: string | null, water: string | null }} */ ({ mow: null, water: null })
   );
@@ -439,8 +454,12 @@ export default function SprayerCalculator() {
   const lastGypsumDate = userLogs[GYPSUM_LOG_KEY] ?? null;
   const petLockoutUntil = userLogs[PET_LOCKOUT_KEY] ?? null;
   const petLockoutUntilMs = petLockoutUntil ? new Date(petLockoutUntil).getTime() : null;
+  const chemicalAppliedToday = hasChemicalApplicationToday(userLogs, todayStr);
   const petLockoutActive =
-    petLockoutUntilMs !== null && !Number.isNaN(petLockoutUntilMs) && petLockoutUntilMs > Date.now();
+    chemicalAppliedToday &&
+    petLockoutUntilMs !== null &&
+    !Number.isNaN(petLockoutUntilMs) &&
+    petLockoutUntilMs > Date.now();
   const petLockoutHoursRemaining = petLockoutActive
     ? Math.max(1, Math.ceil((petLockoutUntilMs - Date.now()) / MS_PER_HOUR))
     : 0;
@@ -669,8 +688,10 @@ export default function SprayerCalculator() {
         ? addDaysToDateString(nextLastWateredDate, dynamicWateringDays)
         : null;
 
-      return compileLawnTasks({
+      return compileAllLawnTasks({
         todayStr,
+        userLogs,
+        pendingDates,
         isDormantSeason,
         isNatureProvidingFullSoak,
         seedEstablishmentActive,
@@ -686,6 +707,8 @@ export default function SprayerCalculator() {
       lastWateredDate,
       lastGypsumDate,
       todayStr,
+      userLogs,
+      pendingDates,
       isDormantSeason,
       isNatureProvidingFullSoak,
       seedEstablishmentActive,
@@ -813,8 +836,38 @@ export default function SprayerCalculator() {
   }, [todayStr, seasonManuallySelected, userLogs]);
 
   useEffect(() => {
+    if (!userLogsHydrated) return;
+
+    const sanitized = stripStalePetLockout(userLogs, todayStr);
+    if (sanitized !== userLogs) {
+      setUserLogs(sanitized);
+      return;
+    }
+
     localStorage.setItem('lawnPackUserLogs', JSON.stringify(userLogs));
-  }, [userLogs]);
+
+    if (userLogsSaveTimerRef.current) {
+      clearTimeout(userLogsSaveTimerRef.current);
+    }
+
+    userLogsSaveTimerRef.current = setTimeout(() => {
+      void (async () => {
+        if (getSupabaseConfigError()) return;
+        const saved = await saveLawnUserLogsToSupabase(userLogs);
+        if (saved === false) {
+          setSupabaseSyncError((prev) =>
+            prev?.includes('maintenance_link.sql') ? prev : getLawnAppStateSetupHint()
+          );
+        }
+      })();
+    }, 800);
+
+    return () => {
+      if (userLogsSaveTimerRef.current) {
+        clearTimeout(userLogsSaveTimerRef.current);
+      }
+    };
+  }, [userLogs, userLogsHydrated]);
 
   useEffect(() => {
     if (lastMowedDate) {
@@ -858,14 +911,36 @@ export default function SprayerCalculator() {
   useEffect(() => {
     let cancelled = false;
 
-    async function hydrateMaintenanceFromSupabase() {
+    async function hydrateFromSupabase() {
+      if (!getSupabaseConfigError()) {
+        try {
+          const remote = await fetchLawnUserLogsFromSupabase();
+          if (remote !== null && !cancelled) {
+            const local = readStoredJson('lawnPackUserLogs', {});
+            const merged = mergeLawnUserLogs(remote, local);
+            const cleared = stripStalePetLockout(merged, todayStr);
+            setUserLogs(cleared);
+            localStorage.setItem('lawnPackUserLogs', JSON.stringify(cleared));
+            await saveLawnUserLogsToSupabase(cleared);
+          } else if (remote === null && !cancelled) {
+            setSupabaseSyncError((prev) => prev ?? getLawnAppStateSetupHint());
+          }
+        } catch (error) {
+          console.warn('[Lawn Care] Lawn pack state pull failed:', error);
+        }
+      }
+
+      if (!cancelled) {
+        setUserLogsHydrated(true);
+      }
+
       await applySharedMaintenanceDates();
       if (!cancelled) {
         setMaintenanceHydrated(true);
       }
     }
 
-    void hydrateMaintenanceFromSupabase();
+    void hydrateFromSupabase();
 
     return () => {
       cancelled = true;
@@ -898,9 +973,12 @@ export default function SprayerCalculator() {
     return () => clearTimeout(timer);
   }, [
     maintenanceHydrated,
+    userLogsHydrated,
     lastMowedDate,
     lastWateredDate,
     lastGypsumDate,
+    userLogs,
+    pendingDates,
     currentSeason,
     isDormantSeason,
     isNatureProvidingFullSoak,
@@ -967,9 +1045,6 @@ export default function SprayerCalculator() {
     });
   };
 
-  const stepTriggersPetLockout = (step) =>
-    step?.type === 'chemical' || step?.type === 'liquid';
-
   const handleLogTask = (stepId) => {
     const dateValue = pendingDates[currentSeason]?.[stepId];
     if (!dateValue) return;
@@ -985,9 +1060,13 @@ export default function SprayerCalculator() {
     };
 
     if (step && stepTriggersPetLockout(step)) {
-      nextLogs[PET_LOCKOUT_KEY] = new Date(
-        Date.now() + PET_LOCKOUT_HOURS * MS_PER_HOUR
-      ).toISOString();
+      if (dateValue === todayStr) {
+        nextLogs[PET_LOCKOUT_KEY] = new Date(
+          Date.now() + PET_LOCKOUT_HOURS * MS_PER_HOUR
+        ).toISOString();
+      } else {
+        delete nextLogs[PET_LOCKOUT_KEY];
+      }
     }
 
     setUserLogs(nextLogs);
@@ -1275,13 +1354,21 @@ export default function SprayerCalculator() {
                   : 'border-red-300 bg-red-50 text-red-800'
               }`}
             >
-              {supabaseSyncError.includes('maintenance_link.sql') ? (
+              {supabaseSyncError.includes('maintenance_link.sql') ||
+              supabaseSyncError.includes('lawn_app_state.sql') ? (
                 <>
                   <p className="font-bold mb-1">One-time database setup</p>
                   <p>{supabaseSyncError}</p>
-                  <p className="mt-2 font-mono text-[10px] break-all">
-                    alter table public.tasks add column if not exists last_completed_date date;
-                  </p>
+                  {supabaseSyncError.includes('lawn_app_state.sql') ? (
+                    <p className="mt-2 text-[10px]">
+                      Run the SQL file <strong>supabase/lawn_app_state.sql</strong> in Supabase (creates
+                      the lawn progress table).
+                    </p>
+                  ) : (
+                    <p className="mt-2 font-mono text-[10px] break-all">
+                      alter table public.tasks add column if not exists last_completed_date date;
+                    </p>
+                  )}
                 </>
               ) : (
                 <>Supabase sync failed: {supabaseSyncError}</>

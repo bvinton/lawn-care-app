@@ -1,4 +1,13 @@
-import { addDaysToDateString } from '../data/LawnPackData';
+import {
+  addDaysToDateString,
+  SEASONS,
+  SEASON_ORDER,
+  makeStepKey,
+  getWorkflowSeasonForDate,
+  getSeasonAnchorDate,
+  cascadeSeasonDates,
+  isSeasonPackComplete,
+} from '../data/LawnPackData';
 
 const GYPSUM_CYCLE_DAYS = 182;
 
@@ -104,4 +113,87 @@ export function compileLawnTasks({
   });
 
   return compiledTasks;
+}
+
+/**
+ * Lawn Pack timeline steps → shared Tasks reminders (Weedol, scarify, seed, etc.).
+ * @param {Object} input
+ * @param {string} input.todayStr
+ * @param {Record<string, string>} input.userLogs
+ * @param {Record<string, Record<string, string>>} input.pendingDates
+ */
+export function compilePackStepTasks({ todayStr, userLogs, pendingDates }) {
+  const workflowSeason = getWorkflowSeasonForDate(todayStr, userLogs);
+  const workflowIndex = SEASON_ORDER.indexOf(workflowSeason);
+
+  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
+  const compiledTasks = [];
+
+  for (let i = 0; i <= workflowIndex; i++) {
+    const seasonKey = SEASON_ORDER[i];
+    if (isSeasonPackComplete(seasonKey, userLogs)) {
+      continue;
+    }
+
+    const anchor = getSeasonAnchorDate(seasonKey, userLogs, pendingDates);
+    const seasonPending = cascadeSeasonDates(seasonKey, anchor, userLogs, pendingDates);
+
+    for (const step of SEASONS[seasonKey].steps) {
+      const logKey = makeStepKey(seasonKey, step.id);
+      const completedDate = userLogs[logKey] ?? null;
+      const dueDate = completedDate ?? seasonPending[step.id];
+      if (!dueDate) continue;
+
+      const status = completedDate
+        ? 'completed'
+        : daysBetween(dueDate, todayStr) >= 0
+          ? 'urgent'
+          : 'pending';
+
+      compiledTasks.push({
+        id: `lawn-pack-${seasonKey}-${step.id}`,
+        title: step.label,
+        dueDate,
+        status,
+        module: 'lawn',
+      });
+    }
+  }
+
+  return compiledTasks;
+}
+
+/**
+ * Maintenance (mow/water/gypsum) + pack timeline steps for Supabase / Tasks app.
+ * @param {Object} input
+ */
+export function compileAllLawnTasks(input) {
+  const {
+    todayStr,
+    userLogs,
+    pendingDates,
+    isDormantSeason,
+    isNatureProvidingFullSoak,
+    seedEstablishmentActive,
+    mowingLockedUntilIso,
+    mowingNextDueIso,
+    wateringNextDueIso,
+    lastGypsumDate,
+    scheduleReason = null,
+  } = input;
+
+  return [
+    ...compilePackStepTasks({ todayStr, userLogs, pendingDates }),
+    ...compileLawnTasks({
+      todayStr,
+      isDormantSeason,
+      isNatureProvidingFullSoak,
+      seedEstablishmentActive,
+      mowingLockedUntilIso,
+      mowingNextDueIso,
+      wateringNextDueIso,
+      lastGypsumDate,
+      scheduleReason,
+    }),
+  ];
 }
