@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Lawn Pack">
+  <rect width="512" height="512" rx="96" fill="#14532d"/>
+  <path fill="#86efac" d="M256 88c-72 0-120 48-120 112 0 40 20 76 52 100 8-36 32-64 68-76-20-28-20-64 0-92-28 12-48 40-52 72 32-16 72-8 96 24 24-56 24-104-12-140z"/>
+  <ellipse cx="256" cy="400" rx="140" ry="28" fill="#166534" opacity="0.5"/>
+</svg>
