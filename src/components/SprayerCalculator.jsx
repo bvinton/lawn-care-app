@@ -7,6 +7,8 @@ import {
   WEEDOL_BARRIER_DAYS,
   SEASON_START_DATES,
   getCalendarSeasonForDate,
+  getWorkflowSeasonForDate,
+  getIncompleteSeasonSteps,
   makeStepKey,
   createInitialPendingDates,
   cascadeSeasonDates,
@@ -309,8 +311,14 @@ export default function SprayerCalculator() {
   const [length, setLength] = useState(INITIAL_LAWN_CONFIG.defaultLength);
   const [width, setWidth] = useState(INITIAL_LAWN_CONFIG.defaultWidth);
   const [sqm, setSqm] = useState(INITIAL_LAWN_CONFIG.defaultSqm);
+  const [userLogs, setUserLogs] = useState(() =>
+    /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {}))
+  );
   const [currentSeason, setCurrentSeason] = useState(() =>
-    getCalendarSeasonForDate(formatInputDate(new Date()))
+    getWorkflowSeasonForDate(
+      formatInputDate(new Date()),
+      /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {}))
+    )
   );
   const [seasonManuallySelected, setSeasonManuallySelected] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState('BIRCHMEIER');
@@ -339,9 +347,6 @@ export default function SprayerCalculator() {
     /** @type {'idle' | 'syncing' | 'synced' | 'error'} */ ('idle')
   );
 
-  const [userLogs, setUserLogs] = useState(() =>
-    /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {}))
-  );
   const [pendingDates, setPendingDates] = useState(() =>
     /** @type {Record<string, Record<string, string>>} */ (
       createInitialPendingDates(
@@ -384,6 +389,13 @@ export default function SprayerCalculator() {
   const today = startOfDay(new Date());
   const todayStr = formatInputDate(today);
   const calendarSeason = getCalendarSeasonForDate(todayStr);
+  const workflowSeason = getWorkflowSeasonForDate(todayStr, userLogs);
+  const isCatchUpMode = workflowSeason !== calendarSeason;
+  const incompleteSpringSteps = getIncompleteSeasonSteps('SPRING', userLogs);
+  const springPackIncomplete = incompleteSpringSteps.length > 0;
+  const springRenovationPending = incompleteSpringSteps.some((step) =>
+    ['prep', 'seed'].includes(step.id)
+  );
 
   const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
   const daysSinceSeed = springSeedDate ? daysBetween(springSeedDate, today) : null;
@@ -710,8 +722,8 @@ export default function SprayerCalculator() {
 
   useEffect(() => {
     if (seasonManuallySelected) return;
-    setCurrentSeason(getCalendarSeasonForDate(todayStr));
-  }, [todayStr, seasonManuallySelected]);
+    setCurrentSeason(getWorkflowSeasonForDate(todayStr, userLogs));
+  }, [todayStr, seasonManuallySelected, userLogs]);
 
   useEffect(() => {
     localStorage.setItem('lawnPackUserLogs', JSON.stringify(userLogs));
@@ -877,7 +889,11 @@ export default function SprayerCalculator() {
   };
 
   const showsWeedolAdvisory = (step) =>
-    currentSeason === 'SPRING' && weedolBarrierActive && step.id !== 'weedol';
+    currentSeason === 'SPRING' &&
+    weedolLoggedDate !== null &&
+    step.id !== 'weedol' &&
+    !userLogs[makeStepKey('SPRING', step.id)] &&
+    (weedolBarrierActive || ['prep', 'seed'].includes(step.id));
 
   const weedolClearanceLabel = weedolClearanceDate
     ? formatDisplayDate(weedolClearanceDate)
@@ -1138,6 +1154,56 @@ export default function SprayerCalculator() {
             <div className="mb-4 rounded-lg border border-orange-300 bg-gradient-to-r from-red-50 to-orange-50 p-3 text-sm font-bold text-orange-900 shadow-sm">
               🚫 PAWS OFF: Chemical drying in progress. Safe in {petLockoutHoursRemaining} hour
               {petLockoutHoursRemaining !== 1 ? 's' : ''}.
+            </div>
+          )}
+          {springPackIncomplete && currentSeason !== 'SPRING' && (
+            <div className="mb-4 rounded-lg border border-amber-400 bg-amber-50 p-3 text-xs text-amber-950 leading-relaxed">
+              <p className="font-bold mb-1">
+                📋 Spring Pack still in progress ({incompleteSpringSteps.length} step
+                {incompleteSpringSteps.length !== 1 ? 's' : ''} left)
+              </p>
+              <p className="mb-2">
+                The calendar says {SEASONS[calendarSeason].name}, but you have unfinished Spring
+                work — we won&apos;t skip ahead until those steps are logged.
+              </p>
+              {weedolLoggedDate && springRenovationPending && (
+                <p className="mb-2 font-semibold">
+                  {weedolBarrierActive ? (
+                    <>
+                      ⏳ Weedol barrier: scarify &amp; seed locked until{' '}
+                      <strong>{formatDisplayDate(weedolClearanceDate)}</strong> (
+                      {weedolDaysRemaining} day{weedolDaysRemaining !== 1 ? 's' : ''} left).
+                    </>
+                  ) : (
+                    <>
+                      ✅ Weedol clearance passed ({formatDisplayDate(weedolClearanceDate)}) —
+                      you can scarify and seed when ready.
+                    </>
+                  )}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentSeason('SPRING');
+                  setSeasonManuallySelected(true);
+                }}
+                className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-amber-600 text-white hover:bg-amber-700"
+              >
+                Open Spring Pack timeline
+              </button>
+            </div>
+          )}
+          {currentSeason === 'SPRING' && isCatchUpMode && !seasonManuallySelected && (
+            <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs font-semibold text-emerald-900 leading-relaxed">
+              📅 Catch-up mode: calendar is {SEASONS[calendarSeason].name}, but Spring Pack steps
+              remain — complete them before Summer tasks unlock here.
+              {weedolBarrierActive && springRenovationPending && weedolClearanceDate && (
+                <span className="block mt-1 font-bold text-amber-900">
+                  ⏳ Weedol barrier until {formatDisplayDate(weedolClearanceDate)} — prep &amp; seed
+                  steps below show the countdown.
+                </span>
+              )}
             </div>
           )}
           <div className="flex justify-between items-center mb-6 border-b pb-4">
@@ -1572,7 +1638,7 @@ export default function SprayerCalculator() {
               type="button"
               onClick={() => {
                 setCurrentSeason(key);
-                setSeasonManuallySelected(key !== calendarSeason);
+                setSeasonManuallySelected(key !== workflowSeason);
               }}
               className={`p-2.5 text-xs font-bold rounded-lg border transition-all ${
                 currentSeason === key
@@ -1584,11 +1650,28 @@ export default function SprayerCalculator() {
             </button>
           ))}
         </div>
-        {seasonManuallySelected && currentSeason !== calendarSeason && (
+        {seasonManuallySelected && currentSeason !== workflowSeason && (
           <p className="text-xs text-center text-amber-700 mt-2">
-            Viewing {SEASONS[currentSeason].name} — today&apos;s season is{' '}
-            {SEASONS[calendarSeason].name}. Tap {SEASONS[calendarSeason].name} to follow the
-            calendar.
+            Viewing {SEASONS[currentSeason].name}
+            {isCatchUpMode ? (
+              <>
+                {' '}
+                — finish Spring Pack first ({incompleteSpringSteps.length} step
+                {incompleteSpringSteps.length !== 1 ? 's' : ''} left). Tap Spring Pack to continue
+                catch-up.
+              </>
+            ) : (
+              <>
+                {' '}
+                — recommended now is {SEASONS[workflowSeason].name}. Tap{' '}
+                {SEASONS[workflowSeason].name} to follow the workflow.
+              </>
+            )}
+          </p>
+        )}
+        {!seasonManuallySelected && isCatchUpMode && currentSeason === 'SPRING' && (
+          <p className="text-xs text-center text-emerald-800 mt-2 font-medium">
+            Catch-up: {SEASONS[calendarSeason].name} on the calendar — finishing Spring Pack first.
           </p>
         )}
         <p className="text-xs text-center text-gray-500 mt-2 italic">{activeSeason.focus}</p>
@@ -1655,9 +1738,18 @@ export default function SprayerCalculator() {
 
                 {isWeedolAdvisoryStep && weedolClearanceLabel && (
                   <div className="mb-3 p-3 bg-amber-100 rounded-lg border border-amber-300 text-xs text-amber-900 font-medium leading-relaxed">
-                    ⏳ TIMELINE ADVISORY: Weedol barrier active. Do not complete this step until{' '}
-                    <strong>{weedolClearanceLabel}</strong> ({weedolDaysRemaining} day
-                    {weedolDaysRemaining !== 1 ? 's' : ''} remaining).
+                    {weedolBarrierActive ? (
+                      <>
+                        ⏳ TIMELINE ADVISORY: Weedol barrier active. Do not complete this step until{' '}
+                        <strong>{weedolClearanceLabel}</strong> ({weedolDaysRemaining} day
+                        {weedolDaysRemaining !== 1 ? 's' : ''} remaining).
+                      </>
+                    ) : (
+                      <>
+                        ✅ Weedol clearance date was <strong>{weedolClearanceLabel}</strong> — safe to
+                        proceed when conditions are right (soil temp, dry weather).
+                      </>
+                    )}
                   </div>
                 )}
 

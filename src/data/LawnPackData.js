@@ -34,6 +34,51 @@ export function getCalendarSeasonForDate(isoDate) {
   return 'AUTUMN';
 }
 
+/** @type {CalendarSeasonKey[]} */
+export const SEASON_ORDER = ['SPRING', 'SUMMER', 'AUTUMN', 'WINTER'];
+
+/**
+ * @param {CalendarSeasonKey} seasonKey
+ * @param {Record<string, string>} userLogs
+ */
+export function isSeasonPackComplete(seasonKey, userLogs) {
+  return SEASONS[seasonKey].steps.every(
+    (step) => userLogs[makeStepKey(seasonKey, step.id)] != null
+  );
+}
+
+/**
+ * Steps not yet logged for a season pack.
+ * @param {CalendarSeasonKey} seasonKey
+ * @param {Record<string, string>} userLogs
+ */
+export function getIncompleteSeasonSteps(seasonKey, userLogs) {
+  return SEASONS[seasonKey].steps.filter(
+    (step) => !userLogs[makeStepKey(seasonKey, step.id)]
+  );
+}
+
+/**
+ * Which season tab to open by default: earliest incomplete pack at or before
+ * today's calendar season (catch-up — don't skip Spring because June arrived).
+ * @param {string} isoDate YYYY-MM-DD
+ * @param {Record<string, string>} userLogs
+ * @returns {CalendarSeasonKey}
+ */
+export function getWorkflowSeasonForDate(isoDate, userLogs) {
+  const calendarSeason = getCalendarSeasonForDate(isoDate);
+  const calendarIndex = SEASON_ORDER.indexOf(calendarSeason);
+
+  for (let i = 0; i <= calendarIndex; i++) {
+    const seasonKey = SEASON_ORDER[i];
+    if (!isSeasonPackComplete(seasonKey, userLogs)) {
+      return seasonKey;
+    }
+  }
+
+  return calendarSeason;
+}
+
 export const WALLSEND_COORDS = {
   latitude: 54.98,
   longitude: -1.53,
