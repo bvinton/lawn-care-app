@@ -24,6 +24,9 @@ export function getSupabaseConfigError() {
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
+    if (import.meta.env.PROD) {
+      return 'Missing Supabase credentials on this deployment. In Vercel → Project → Settings → Environment Variables, add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for Production, then redeploy.';
+    }
     return 'Missing Supabase credentials. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local, then restart the dev server.';
   }
 
