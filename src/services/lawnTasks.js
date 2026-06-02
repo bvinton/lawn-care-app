@@ -1,4 +1,5 @@
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
+import { MOW_TASK_NAME, WATER_TASK_NAME } from './lawnMaintenanceSync';
 
 export const LAWN_APP_SOURCE = 'lawn';
 
@@ -38,47 +39,55 @@ function requireSupabase() {
   return supabase;
 }
 
-/** @param {CompiledLawnTask} task */
-function compiledTaskToRow(task) {
-  return {
+/**
+ * @param {CompiledLawnTask} task
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} maintenance
+ */
+function compiledTaskToRow(task, maintenance = {}) {
+  /** @type {Record<string, unknown>} */
+  const row = {
     app_source: LAWN_APP_SOURCE,
     task_name: task.title,
     due_date: task.dueDate,
     is_completed: task.status === 'completed',
   };
-}
 
-/** @returns {Promise<Map<string, string>>} */
-async function fetchLawnTaskIdsByName() {
-  const supabase = requireSupabase();
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('id, task_name')
-    .eq('app_source', LAWN_APP_SOURCE);
-
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
+  if (task.title === MOW_TASK_NAME && maintenance.lastMowedDate) {
+    row.last_completed_date = maintenance.lastMowedDate;
+  }
+  if (task.title === WATER_TASK_NAME && maintenance.lastWateredDate) {
+    row.last_completed_date = maintenance.lastWateredDate;
   }
 
-  return new Map((data ?? []).map((row) => [row.task_name, row.id]));
+  return row;
 }
 
 /**
  * Create or update every compiled lawn task in Supabase.
  * @param {CompiledLawnTask[]} compiledTasks
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} [maintenance]
  */
-export async function syncLawnTasksToSupabase(compiledTasks) {
+export async function syncLawnTasksToSupabase(compiledTasks, maintenance = {}) {
   const supabase = requireSupabase();
-  const existingByName = await fetchLawnTaskIdsByName();
 
   for (const task of compiledTasks) {
-    const existingId = existingByName.get(task.title);
+    const payload = compiledTaskToRow(task, maintenance);
+    const { data: existing, error: findError } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .eq('task_name', task.title);
 
-    if (existingId) {
+    if (findError) {
+      throw new Error(`Lookup failed for "${task.title}": ${formatSupabaseSyncError(findError)}`);
+    }
+
+    if (existing && existing.length > 0) {
       const { error } = await supabase
         .from('tasks')
-        .update(compiledTaskToRow(task))
-        .eq('id', existingId);
+        .update(payload)
+        .eq('app_source', LAWN_APP_SOURCE)
+        .eq('task_name', task.title);
 
       if (error) {
         throw new Error(`Update failed for "${task.title}": ${formatSupabaseSyncError(error)}`);
@@ -86,7 +95,7 @@ export async function syncLawnTasksToSupabase(compiledTasks) {
       continue;
     }
 
-    const { error } = await supabase.from('tasks').insert(compiledTaskToRow(task));
+    const { error } = await supabase.from('tasks').insert(payload);
 
     if (error) {
       throw new Error(`Insert failed for "${task.title}": ${formatSupabaseSyncError(error)}`);

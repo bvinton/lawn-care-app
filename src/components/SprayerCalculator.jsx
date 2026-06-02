@@ -22,9 +22,8 @@ import {
   LAWN_APP_SOURCE,
 } from '../services/lawnTasks';
 import {
-  fetchLawnMaintenanceRows,
-  inferMaintenanceDatesFromRows,
   mergeMaintenanceDate,
+  pullMaintenanceDatesFromSupabase,
 } from '../services/lawnMaintenanceSync';
 import { getSupabaseConfigError } from '../lib/supabase';
 import { formatSupabaseSyncError } from '../lib/supabase';
@@ -708,7 +707,12 @@ export default function SprayerCalculator() {
       setLawnTasksSnapshot(compiledTasks);
 
       try {
-        await syncLawnTasksToSupabase(compiledTasks);
+        await syncLawnTasksToSupabase(compiledTasks, {
+          lastMowedDate:
+            overrides.lastMowedDate !== undefined ? overrides.lastMowedDate : lastMowedDate,
+          lastWateredDate:
+            overrides.lastWateredDate !== undefined ? overrides.lastWateredDate : lastWateredDate,
+        });
         lastSyncFingerprintRef.current = fingerprint;
         setSupabaseSyncError(null);
       } catch (error) {
@@ -719,7 +723,38 @@ export default function SprayerCalculator() {
         syncInFlightRef.current = false;
       }
     },
-    [compileLawnTasksExport]
+    [compileLawnTasksExport, lastMowedDate, lastWateredDate]
+  );
+
+  const applySharedMaintenanceDates = useCallback(
+    async () => {
+      if (getSupabaseConfigError()) return;
+
+      try {
+        const inferred = await pullMaintenanceDatesFromSupabase(todayStr);
+        setLastMowedDate((prev) => mergeMaintenanceDate(prev, inferred.lastMowedDate) ?? prev);
+        setLastWateredDate((prev) => mergeMaintenanceDate(prev, inferred.lastWateredDate) ?? prev);
+
+        setMaintenanceHints({
+          mow:
+            inferred.mowFromTasksApp && inferred.lastMowedDate
+              ? `Linked from Tasks app — last mow ${formatDisplayDate(inferred.lastMowedDate)}.`
+              : null,
+          water:
+            inferred.waterFromTasksApp && inferred.lastWateredDate
+              ? `Linked from Tasks app — last water ${formatDisplayDate(inferred.lastWateredDate)}.`
+              : null,
+        });
+        setSupabaseSyncError(null);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn('[Lawn Care] Shared maintenance pull failed:', error);
+        setSupabaseSyncError(
+          `Could not sync mow/water with Tasks app: ${message}`
+        );
+      }
+    },
+    [todayStr]
   );
 
   const handleCopyTasksJson = async () => {
@@ -796,42 +831,9 @@ export default function SprayerCalculator() {
     let cancelled = false;
 
     async function hydrateMaintenanceFromSupabase() {
-      if (getSupabaseConfigError()) {
+      await applySharedMaintenanceDates();
+      if (!cancelled) {
         setMaintenanceHydrated(true);
-        return;
-      }
-
-      try {
-        const rows = await fetchLawnMaintenanceRows();
-        if (cancelled) return;
-
-        const inferred = inferMaintenanceDatesFromRows(rows, todayStr);
-        setLastMowedDate((prev) => mergeMaintenanceDate(prev, inferred.lastMowedDate) ?? prev);
-        setLastWateredDate((prev) => mergeMaintenanceDate(prev, inferred.lastWateredDate) ?? prev);
-
-        const mergedMow = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
-        const mergedWater = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
-
-        setMaintenanceHints({
-          mow:
-            inferred.mowFromTasksApp && mergedMow
-              ? `Last mow synced from Tasks app (${formatDisplayDate(mergedMow)}).`
-              : null,
-          water:
-            inferred.waterFromTasksApp && mergedWater
-              ? `Last water synced from Tasks app (${formatDisplayDate(mergedWater)}).`
-              : null,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn('[Lawn Care] Maintenance hydrate failed:', error);
-        setSupabaseSyncError(
-          `Could not load mow/water history from Tasks app: ${message}`
-        );
-      } finally {
-        if (!cancelled) {
-          setMaintenanceHydrated(true);
-        }
       }
     }
 
@@ -840,7 +842,23 @@ export default function SprayerCalculator() {
     return () => {
       cancelled = true;
     };
-  }, [todayStr]);
+  }, [applySharedMaintenanceDates]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void applySharedMaintenanceDates();
+      }
+    };
+
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [applySharedMaintenanceDates]);
 
   useEffect(() => {
     if (!maintenanceHydrated) return;
