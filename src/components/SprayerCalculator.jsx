@@ -6,6 +6,7 @@ import {
   SPRINKLER_OPTIONS,
   WEEDOL_BARRIER_DAYS,
   SEASON_START_DATES,
+  getCalendarSeasonForDate,
   makeStepKey,
   createInitialPendingDates,
   cascadeSeasonDates,
@@ -308,7 +309,10 @@ export default function SprayerCalculator() {
   const [length, setLength] = useState(INITIAL_LAWN_CONFIG.defaultLength);
   const [width, setWidth] = useState(INITIAL_LAWN_CONFIG.defaultWidth);
   const [sqm, setSqm] = useState(INITIAL_LAWN_CONFIG.defaultSqm);
-  const [currentSeason, setCurrentSeason] = useState('SPRING');
+  const [currentSeason, setCurrentSeason] = useState(() =>
+    getCalendarSeasonForDate(formatInputDate(new Date()))
+  );
+  const [seasonManuallySelected, setSeasonManuallySelected] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState('BIRCHMEIER');
   const [selectedSprinkler, setSelectedSprinkler] = useState(() => {
     const saved = localStorage.getItem('lawnPackSelectedSprinkler');
@@ -379,6 +383,7 @@ export default function SprayerCalculator() {
   const activeSeason = SEASONS[currentSeason];
   const today = startOfDay(new Date());
   const todayStr = formatInputDate(today);
+  const calendarSeason = getCalendarSeasonForDate(todayStr);
 
   const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
   const daysSinceSeed = springSeedDate ? daysBetween(springSeedDate, today) : null;
@@ -435,7 +440,95 @@ export default function SprayerCalculator() {
     !isSoilTooColdForSeed &&
     !isSoilTooHotForSeed;
 
-  const isWinterSeason = currentSeason === 'WINTER';
+  // Calendar-based dormancy: Dec, Jan, Feb = grass not actively growing.
+  // Used for maintenance tasks (mow/water) independently of the manual season tab.
+  const isDormantSeason = (() => {
+    const month = today.getMonth() + 1; // 1–12
+    return month === 12 || month === 1 || month === 2;
+  })();
+
+  // Dynamic mowing interval (days) adjusted for soil temperature, rainfall,
+  // and post-seed recovery phase.
+  const dynamicMowingDays = (() => {
+    const temp = currentSoilTemp;
+    const rain = forecastedRainSum;
+
+    // Post-seed recovery (21–42 days after seeding): ease back in gently
+    if (springSeedDate) {
+      const daysSince = Math.floor(
+        (today.getTime() - new Date(`${springSeedDate}T12:00:00`).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysSince >= SEED_ESTABLISHMENT_DAYS && daysSince < 42) return 14;
+    }
+
+    if ((temp !== null && temp < 8) || rain > 25) return 14;   // very cold / waterlogged
+    if ((temp !== null && temp < 12) || rain > 15) return 10;  // cool / wet
+    if ((temp !== null && temp > 18) && rain < 5) return 5;    // warm & dry – fast growth
+    return 7;                                                   // normal growing season
+  })();
+
+  // Dynamic watering interval (days) adjusted for soil temperature, rainfall,
+  // and seed establishment.
+  const dynamicWateringDays = (() => {
+    const temp = currentSoilTemp;
+    const rain = forecastedRainSum;
+
+    // Active seed establishment: keep the seedbed consistently moist
+    if (seedEstablishmentActive) return 1;
+
+    // Post-seed recovery (21–42 days): continued elevated watering
+    if (springSeedDate) {
+      const daysSince = Math.floor(
+        (today.getTime() - new Date(`${springSeedDate}T12:00:00`).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysSince >= SEED_ESTABLISHMENT_DAYS && daysSince < 42) return 2;
+    }
+
+    if ((temp !== null && temp > 20) && rain < 2) return 2;  // hot & dry – high demand
+    if (rain >= 5) return 5;                                  // meaningful rain – reduce need
+    if (rain >= 2) return 4;                                  // light rain – slight reduction
+    if (temp !== null && temp < 12) return 5;                 // cool – low evaporation
+    return 3;                                                  // normal
+  })();
+
+  // Human-readable explanations surfaced in the UI for why an interval was adjusted.
+  const scheduleReason = (() => {
+    const temp = currentSoilTemp;
+    const rain = forecastedRainSum;
+    const mowReasons = [];
+    const waterReasons = [];
+
+    if (springSeedDate) {
+      const daysSince = Math.floor(
+        (today.getTime() - new Date(`${springSeedDate}T12:00:00`).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysSince >= SEED_ESTABLISHMENT_DAYS && daysSince < 42) {
+        mowReasons.push('gentle recovery schedule after seeding');
+        waterReasons.push('enhanced watering during turf recovery');
+      }
+    }
+
+    if (seedEstablishmentActive) {
+      waterReasons.push('daily watering during seed establishment');
+    }
+
+    if (temp !== null && temp > 18 && rain < 5) {
+      mowReasons.push(`${temp.toFixed(0)}°C soil + dry forecast – fast growth`);
+    } else if (temp !== null && temp < 10) {
+      mowReasons.push(`${temp.toFixed(0)}°C soil – slower growth`);
+    }
+
+    if (rain > 5) {
+      waterReasons.push(`${rain.toFixed(0)}mm forecast this week – reduced need`);
+    } else if (temp !== null && temp > 20 && rain < 2) {
+      waterReasons.push(`${temp.toFixed(0)}°C soil & dry forecast – increased demand`);
+    }
+
+    return {
+      mow: mowReasons.length > 0 ? mowReasons.join(', ') : null,
+      water: waterReasons.length > 0 ? waterReasons.join(', ') : null,
+    };
+  })();
 
   /** @param {string | null | undefined} lastDateString @param {number} daysToAdd */
   const getNextDueDate = (lastDateString, daysToAdd) => {
@@ -450,18 +543,18 @@ export default function SprayerCalculator() {
   };
 
   const mowingNextDueIso = lastMowedDate
-    ? addDaysToDateString(lastMowedDate, MOWING_DUE_DAYS)
+    ? addDaysToDateString(lastMowedDate, dynamicMowingDays)
     : null;
   const wateringNextDueIso = lastWateredDate
-    ? addDaysToDateString(lastWateredDate, WATERING_DUE_DAYS)
+    ? addDaysToDateString(lastWateredDate, dynamicWateringDays)
     : null;
   const mowingLockedUntilIso =
     seedEstablishmentActive && springSeedDate
       ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS)
       : null;
 
-  const mowingNextDate = getNextDueDate(lastMowedDate, MOWING_DUE_DAYS);
-  const wateringNextDate = getNextDueDate(lastWateredDate, WATERING_DUE_DAYS);
+  const mowingNextDate = getNextDueDate(lastMowedDate, dynamicMowingDays);
+  const wateringNextDate = getNextDueDate(lastWateredDate, dynamicWateringDays);
   const seedLockEndDate = getNextDueDate(springSeedDate, SEED_ESTABLISHMENT_DAYS);
 
   const activeSeasonStep =
@@ -471,7 +564,7 @@ export default function SprayerCalculator() {
 
   let recommendedSetting =
     'Height: Setting 3 (45mm) - Standard safe maintenance cut to prevent scalping';
-  if (currentSeason === 'WINTER') {
+  if (isDormantSeason) {
     recommendedSetting = 'Height: N/A - Growth Dormant';
   } else if (currentSeason === 'SPRING' && seedEstablishmentActive) {
     recommendedSetting = 'Height: 🚫 LOCKED - Do not mow fresh seed';
@@ -487,7 +580,9 @@ export default function SprayerCalculator() {
   const maintenanceDueDates = {
     mowingNextDue: mowingNextDueIso,
     mowingLockedUntil: mowingLockedUntilIso,
+    mowingIntervalDays: dynamicMowingDays,
     wateringNextDue: wateringNextDueIso,
+    wateringIntervalDays: dynamicWateringDays,
     wateringMinutes: dynamicMinutes,
     forecastedRainSum,
     netWaterNeeded,
@@ -498,21 +593,22 @@ export default function SprayerCalculator() {
     mowerModel,
     lawnSurface,
     recommendedSetting,
-    mowingStatus: isWinterSeason ? 'dormant' : seedEstablishmentActive ? 'locked' : 'active',
-    wateringStatus: isWinterSeason
+    mowingStatus: isDormantSeason ? 'dormant' : seedEstablishmentActive ? 'locked' : 'active',
+    wateringStatus: isDormantSeason
       ? 'dormant'
       : isNatureProvidingFullSoak
         ? 'paused'
         : 'active',
+    scheduleReason,
   };
   const mowingDue =
-    !isWinterSeason &&
+    !isDormantSeason &&
     !seedEstablishmentActive &&
-    (daysSinceMow === null || daysSinceMow >= MOWING_DUE_DAYS);
+    (daysSinceMow === null || daysSinceMow >= dynamicMowingDays);
   const wateringDue =
-    !isWinterSeason &&
+    !isDormantSeason &&
     !isNatureProvidingFullSoak &&
-    (daysSinceWater === null || daysSinceWater >= WATERING_DUE_DAYS);
+    (daysSinceWater === null || daysSinceWater >= dynamicWateringDays);
 
   const summerGranularRepeat = getGranularRepeatDate('SUMMER', userLogs);
   const granularRepeatDue =
@@ -539,21 +635,22 @@ export default function SprayerCalculator() {
         overrides.lastGypsumDate !== undefined ? overrides.lastGypsumDate : lastGypsumDate;
 
       const nextMowingNextDueIso = nextLastMowedDate
-        ? addDaysToDateString(nextLastMowedDate, MOWING_DUE_DAYS)
+        ? addDaysToDateString(nextLastMowedDate, dynamicMowingDays)
         : null;
       const nextWateringNextDueIso = nextLastWateredDate
-        ? addDaysToDateString(nextLastWateredDate, WATERING_DUE_DAYS)
+        ? addDaysToDateString(nextLastWateredDate, dynamicWateringDays)
         : null;
 
       return compileLawnTasks({
         todayStr,
-        isWinterSeason,
+        isDormantSeason,
         isNatureProvidingFullSoak,
         seedEstablishmentActive,
         mowingLockedUntilIso,
         mowingNextDueIso: nextMowingNextDueIso,
         wateringNextDueIso: nextWateringNextDueIso,
         lastGypsumDate: nextLastGypsumDate,
+        scheduleReason,
       });
     },
     [
@@ -561,10 +658,11 @@ export default function SprayerCalculator() {
       lastWateredDate,
       lastGypsumDate,
       todayStr,
-      isWinterSeason,
+      isDormantSeason,
       isNatureProvidingFullSoak,
       seedEstablishmentActive,
       mowingLockedUntilIso,
+      scheduleReason,
     ]
   );
 
@@ -609,6 +707,11 @@ export default function SprayerCalculator() {
   useEffect(() => {
     setSqm(length * width);
   }, [length, width]);
+
+  useEffect(() => {
+    if (seasonManuallySelected) return;
+    setCurrentSeason(getCalendarSeasonForDate(todayStr));
+  }, [todayStr, seasonManuallySelected]);
 
   useEffect(() => {
     localStorage.setItem('lawnPackUserLogs', JSON.stringify(userLogs));
@@ -661,7 +764,7 @@ export default function SprayerCalculator() {
     lastWateredDate,
     lastGypsumDate,
     currentSeason,
-    isWinterSeason,
+    isDormantSeason,
     isNatureProvidingFullSoak,
     seedEstablishmentActive,
     forecastedRainSum,
@@ -1143,7 +1246,7 @@ export default function SprayerCalculator() {
             data-lawn-surface={lawnSurface}
             data-recommended-mower-setting={recommendedSetting}
             className={`flex flex-col rounded-lg border p-3 ${
-              isWinterSeason
+              isDormantSeason
                 ? 'bg-gray-100 border-gray-300 text-gray-500'
                 : seedEstablishmentActive
                   ? 'bg-red-50 border-red-300'
@@ -1155,10 +1258,10 @@ export default function SprayerCalculator() {
             <p className="text-xs font-bold text-gray-800 mb-1">✂️ Mowing Tracker</p>
 
             <div className="min-h-[2.75rem] mb-3">
-              {isWinterSeason ? (
+              {isDormantSeason ? (
                 <>
                   <p className="text-xs font-medium leading-snug">
-                    ❄️ WINTER DORMANT: Mowing suspended for the season.
+                    ❄️ WINTER DORMANT: Mowing suspended – grass not actively growing.
                   </p>
                   <p className="mt-2 text-xs font-semibold text-gray-600">
                     Next Due: N/A (Dormant)
@@ -1175,14 +1278,26 @@ export default function SprayerCalculator() {
                   </p>
                 </>
               ) : mowingDue ? (
-                <p className="text-xs font-bold text-amber-900 leading-snug">
-                  🚨 MOWING DUE: It has been {daysSinceMow ?? '∞'} days since your last cut.
-                </p>
+                <>
+                  <p className="text-xs font-bold text-amber-900 leading-snug">
+                    🚨 MOWING DUE: It has been {daysSinceMow ?? '∞'} days since your last cut.
+                  </p>
+                  {scheduleReason.mow && (
+                    <p className="mt-1 text-xs text-blue-700 italic">
+                      📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
+                    </p>
+                  )}
+                </>
               ) : (
                 <>
                   <p className="text-xs text-gray-600 leading-snug">
                     Last cut: {formatDisplayDate(lastMowedDate)} ({daysSinceMow} days ago)
                   </p>
+                  {scheduleReason.mow && (
+                    <p className="mt-1 text-xs text-blue-700 italic">
+                      📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
+                    </p>
+                  )}
                   {mowingNextDate && (
                     <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-800 font-semibold">
                       📅 Next Cut Due: {mowingNextDate}
@@ -1199,7 +1314,7 @@ export default function SprayerCalculator() {
                     ? 'font-bold text-red-800'
                     : isOnScarificationPrepStep
                       ? 'font-bold text-amber-900'
-                      : currentSeason === 'WINTER'
+                      : isDormantSeason
                         ? 'font-medium text-gray-500'
                         : 'font-medium text-gray-600'
                 }`}
@@ -1221,7 +1336,7 @@ export default function SprayerCalculator() {
                   value={pendingMowLogDate}
                   max={todayStr}
                   onChange={setPendingMowLogDate}
-                  disabled={isWinterSeason || seedEstablishmentActive}
+                  disabled={isDormantSeason || seedEstablishmentActive}
                   className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
@@ -1234,7 +1349,7 @@ export default function SprayerCalculator() {
                   setPendingMowLogDate(todayStr);
                   void pushLawnTasksToSupabase({ lastMowedDate: loggedDate });
                 }}
-                disabled={isWinterSeason || seedEstablishmentActive || !pendingMowLogDate}
+                disabled={isDormantSeason || seedEstablishmentActive || !pendingMowLogDate}
                 className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 ✂️ Log
@@ -1250,7 +1365,7 @@ export default function SprayerCalculator() {
             data-net-water-needed={netWaterNeeded}
             data-water-status={maintenanceDueDates.wateringStatus}
             className={`flex flex-col rounded-lg border p-3 ${
-              isWinterSeason
+              isDormantSeason
                 ? 'bg-gray-100 border-gray-300 text-gray-500'
                 : isNatureProvidingFullSoak
                   ? 'bg-sky-100 border-sky-300 text-sky-900'
@@ -1262,10 +1377,10 @@ export default function SprayerCalculator() {
             <p className="text-xs font-bold text-gray-800 mb-1">🚰 Watering Tracker</p>
 
             <div className={`mb-3 ${wateringDue ? 'min-h-[6rem]' : 'min-h-[2.75rem]'}`}>
-              {isWinterSeason ? (
+              {isDormantSeason ? (
                 <>
                   <p className="text-xs font-medium leading-snug">
-                    ❄️ WINTER: Watering suspended to prevent frost expansion.
+                    ❄️ WINTER DORMANT: Watering suspended – frost risk.
                   </p>
                   <p className="mt-2 text-xs font-semibold text-gray-600">Next Due: N/A</p>
                 </>
@@ -1285,6 +1400,11 @@ export default function SprayerCalculator() {
                     your location&apos;s weather, turn on your {activeSprinkler.name} for exactly{' '}
                     {dynamicMinutes} minutes to achieve optimal root depth without wasting water.
                   </p>
+                  {scheduleReason.water && (
+                    <p className="mt-1 text-xs text-blue-700 italic">
+                      📊 {dynamicWateringDays}-day interval: {scheduleReason.water}
+                    </p>
+                  )}
                   {DECKING_EDGE_WATERING_SUBTASK}
                   {wateringNextDate && (
                     <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
@@ -1301,6 +1421,11 @@ export default function SprayerCalculator() {
                   <p className="text-xs text-gray-600 leading-snug">
                     Last water: {formatDisplayDate(lastWateredDate)} ({daysSinceWater} days ago)
                   </p>
+                  {scheduleReason.water && (
+                    <p className="mt-1 text-xs text-blue-700 italic">
+                      📊 {dynamicWateringDays}-day interval: {scheduleReason.water}
+                    </p>
+                  )}
                   {wateringNextDate && (
                     <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
                       🚰 Next Water Due: {wateringNextDate} ({dynamicMinutes} min soak).{' '}
@@ -1328,7 +1453,7 @@ export default function SprayerCalculator() {
                   value={pendingWaterLogDate}
                   max={todayStr}
                   onChange={setPendingWaterLogDate}
-                  disabled={isWinterSeason || isNatureProvidingFullSoak}
+                  disabled={isDormantSeason || isNatureProvidingFullSoak}
                   className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
@@ -1341,7 +1466,7 @@ export default function SprayerCalculator() {
                   setPendingWaterLogDate(todayStr);
                   void pushLawnTasksToSupabase({ lastWateredDate: loggedDate });
                 }}
-                disabled={isWinterSeason || isNatureProvidingFullSoak || !pendingWaterLogDate}
+                disabled={isDormantSeason || isNatureProvidingFullSoak || !pendingWaterLogDate}
                 className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 💦 Log Watered
@@ -1445,7 +1570,10 @@ export default function SprayerCalculator() {
             <button
               key={key}
               type="button"
-              onClick={() => setCurrentSeason(key)}
+              onClick={() => {
+                setCurrentSeason(key);
+                setSeasonManuallySelected(key !== calendarSeason);
+              }}
               className={`p-2.5 text-xs font-bold rounded-lg border transition-all ${
                 currentSeason === key
                   ? 'bg-green-600 text-white border-green-600 shadow-md'
@@ -1456,6 +1584,13 @@ export default function SprayerCalculator() {
             </button>
           ))}
         </div>
+        {seasonManuallySelected && currentSeason !== calendarSeason && (
+          <p className="text-xs text-center text-amber-700 mt-2">
+            Viewing {SEASONS[currentSeason].name} — today&apos;s season is{' '}
+            {SEASONS[calendarSeason].name}. Tap {SEASONS[calendarSeason].name} to follow the
+            calendar.
+          </p>
+        )}
         <p className="text-xs text-center text-gray-500 mt-2 italic">{activeSeason.focus}</p>
       </div>
 

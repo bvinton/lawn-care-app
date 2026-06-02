@@ -16,6 +16,24 @@ export const SEASON_START_DATES = {
   WINTER: '2026-12-01',
 };
 
+/** @typedef {'SPRING' | 'SUMMER' | 'AUTUMN' | 'WINTER'} CalendarSeasonKey */
+
+/**
+ * Lawn pack season for a calendar date (UK boundaries aligned with SEASON_START_DATES).
+ * Spring Mar–May, Summer Jun–Aug, Autumn Sep–Nov, Winter Dec–Feb.
+ * @param {string} isoDate YYYY-MM-DD
+ * @returns {CalendarSeasonKey}
+ */
+export function getCalendarSeasonForDate(isoDate) {
+  const [, month, day] = isoDate.split('-').map(Number);
+  const monthDay = month * 100 + day;
+
+  if (monthDay >= 1201 || monthDay < 301) return 'WINTER';
+  if (monthDay < 601) return 'SPRING';
+  if (monthDay < 901) return 'SUMMER';
+  return 'AUTUMN';
+}
+
 export const WALLSEND_COORDS = {
   latitude: 54.98,
   longitude: -1.53,

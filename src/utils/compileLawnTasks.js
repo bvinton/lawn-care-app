@@ -12,38 +12,41 @@ function daysBetween(from, to) {
 /**
  * @param {Object} input
  * @param {string} input.todayStr
- * @param {boolean} input.isWinterSeason
+ * @param {boolean} input.isDormantSeason   - calendar-based (Dec–Feb): grass not growing
  * @param {boolean} input.isNatureProvidingFullSoak
  * @param {boolean} input.seedEstablishmentActive
  * @param {string | null} input.mowingLockedUntilIso
- * @param {string | null} input.mowingNextDueIso
- * @param {string | null} input.wateringNextDueIso
+ * @param {string | null} input.mowingNextDueIso    - pre-computed from dynamic interval
+ * @param {string | null} input.wateringNextDueIso  - pre-computed from dynamic interval
  * @param {string | null} input.lastGypsumDate
+ * @param {{ mow: string | null, water: string | null } | null} [input.scheduleReason]
  */
 export function compileLawnTasks({
   todayStr,
-  isWinterSeason,
+  isDormantSeason,
   isNatureProvidingFullSoak,
   seedEstablishmentActive,
   mowingLockedUntilIso,
   mowingNextDueIso,
   wateringNextDueIso,
   lastGypsumDate,
+  scheduleReason = null,
 }) {
   /** @param {string} dueDateIso */
   const taskStatusFromDue = (dueDateIso) =>
     daysBetween(dueDateIso, todayStr) >= 0 ? 'urgent' : 'pending';
 
-  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn' }>} */
+  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
   const compiledTasks = [];
 
-  if (isWinterSeason) {
+  if (isDormantSeason) {
     compiledTasks.push({
       id: 'lawn-mow',
       title: 'Mow lawn',
       dueDate: todayStr,
       status: 'completed',
       module: 'lawn',
+      reason: 'Winter dormancy – grass not actively growing',
     });
   } else if (seedEstablishmentActive && mowingLockedUntilIso) {
     compiledTasks.push({
@@ -52,6 +55,7 @@ export function compileLawnTasks({
       dueDate: mowingLockedUntilIso,
       status: 'pending',
       module: 'lawn',
+      reason: 'Seed establishment – do not mow fresh seed',
     });
   } else {
     const mowDueDate = mowingNextDueIso ?? todayStr;
@@ -61,16 +65,20 @@ export function compileLawnTasks({
       dueDate: mowDueDate,
       status: taskStatusFromDue(mowDueDate),
       module: 'lawn',
+      reason: scheduleReason?.mow ?? null,
     });
   }
 
-  if (isWinterSeason || isNatureProvidingFullSoak) {
+  if (isDormantSeason || isNatureProvidingFullSoak) {
     compiledTasks.push({
       id: 'lawn-water',
       title: 'Water lawn',
       dueDate: todayStr,
       status: 'completed',
       module: 'lawn',
+      reason: isDormantSeason
+        ? 'Winter dormancy – watering suspended'
+        : 'Heavy rain forecast – nature providing full soak',
     });
   } else {
     const waterDueDate = wateringNextDueIso ?? todayStr;
@@ -80,6 +88,7 @@ export function compileLawnTasks({
       dueDate: waterDueDate,
       status: taskStatusFromDue(waterDueDate),
       module: 'lawn',
+      reason: scheduleReason?.water ?? null,
     });
   }
 
