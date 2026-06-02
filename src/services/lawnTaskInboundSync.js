@@ -3,6 +3,14 @@ import { MOW_TASK_NAME, WATER_TASK_NAME, pickLatestIsoDate } from './lawnMainten
 
 export const GYPSUM_TASK_NAME = 'Apply Liquid Gypsum';
 export const GYPSUM_LOG_KEY = 'lastGypsumDate';
+export const GYPSUM_POSTPONE_KEY = 'gypsumPostponedUntil';
+
+/** @type {Array<{ label: string, days: number }>} */
+export const GYPSUM_POSTPONE_OPTIONS = [
+  { label: '4 weeks', days: 28 },
+  { label: '3 months', days: 91 },
+  { label: '6 months', days: 182 },
+];
 
 /** @type {Map<string, string> | null} */
 let taskNameToStepKey = null;

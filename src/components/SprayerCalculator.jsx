@@ -26,7 +26,13 @@ import {
   clearLawnTaskCompletion,
   LAWN_APP_SOURCE,
 } from '../services/lawnTasks';
-import { applyInboundTaskCompletions } from '../services/lawnTaskInboundSync';
+import {
+  applyInboundTaskCompletions,
+  GYPSUM_LOG_KEY,
+  GYPSUM_POSTPONE_KEY,
+  GYPSUM_POSTPONE_OPTIONS,
+} from '../services/lawnTaskInboundSync';
+import { getGypsumSchedule } from '../utils/compileLawnTasks';
 import {
   mergeMaintenanceDate,
   pullMaintenanceDatesFromSupabase,
@@ -51,7 +57,6 @@ const SEED_ESTABLISHMENT_DAYS = 21;
 const GYPSUM_CYCLE_DAYS = 182;
 const SEED_GERMINATION_SOIL_TEMP_MIN_C = 10;
 const SEED_GERMINATION_SOIL_TEMP_MAX_C = 25;
-const GYPSUM_LOG_KEY = 'lastGypsumDate';
 const PET_LOCKOUT_KEY = 'petLockoutUntil';
 const PET_LOCKOUT_HOURS = 24;
 const RAIN_THRESHOLD_MM = 5.0;
@@ -480,14 +485,16 @@ export default function SprayerCalculator() {
   const petLockoutHoursRemaining = petLockoutActive
     ? Math.max(1, Math.ceil((petLockoutUntilMs - Date.now()) / MS_PER_HOUR))
     : 0;
+  const gypsumPostponedUntil = userLogs[GYPSUM_POSTPONE_KEY] ?? null;
+  const gypsumSchedule = getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr);
+  const {
+    gypsumDue,
+    gypsumDaysRemaining,
+    snoozed: gypsumSnoozed,
+    dueDate: gypsumDueDate,
+    naturalDue: gypsumNaturalDue,
+  } = gypsumSchedule;
   const daysSinceGypsum = lastGypsumDate ? daysBetween(lastGypsumDate, today) : null;
-  const gypsumDue =
-    lastGypsumDate === null ||
-    (daysSinceGypsum !== null && daysSinceGypsum >= GYPSUM_CYCLE_DAYS);
-  const gypsumDaysRemaining =
-    lastGypsumDate && daysSinceGypsum !== null && daysSinceGypsum < GYPSUM_CYCLE_DAYS
-      ? GYPSUM_CYCLE_DAYS - daysSinceGypsum
-      : 0;
 
   const soilTempMinForCheck = currentSoilTempMin ?? currentSoilTemp;
   const soilTempMaxForCheck = currentSoilTemp ?? currentSoilTempMin;
@@ -697,6 +704,10 @@ export default function SprayerCalculator() {
         overrides.lastWateredDate !== undefined ? overrides.lastWateredDate : lastWateredDate;
       const nextLastGypsumDate =
         overrides.lastGypsumDate !== undefined ? overrides.lastGypsumDate : lastGypsumDate;
+      const nextGypsumPostponedUntil =
+        overrides.gypsumPostponedUntil !== undefined
+          ? overrides.gypsumPostponedUntil
+          : userLogs[GYPSUM_POSTPONE_KEY] ?? null;
 
       const nextMowingNextDueIso = nextLastMowedDate
         ? addDaysToDateString(nextLastMowedDate, dynamicMowingDays)
@@ -716,6 +727,7 @@ export default function SprayerCalculator() {
         mowingNextDueIso: nextMowingNextDueIso,
         wateringNextDueIso: nextWateringNextDueIso,
         lastGypsumDate: nextLastGypsumDate,
+        gypsumPostponedUntil: nextGypsumPostponedUntil,
         scheduleReason,
       });
     },
@@ -1956,23 +1968,93 @@ export default function SprayerCalculator() {
           <p className="text-xs font-bold text-gray-800 mb-2">🧪 Soil Treatments</p>
 
           <div className="mb-3 min-h-[2.75rem]">
+            <p className="text-xs text-gray-500 leading-snug mb-2 italic">
+              Optional — about every 6 months for soil drainage. Mow and water stay on their
+              own schedule.
+            </p>
             {lastGypsumDate && (
               <p className="text-xs text-gray-600 leading-snug mb-2">
                 Last Liquid Gypsum: {formatDisplayDate(lastGypsumDate)}
                 {daysSinceGypsum !== null && ` (${daysSinceGypsum} days ago)`}
               </p>
             )}
-            {gypsumDue ? (
+            {gypsumSnoozed ? (
+              <p className="text-xs font-bold text-sky-900 leading-snug">
+                📅 Postponed — next reminder {formatDisplayDate(gypsumDueDate)} (
+                {gypsumDaysRemaining} day{gypsumDaysRemaining !== 1 ? 's' : ''})
+              </p>
+            ) : gypsumDue ? (
               <p className="text-xs font-bold text-amber-900 leading-snug">
                 🟠 Liquid Gypsum due: Maintain soil drainage
+                {gypsumNaturalDue !== gypsumDueDate && (
+                  <span className="font-normal text-amber-800">
+                    {' '}
+                    (cycle target {formatDisplayDate(gypsumNaturalDue)})
+                  </span>
+                )}
               </p>
             ) : (
               <p className="text-xs font-bold text-emerald-800 leading-snug">
-                ✅ Soil structure stable (Next dose due in {gypsumDaysRemaining} day
-                {gypsumDaysRemaining !== 1 ? 's' : ''})
+                ✅ Not due now — next reminder {formatDisplayDate(gypsumDueDate)} (
+                {gypsumDaysRemaining} day{gypsumDaysRemaining !== 1 ? 's' : ''})
               </p>
             )}
           </div>
+
+          {(gypsumDue || gypsumSnoozed) && (
+            <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 p-2.5">
+              {gypsumDue && (
+                <>
+                  <p className="text-[11px] font-bold text-sky-950 mb-1.5">
+                    Too much on? Postpone gypsum only
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {GYPSUM_POSTPONE_OPTIONS.map((option) => (
+                      <button
+                        key={option.days}
+                        type="button"
+                        onClick={() => {
+                          const until = addDaysToDateString(todayStr, option.days);
+                          setUserLogs((prev) => ({
+                            ...prev,
+                            [GYPSUM_POSTPONE_KEY]: until,
+                          }));
+                          lastSyncFingerprintRef.current = '';
+                          void pushLawnTasksToSupabase(
+                            { gypsumPostponedUntil: until },
+                            { quiet: true, force: true }
+                          );
+                        }}
+                        className="text-[10px] font-bold py-1.5 px-2.5 rounded-md border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 transition-colors"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {gypsumSnoozed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserLogs((prev) => {
+                      const next = { ...prev };
+                      delete next[GYPSUM_POSTPONE_KEY];
+                      return next;
+                    });
+                    lastSyncFingerprintRef.current = '';
+                    void pushLawnTasksToSupabase(
+                      { gypsumPostponedUntil: null },
+                      { quiet: true, force: true }
+                    );
+                  }}
+                  className={`text-[10px] font-semibold text-sky-800 underline hover:text-sky-950 ${gypsumDue ? 'mt-2' : ''}`}
+                >
+                  Cancel postpone — use normal 6‑month schedule
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <div>
@@ -1995,12 +2077,16 @@ export default function SprayerCalculator() {
               onClick={() => {
                 if (!pendingGypsumLogDate) return;
                 const loggedDate = pendingGypsumLogDate;
-                setUserLogs((prev) => ({
-                  ...prev,
-                  [GYPSUM_LOG_KEY]: loggedDate,
-                }));
+                setUserLogs((prev) => {
+                  const next = { ...prev, [GYPSUM_LOG_KEY]: loggedDate };
+                  delete next[GYPSUM_POSTPONE_KEY];
+                  return next;
+                });
                 setPendingGypsumLogDate(todayStr);
-                void pushLawnTasksToSupabase({ lastGypsumDate: loggedDate }, { quiet: true });
+                void pushLawnTasksToSupabase(
+                  { lastGypsumDate: loggedDate, gypsumPostponedUntil: null },
+                  { quiet: true, force: true }
+                );
               }}
               disabled={!pendingGypsumLogDate}
               className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"

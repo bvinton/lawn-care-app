@@ -11,6 +11,43 @@ import {
 
 const GYPSUM_CYCLE_DAYS = 182;
 
+/**
+ * @param {string | null} lastGypsumDate
+ * @param {string | null | undefined} gypsumPostponedUntil
+ * @param {string} todayStr
+ */
+export function getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr) {
+  const naturalDue = lastGypsumDate
+    ? addDaysToDateString(lastGypsumDate, GYPSUM_CYCLE_DAYS)
+    : todayStr;
+
+  const snoozed =
+    typeof gypsumPostponedUntil === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(gypsumPostponedUntil) &&
+    gypsumPostponedUntil > todayStr;
+
+  const dueDate = snoozed ? gypsumPostponedUntil : naturalDue;
+  const cycleWouldBeDue =
+    !lastGypsumDate || daysBetween(naturalDue, todayStr) >= 0;
+  const gypsumDue = snoozed ? false : cycleWouldBeDue;
+
+  let gypsumDaysRemaining = 0;
+  if (snoozed) {
+    gypsumDaysRemaining = daysBetween(todayStr, gypsumPostponedUntil);
+  } else if (!gypsumDue && lastGypsumDate && daysBetween(naturalDue, todayStr) < 0) {
+    gypsumDaysRemaining = daysBetween(todayStr, naturalDue);
+  }
+
+  return {
+    dueDate,
+    gypsumDue,
+    gypsumDaysRemaining,
+    naturalDue,
+    snoozed,
+    gypsumPostponedUntil: snoozed ? gypsumPostponedUntil : null,
+  };
+}
+
 /** @param {string | Date} from @param {string | Date} to */
 function daysBetween(from, to) {
   const start = typeof from === 'string' ? new Date(`${from}T12:00:00`) : from;
@@ -28,6 +65,7 @@ function daysBetween(from, to) {
  * @param {string | null} input.mowingNextDueIso    - pre-computed from dynamic interval
  * @param {string | null} input.wateringNextDueIso  - pre-computed from dynamic interval
  * @param {string | null} input.lastGypsumDate
+ * @param {string | null} [input.gypsumPostponedUntil]
  * @param {{ mow: string | null, water: string | null } | null} [input.scheduleReason]
  */
 export function compileLawnTasks({
@@ -39,6 +77,7 @@ export function compileLawnTasks({
   mowingNextDueIso,
   wateringNextDueIso,
   lastGypsumDate,
+  gypsumPostponedUntil = null,
   scheduleReason = null,
 }) {
   /** @param {string} dueDateIso */
@@ -101,15 +140,16 @@ export function compileLawnTasks({
     });
   }
 
-  const gypsumDueDate = lastGypsumDate
-    ? addDaysToDateString(lastGypsumDate, GYPSUM_CYCLE_DAYS)
-    : todayStr;
+  const gypsum = getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr);
   compiledTasks.push({
     id: 'lawn-gypsum',
     title: 'Apply Liquid Gypsum',
-    dueDate: gypsumDueDate,
-    status: taskStatusFromDue(gypsumDueDate),
+    dueDate: gypsum.dueDate,
+    status: gypsum.gypsumDue ? 'urgent' : taskStatusFromDue(gypsum.dueDate),
     module: 'lawn',
+    reason: gypsum.snoozed
+      ? `Postponed — remind ${gypsum.dueDate}`
+      : 'Typically every ~6 months for soil drainage',
   });
 
   return compiledTasks;
@@ -180,6 +220,7 @@ export function compileAllLawnTasks(input) {
     mowingNextDueIso,
     wateringNextDueIso,
     lastGypsumDate,
+    gypsumPostponedUntil = null,
     scheduleReason = null,
   } = input;
 
@@ -194,6 +235,7 @@ export function compileAllLawnTasks(input) {
       mowingNextDueIso,
       wateringNextDueIso,
       lastGypsumDate,
+      gypsumPostponedUntil,
       scheduleReason,
     }),
   ];
