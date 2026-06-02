@@ -1,5 +1,12 @@
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
-import { MOW_TASK_NAME, WATER_TASK_NAME } from './lawnMaintenanceSync';
+import {
+  MOW_TASK_NAME,
+  WATER_TASK_NAME,
+  isMissingLastCompletedColumnError,
+  withoutLastCompletedDate,
+  probeLastCompletedColumn,
+  resetLastCompletedColumnProbe,
+} from './lawnMaintenanceSync';
 
 export const LAWN_APP_SOURCE = 'lawn';
 
@@ -67,39 +74,72 @@ function compiledTaskToRow(task, maintenance = {}) {
  * @param {CompiledLawnTask[]} compiledTasks
  * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} [maintenance]
  */
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {Record<string, unknown>} payload
+ * @param {string} taskTitle
+ */
+async function writeTaskPayload(supabase, payload, taskTitle) {
+  const canUseLastCompleted = await probeLastCompletedColumn(supabase);
+  let body = canUseLastCompleted ? payload : withoutLastCompletedDate(payload);
+
+  const { data: existing, error: findError } = await supabase
+    .from('tasks')
+    .select('id')
+    .eq('app_source', LAWN_APP_SOURCE)
+    .eq('task_name', taskTitle);
+
+  if (findError) {
+    throw new Error(`Lookup failed for "${taskTitle}": ${formatSupabaseSyncError(findError)}`);
+  }
+
+  if (existing && existing.length > 0) {
+    let { error } = await supabase
+      .from('tasks')
+      .update(body)
+      .eq('app_source', LAWN_APP_SOURCE)
+      .eq('task_name', taskTitle);
+
+    if (error && isMissingLastCompletedColumnError(error)) {
+      resetLastCompletedColumnProbe();
+      body = withoutLastCompletedDate(payload);
+      ({ error } = await supabase
+        .from('tasks')
+        .update(body)
+        .eq('app_source', LAWN_APP_SOURCE)
+        .eq('task_name', taskTitle));
+    }
+
+    if (error) {
+      throw new Error(`Update failed for "${taskTitle}": ${formatSupabaseSyncError(error)}`);
+    }
+    return;
+  }
+
+  let { error } = await supabase.from('tasks').insert(body);
+
+  if (error && isMissingLastCompletedColumnError(error)) {
+    resetLastCompletedColumnProbe();
+    body = withoutLastCompletedDate(payload);
+    ({ error } = await supabase.from('tasks').insert(body));
+  }
+
+  if (error) {
+    throw new Error(`Insert failed for "${taskTitle}": ${formatSupabaseSyncError(error)}`);
+  }
+}
+
+/** @returns {Promise<boolean>} */
+export async function isLastCompletedColumnAvailable() {
+  return probeLastCompletedColumn(requireSupabase());
+}
+
 export async function syncLawnTasksToSupabase(compiledTasks, maintenance = {}) {
   const supabase = requireSupabase();
 
   for (const task of compiledTasks) {
     const payload = compiledTaskToRow(task, maintenance);
-    const { data: existing, error: findError } = await supabase
-      .from('tasks')
-      .select('id')
-      .eq('app_source', LAWN_APP_SOURCE)
-      .eq('task_name', task.title);
-
-    if (findError) {
-      throw new Error(`Lookup failed for "${task.title}": ${formatSupabaseSyncError(findError)}`);
-    }
-
-    if (existing && existing.length > 0) {
-      const { error } = await supabase
-        .from('tasks')
-        .update(payload)
-        .eq('app_source', LAWN_APP_SOURCE)
-        .eq('task_name', task.title);
-
-      if (error) {
-        throw new Error(`Update failed for "${task.title}": ${formatSupabaseSyncError(error)}`);
-      }
-      continue;
-    }
-
-    const { error } = await supabase.from('tasks').insert(payload);
-
-    if (error) {
-      throw new Error(`Insert failed for "${task.title}": ${formatSupabaseSyncError(error)}`);
-    }
+    await writeTaskPayload(supabase, payload, task.title);
   }
 
   try {

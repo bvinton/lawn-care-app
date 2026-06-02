@@ -8,6 +8,54 @@ import { LAWN_APP_SOURCE } from './lawnTasks';
 export const MOW_TASK_NAME = 'Mow lawn';
 export const WATER_TASK_NAME = 'Water lawn';
 
+/** @type {boolean | null} */
+let lastCompletedColumnAvailable = null;
+
+export function resetLastCompletedColumnProbe() {
+  lastCompletedColumnAvailable = null;
+}
+
+/** @param {unknown} error */
+export function isMissingLastCompletedColumnError(error) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String(/** @type {{ message: unknown }} */ (error).message)
+        : String(error);
+  return /last_completed_date|42703|PGRST204|schema cache/i.test(message);
+}
+
+/** @param {Record<string, unknown>} payload */
+export function withoutLastCompletedDate(payload) {
+  const next = { ...payload };
+  delete next.last_completed_date;
+  return next;
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<boolean>}
+ */
+export async function probeLastCompletedColumn(supabase) {
+  if (lastCompletedColumnAvailable !== null) {
+    return lastCompletedColumnAvailable;
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .select('last_completed_date')
+    .eq('app_source', LAWN_APP_SOURCE)
+    .limit(1);
+
+  lastCompletedColumnAvailable = !error;
+  return lastCompletedColumnAvailable;
+}
+
+export function getLastCompletedColumnHint() {
+  return 'Run supabase/maintenance_link.sql in the Supabase SQL Editor to link Tasks app completions with this app.';
+}
+
 /**
  * @param {string | null | undefined} isoDate
  * @returns {string | null}

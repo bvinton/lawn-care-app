@@ -24,9 +24,11 @@ import {
 import {
   mergeMaintenanceDate,
   pullMaintenanceDatesFromSupabase,
+  getLastCompletedColumnHint,
+  probeLastCompletedColumn,
+  isMissingLastCompletedColumnError,
 } from '../services/lawnMaintenanceSync';
-import { getSupabaseConfigError } from '../lib/supabase';
-import { formatSupabaseSyncError } from '../lib/supabase';
+import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { compileLawnTasks } from '../utils/compileLawnTasks';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -716,9 +718,12 @@ export default function SprayerCalculator() {
         lastSyncFingerprintRef.current = fingerprint;
         setSupabaseSyncError(null);
       } catch (error) {
-        const message = formatSupabaseSyncError(error);
         console.error('[Lawn Care] Supabase sync failed:', error);
-        setSupabaseSyncError(message);
+        if (isMissingLastCompletedColumnError(error)) {
+          setSupabaseSyncError(getLastCompletedColumnHint());
+        } else {
+          setSupabaseSyncError(formatSupabaseSyncError(error));
+        }
       } finally {
         syncInFlightRef.current = false;
       }
@@ -729,6 +734,14 @@ export default function SprayerCalculator() {
   const applySharedMaintenanceDates = useCallback(
     async () => {
       if (getSupabaseConfigError()) return;
+
+      const supabase = getSupabase();
+      if (supabase) {
+        const linked = await probeLastCompletedColumn(supabase);
+        if (!linked) {
+          setSupabaseSyncError(getLastCompletedColumnHint());
+        }
+      }
 
       try {
         const inferred = await pullMaintenanceDatesFromSupabase(todayStr);
@@ -745,13 +758,18 @@ export default function SprayerCalculator() {
               ? `Linked from Tasks app — last water ${formatDisplayDate(inferred.lastWateredDate)}.`
               : null,
         });
-        setSupabaseSyncError(null);
+        const supabaseClient = getSupabase();
+        if (supabaseClient && (await probeLastCompletedColumn(supabaseClient))) {
+          setSupabaseSyncError(null);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn('[Lawn Care] Shared maintenance pull failed:', error);
-        setSupabaseSyncError(
-          `Could not sync mow/water with Tasks app: ${message}`
-        );
+        if (!isMissingLastCompletedColumnError(error)) {
+          setSupabaseSyncError(
+            `Could not sync mow/water with Tasks app: ${message}`
+          );
+        }
       }
     },
     [todayStr]
@@ -1240,8 +1258,24 @@ export default function SprayerCalculator() {
       ) : (
         <>
           {supabaseSyncError && (
-            <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-xs font-semibold text-red-800">
-              Supabase sync failed: {supabaseSyncError}
+            <div
+              className={`mb-4 rounded-lg border p-3 text-xs font-semibold leading-relaxed ${
+                supabaseSyncError.includes('maintenance_link.sql')
+                  ? 'border-amber-400 bg-amber-50 text-amber-950'
+                  : 'border-red-300 bg-red-50 text-red-800'
+              }`}
+            >
+              {supabaseSyncError.includes('maintenance_link.sql') ? (
+                <>
+                  <p className="font-bold mb-1">One-time database setup</p>
+                  <p>{supabaseSyncError}</p>
+                  <p className="mt-2 font-mono text-[10px] break-all">
+                    alter table public.tasks add column if not exists last_completed_date date;
+                  </p>
+                </>
+              ) : (
+                <>Supabase sync failed: {supabaseSyncError}</>
+              )}
             </div>
           )}
           {petLockoutActive && (
