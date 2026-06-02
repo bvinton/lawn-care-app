@@ -22,8 +22,11 @@ import {
 import {
   syncLawnTasksToSupabase,
   fetchLawnTasksFromSupabase,
+  fetchLawnTasksForInboundSync,
+  clearLawnTaskCompletion,
   LAWN_APP_SOURCE,
 } from '../services/lawnTasks';
+import { applyInboundTaskCompletions } from '../services/lawnTaskInboundSync';
 import {
   mergeMaintenanceDate,
   pullMaintenanceDatesFromSupabase,
@@ -213,6 +216,16 @@ function formatDaysSinceLabel(days) {
   return `${days} day${days === 1 ? '' : 's'}`;
 }
 
+/** @param {Date} date */
+function formatSyncTimeAgo(date) {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+}
+
 /** @param {string} dateString */
 function formatDisplayDate(dateString) {
   const normalized = startOfDay(dateString);
@@ -377,6 +390,10 @@ export default function SprayerCalculator() {
   );
   const syncInFlightRef = useRef(false);
   const lastSyncFingerprintRef = useRef('');
+  const [cloudSyncStatus, setCloudSyncStatus] = useState(
+    /** @type {'idle' | 'pulling' | 'pushing' | 'synced' | 'error'} */ ('idle')
+  );
+  const [lastCloudSyncAt, setLastCloudSyncAt] = useState(/** @type {Date | null} */ (null));
 
   const [pendingDates, setPendingDates] = useState(() =>
     /** @type {Record<string, Record<string, string>>} */ (
@@ -719,17 +736,23 @@ export default function SprayerCalculator() {
 
   const pushLawnTasksToSupabase = useCallback(
     async (overrides = {}, options = {}) => {
-      const { quiet = true } = options;
+      const { quiet = true, force = false } = options;
       const compiledTasks = compileLawnTasksExport(overrides);
       const fingerprint = JSON.stringify(compiledTasks);
 
-      if (syncInFlightRef.current || fingerprint === lastSyncFingerprintRef.current) {
+      if (
+        !force &&
+        (syncInFlightRef.current || fingerprint === lastSyncFingerprintRef.current)
+      ) {
         setLawnTasksSnapshot(compiledTasks);
         return;
       }
 
       syncInFlightRef.current = true;
       setLawnTasksSnapshot(compiledTasks);
+      if (!quiet) {
+        setCloudSyncStatus('pushing');
+      }
 
       try {
         await syncLawnTasksToSupabase(
@@ -746,8 +769,11 @@ export default function SprayerCalculator() {
         );
         lastSyncFingerprintRef.current = fingerprint;
         setSupabaseSyncError(null);
+        setLastCloudSyncAt(new Date());
+        setCloudSyncStatus('synced');
       } catch (error) {
         console.error('[Lawn Care] Supabase sync failed:', error);
+        setCloudSyncStatus('error');
         if (isMissingLastCompletedColumnError(error)) {
           setSupabaseSyncError(getLastCompletedColumnHint());
         } else {
@@ -760,52 +786,125 @@ export default function SprayerCalculator() {
     [compileLawnTasksExport, lastMowedDate, lastWateredDate]
   );
 
-  const applySharedMaintenanceDates = useCallback(
-    async () => {
-      if (getSupabaseConfigError()) return;
+  const pullCloudState = useCallback(async () => {
+    if (getSupabaseConfigError()) return null;
 
-      const supabase = getSupabase();
-      if (supabase) {
-        const linked = await probeLastCompletedColumn(supabase);
-        if (!linked) {
-          setSupabaseSyncError(getLastCompletedColumnHint());
-        }
+    const supabase = getSupabase();
+    if (supabase) {
+      const linked = await probeLastCompletedColumn(supabase);
+      if (!linked) {
+        setSupabaseSyncError(getLastCompletedColumnHint());
+      }
+    }
+
+    let nextUserLogs = stripStalePetLockout(readStoredJson('lawnPackUserLogs', {}), todayStr);
+    let nextMow = localStorage.getItem('lawnPackLastMowedDate');
+    let nextWater = localStorage.getItem('lawnPackLastWateredDate');
+    let inboundPack = 0;
+    let inboundMaintenance = false;
+
+    try {
+      const remote = await fetchLawnUserLogsFromSupabase();
+      if (remote !== null) {
+        nextUserLogs = stripStalePetLockout(mergeLawnUserLogs(remote, nextUserLogs), todayStr);
+      } else {
+        setSupabaseSyncError((prev) => prev ?? getLawnAppStateSetupHint());
+      }
+    } catch (error) {
+      console.warn('[Lawn Care] Lawn pack state pull failed:', error);
+    }
+
+    try {
+      const rows = await fetchLawnTasksForInboundSync();
+      const inbound = applyInboundTaskCompletions(rows, todayStr, nextUserLogs, {
+        lastMowedDate: nextMow,
+        lastWateredDate: nextWater,
+      });
+      nextUserLogs = stripStalePetLockout(inbound.userLogs, todayStr);
+      nextMow = inbound.lastMowedDate ?? nextMow;
+      nextWater = inbound.lastWateredDate ?? nextWater;
+      inboundPack = inbound.packStepsUpdated;
+      inboundMaintenance = inbound.maintenanceUpdated;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('[Lawn Care] Task inbound pull failed:', error);
+      if (!isMissingLastCompletedColumnError(error)) {
+        setSupabaseSyncError(`Could not load tasks from shared database: ${message}`);
+      }
+    }
+
+    try {
+      const inferred = await pullMaintenanceDatesFromSupabase(todayStr);
+      if (inferred.lastMowedDate) {
+        nextMow = mergeMaintenanceDate(nextMow, inferred.lastMowedDate);
+        inboundMaintenance = true;
+      }
+      if (inferred.lastWateredDate) {
+        nextWater = mergeMaintenanceDate(nextWater, inferred.lastWateredDate);
+        inboundMaintenance = true;
       }
 
-      try {
-        const inferred = await pullMaintenanceDatesFromSupabase(todayStr);
-        if (inferred.lastMowedDate) {
-          setLastMowedDate((prev) => mergeMaintenanceDate(prev, inferred.lastMowedDate));
-        }
-        if (inferred.lastWateredDate) {
-          setLastWateredDate((prev) => mergeMaintenanceDate(prev, inferred.lastWateredDate));
-        }
+      setMaintenanceHints({
+        mow:
+          inferred.mowFromTasksApp && nextMow
+            ? `Synced from Tasks app — last mow ${formatDisplayDate(nextMow)}.`
+            : null,
+        water:
+          inferred.waterFromTasksApp && nextWater
+            ? `Synced from Tasks app — last water ${formatDisplayDate(nextWater)}.`
+            : null,
+      });
+    } catch (error) {
+      console.warn('[Lawn Care] Maintenance pull failed:', error);
+    }
 
-        setMaintenanceHints({
-          mow:
-            inferred.mowFromTasksApp && inferred.lastMowedDate
-              ? `Linked from Tasks app — last mow ${formatDisplayDate(inferred.lastMowedDate)}.`
-              : null,
-          water:
-            inferred.waterFromTasksApp && inferred.lastWateredDate
-              ? `Linked from Tasks app — last water ${formatDisplayDate(inferred.lastWateredDate)}.`
-              : null,
-        });
-        const supabaseClient = getSupabase();
-        if (supabaseClient && (await probeLastCompletedColumn(supabaseClient))) {
-          setSupabaseSyncError(null);
+    setUserLogs(nextUserLogs);
+    localStorage.setItem('lawnPackUserLogs', JSON.stringify(nextUserLogs));
+    if (nextMow) setLastMowedDate(nextMow);
+    if (nextWater) setLastWateredDate(nextWater);
+
+    try {
+      await saveLawnUserLogsToSupabase(nextUserLogs);
+    } catch (error) {
+      console.warn('[Lawn Care] Lawn pack state save failed:', error);
+    }
+
+    const supabaseClient = getSupabase();
+    if (supabaseClient && (await probeLastCompletedColumn(supabaseClient))) {
+      setSupabaseSyncError((prev) =>
+        prev?.includes('maintenance_link.sql') || prev?.includes('lawn_app_state.sql')
+          ? prev
+          : null
+      );
+    }
+
+    return { inboundPack, inboundMaintenance };
+  }, [todayStr]);
+
+  const runFullCloudSync = useCallback(
+    async (options = {}) => {
+      const { forcePush = true } = options;
+      if (getSupabaseConfigError()) {
+        setCloudSyncStatus('error');
+        return;
+      }
+
+      setCloudSyncStatus('pulling');
+      try {
+        await pullCloudState();
+        if (forcePush) {
+          lastSyncFingerprintRef.current = '';
+          await pushLawnTasksToSupabase({}, { quiet: false, force: true });
+        } else {
+          setLastCloudSyncAt(new Date());
+          setCloudSyncStatus('synced');
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn('[Lawn Care] Shared maintenance pull failed:', error);
-        if (!isMissingLastCompletedColumnError(error)) {
-          setSupabaseSyncError(
-            `Could not sync mow/water with Tasks app: ${message}`
-          );
-        }
+        console.error('[Lawn Care] Cloud sync failed:', error);
+        setCloudSyncStatus('error');
       }
     },
-    [todayStr]
+    [pullCloudState, pushLawnTasksToSupabase]
   );
 
   const handleCopyTasksJson = async () => {
@@ -912,32 +1011,12 @@ export default function SprayerCalculator() {
     let cancelled = false;
 
     async function hydrateFromSupabase() {
-      if (!getSupabaseConfigError()) {
-        try {
-          const remote = await fetchLawnUserLogsFromSupabase();
-          if (remote !== null && !cancelled) {
-            const local = readStoredJson('lawnPackUserLogs', {});
-            const merged = mergeLawnUserLogs(remote, local);
-            const cleared = stripStalePetLockout(merged, todayStr);
-            setUserLogs(cleared);
-            localStorage.setItem('lawnPackUserLogs', JSON.stringify(cleared));
-            await saveLawnUserLogsToSupabase(cleared);
-          } else if (remote === null && !cancelled) {
-            setSupabaseSyncError((prev) => prev ?? getLawnAppStateSetupHint());
-          }
-        } catch (error) {
-          console.warn('[Lawn Care] Lawn pack state pull failed:', error);
-        }
-      }
-
-      if (!cancelled) {
-        setUserLogsHydrated(true);
-      }
-
-      await applySharedMaintenanceDates();
-      if (!cancelled) {
-        setMaintenanceHydrated(true);
-      }
+      await pullCloudState();
+      if (cancelled) return;
+      setUserLogsHydrated(true);
+      setMaintenanceHydrated(true);
+      lastSyncFingerprintRef.current = '';
+      await pushLawnTasksToSupabase({}, { quiet: true, force: true });
     }
 
     void hydrateFromSupabase();
@@ -945,12 +1024,13 @@ export default function SprayerCalculator() {
     return () => {
       cancelled = true;
     };
-  }, [applySharedMaintenanceDates]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+  }, []);
 
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        void applySharedMaintenanceDates();
+        void runFullCloudSync();
       }
     };
 
@@ -961,7 +1041,7 @@ export default function SprayerCalculator() {
       window.removeEventListener('focus', onVisible);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [applySharedMaintenanceDates]);
+  }, [runFullCloudSync]);
 
   useEffect(() => {
     if (!maintenanceHydrated) return;
@@ -1070,7 +1150,8 @@ export default function SprayerCalculator() {
     }
 
     setUserLogs(nextLogs);
-    void pushLawnTasksToSupabase({}, { quiet: true });
+    lastSyncFingerprintRef.current = '';
+    void pushLawnTasksToSupabase({}, { quiet: true, force: true });
 
     if (isFirstStep) {
       recascadeSeason(currentSeason, dateValue, nextLogs);
@@ -1082,9 +1163,17 @@ export default function SprayerCalculator() {
 
   const handleClearLog = (stepId) => {
     const key = makeStepKey(currentSeason, stepId);
+    const step = SEASONS[currentSeason].steps.find((s) => s.id === stepId);
     const nextLogs = { ...userLogs };
     delete nextLogs[key];
     setUserLogs(nextLogs);
+
+    if (step) {
+      void clearLawnTaskCompletion(step.label).then(() => {
+        lastSyncFingerprintRef.current = '';
+        void pushLawnTasksToSupabase({}, { quiet: true, force: true });
+      });
+    }
 
     const isFirstStep = SEASONS[currentSeason].steps[0].id === stepId;
     const anchor = isFirstStep
@@ -1431,21 +1520,64 @@ export default function SprayerCalculator() {
               )}
             </div>
           )}
-          <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <div>
+          <div className="flex justify-between items-start gap-2 mb-6 border-b pb-4">
+            <div className="min-w-0">
               <h2 className="text-xl font-black text-green-800">📋 Lawn Pack Workflow</h2>
               <p className="text-sm text-green-700 mt-1">
                 <span className="font-black">{sqm} SQM</span>
                 <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setActiveScreen('settings')}
-              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
-            >
-              ⚙️ Setup
-            </button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void runFullCloudSync()}
+                disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
+                title={
+                  cloudSyncStatus === 'synced' && lastCloudSyncAt
+                    ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
+                    : cloudSyncStatus === 'error'
+                      ? 'Sync problem — tap to retry'
+                      : 'Sync with Tasks app & database'
+                }
+                className={`flex flex-col items-center justify-center min-w-[2.75rem] py-1 px-2 rounded-lg border text-[10px] font-bold leading-tight transition-all disabled:opacity-60 ${
+                  cloudSyncStatus === 'synced'
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                    : cloudSyncStatus === 'error'
+                      ? 'border-red-300 bg-red-50 text-red-700'
+                      : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+                }`}
+                aria-label="Sync with shared database"
+              >
+                <span
+                  className={`text-base leading-none ${
+                    cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'
+                      ? 'inline-block animate-spin'
+                      : ''
+                  }`}
+                >
+                  {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
+                </span>
+                <span>
+                  {cloudSyncStatus === 'pulling'
+                    ? 'Pull…'
+                    : cloudSyncStatus === 'pushing'
+                      ? 'Push…'
+                      : cloudSyncStatus === 'synced'
+                        ? 'Synced'
+                        : cloudSyncStatus === 'error'
+                          ? 'Retry'
+                          : 'Sync'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveScreen('settings')}
+                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+              >
+                ⚙️ Setup
+              </button>
+            </div>
           </div>
       <section
         id="maintenance-panel"

@@ -156,6 +156,7 @@ export function compilePackStepTasks({ todayStr, userLogs, pendingDates }) {
         dueDate,
         status,
         module: 'lawn',
+        completedDate: completedDate ?? null,
       });
     }
   }
