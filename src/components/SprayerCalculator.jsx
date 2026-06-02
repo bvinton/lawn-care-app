@@ -709,12 +709,18 @@ export default function SprayerCalculator() {
       setLawnTasksSnapshot(compiledTasks);
 
       try {
-        await syncLawnTasksToSupabase(compiledTasks, {
-          lastMowedDate:
-            overrides.lastMowedDate !== undefined ? overrides.lastMowedDate : lastMowedDate,
-          lastWateredDate:
-            overrides.lastWateredDate !== undefined ? overrides.lastWateredDate : lastWateredDate,
-        });
+        await syncLawnTasksToSupabase(
+          compiledTasks,
+          {
+            lastMowedDate:
+              overrides.lastMowedDate !== undefined ? overrides.lastMowedDate : lastMowedDate,
+            lastWateredDate:
+              overrides.lastWateredDate !== undefined
+                ? overrides.lastWateredDate
+                : lastWateredDate,
+          },
+          todayStr
+        );
         lastSyncFingerprintRef.current = fingerprint;
         setSupabaseSyncError(null);
       } catch (error) {
@@ -745,8 +751,12 @@ export default function SprayerCalculator() {
 
       try {
         const inferred = await pullMaintenanceDatesFromSupabase(todayStr);
-        setLastMowedDate((prev) => mergeMaintenanceDate(prev, inferred.lastMowedDate) ?? prev);
-        setLastWateredDate((prev) => mergeMaintenanceDate(prev, inferred.lastWateredDate) ?? prev);
+        if (inferred.lastMowedDate) {
+          setLastMowedDate((prev) => mergeMaintenanceDate(prev, inferred.lastMowedDate));
+        }
+        if (inferred.lastWateredDate) {
+          setLastWateredDate((prev) => mergeMaintenanceDate(prev, inferred.lastWateredDate));
+        }
 
         setMaintenanceHints({
           mow:

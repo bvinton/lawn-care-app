@@ -6,7 +6,11 @@ import {
   withoutLastCompletedDate,
   probeLastCompletedColumn,
   resetLastCompletedColumnProbe,
+  pickLatestIsoDate,
+  inferLastDoneFromMaintenanceRow,
 } from './lawnMaintenanceSync';
+
+const MAINTENANCE_TASK_NAMES = new Set([MOW_TASK_NAME, WATER_TASK_NAME]);
 
 export const LAWN_APP_SOURCE = 'lawn';
 
@@ -21,6 +25,7 @@ export const LAWN_APP_SOURCE = 'lawn';
  * @property {string} dueDate
  * @property {LawnTaskStatus} status
  * @property {'lawn'} module
+ * @property {string | null} [reason]
  */
 
 /**
@@ -44,6 +49,67 @@ function requireSupabase() {
   }
 
   return supabase;
+}
+
+/**
+ * @param {CompiledLawnTask} task
+ * @returns {boolean}
+ */
+function isSyntheticMaintenanceComplete(task) {
+  return (
+    task.status === 'completed' &&
+    typeof task.reason === 'string' &&
+    /dormancy|winter|rain|not actively growing|nature providing/i.test(task.reason)
+  );
+}
+
+/**
+ * @param {CompiledLawnTask} task
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} maintenance
+ * @param {Array<{ due_date: string, is_completed: boolean, last_completed_date?: string | null }>} [existingRows]
+ * @param {string} todayStr
+ */
+function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
+  const localLast =
+    task.title === MOW_TASK_NAME
+      ? maintenance.lastMowedDate
+      : task.title === WATER_TASK_NAME
+        ? maintenance.lastWateredDate
+        : null;
+
+  let lastCompleted = localLast ?? null;
+  for (const existing of existingRows ?? []) {
+    lastCompleted = pickLatestIsoDate(
+      lastCompleted,
+      existing.last_completed_date ?? null,
+      inferLastDoneFromMaintenanceRow(
+        {
+          task_name: task.title,
+          due_date: existing.due_date,
+          is_completed: existing.is_completed,
+          last_completed_date: existing.last_completed_date ?? null,
+        },
+        todayStr
+      )
+    );
+  }
+
+  /** @type {Record<string, unknown>} */
+  const row = {
+    app_source: LAWN_APP_SOURCE,
+    task_name: task.title,
+    due_date: task.dueDate,
+  };
+
+  if (lastCompleted) {
+    row.last_completed_date = lastCompleted;
+  }
+
+  if (isSyntheticMaintenanceComplete(task)) {
+    row.is_completed = true;
+  }
+
+  return row;
 }
 
 /**
@@ -76,51 +142,16 @@ function compiledTaskToRow(task, maintenance = {}) {
  */
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
- * @param {Record<string, unknown>} payload
+ * @param {Record<string, unknown>} body
  * @param {string} taskTitle
+ * @param {Record<string, unknown>} fullPayload
  */
-async function writeTaskPayload(supabase, payload, taskTitle) {
-  const canUseLastCompleted = await probeLastCompletedColumn(supabase);
-  let body = canUseLastCompleted ? payload : withoutLastCompletedDate(payload);
-
-  const { data: existing, error: findError } = await supabase
-    .from('tasks')
-    .select('id')
-    .eq('app_source', LAWN_APP_SOURCE)
-    .eq('task_name', taskTitle);
-
-  if (findError) {
-    throw new Error(`Lookup failed for "${taskTitle}": ${formatSupabaseSyncError(findError)}`);
-  }
-
-  if (existing && existing.length > 0) {
-    let { error } = await supabase
-      .from('tasks')
-      .update(body)
-      .eq('app_source', LAWN_APP_SOURCE)
-      .eq('task_name', taskTitle);
-
-    if (error && isMissingLastCompletedColumnError(error)) {
-      resetLastCompletedColumnProbe();
-      body = withoutLastCompletedDate(payload);
-      ({ error } = await supabase
-        .from('tasks')
-        .update(body)
-        .eq('app_source', LAWN_APP_SOURCE)
-        .eq('task_name', taskTitle));
-    }
-
-    if (error) {
-      throw new Error(`Update failed for "${taskTitle}": ${formatSupabaseSyncError(error)}`);
-    }
-    return;
-  }
-
+async function applyTaskWrite(supabase, body, taskTitle, fullPayload) {
   let { error } = await supabase.from('tasks').insert(body);
 
   if (error && isMissingLastCompletedColumnError(error)) {
     resetLastCompletedColumnProbe();
-    body = withoutLastCompletedDate(payload);
+    body = withoutLastCompletedDate(fullPayload);
     ({ error } = await supabase.from('tasks').insert(body));
   }
 
@@ -129,17 +160,78 @@ async function writeTaskPayload(supabase, payload, taskTitle) {
   }
 }
 
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {CompiledLawnTask} task
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} maintenance
+ * @param {string} todayStr
+ */
+async function writeTaskPayload(supabase, task, maintenance, todayStr) {
+  const taskTitle = task.title;
+  const isMaintenance = MAINTENANCE_TASK_NAMES.has(taskTitle);
+  const fullPayload = isMaintenance
+    ? buildMaintenanceSyncRow(task, maintenance, [], todayStr)
+    : compiledTaskToRow(task, maintenance);
+
+  const { data: existing, error: findError } = await supabase
+    .from('tasks')
+    .select(
+      isMaintenance ? 'id, due_date, is_completed, last_completed_date' : 'id'
+    )
+    .eq('app_source', LAWN_APP_SOURCE)
+    .eq('task_name', taskTitle)
+    .order('id', { ascending: true });
+
+  if (findError) {
+    throw new Error(`Lookup failed for "${taskTitle}": ${formatSupabaseSyncError(findError)}`);
+  }
+
+  let payload = isMaintenance
+    ? buildMaintenanceSyncRow(task, maintenance, existing ?? [], todayStr)
+    : fullPayload;
+
+  const canUseLastCompleted = await probeLastCompletedColumn(supabase);
+  let body = canUseLastCompleted ? payload : withoutLastCompletedDate(payload);
+
+  if (existing && existing.length > 0) {
+    const [primary, ...duplicates] = existing;
+
+    let { error } = await supabase.from('tasks').update(body).eq('id', primary.id);
+
+    if (error && isMissingLastCompletedColumnError(error)) {
+      resetLastCompletedColumnProbe();
+      body = withoutLastCompletedDate(payload);
+      ({ error } = await supabase.from('tasks').update(body).eq('id', primary.id));
+    }
+
+    if (error) {
+      throw new Error(`Update failed for "${taskTitle}": ${formatSupabaseSyncError(error)}`);
+    }
+
+    for (const duplicate of duplicates) {
+      const { error: deleteError } = await supabase.from('tasks').delete().eq('id', duplicate.id);
+      if (deleteError) {
+        console.warn(`[Lawn Care] Could not remove duplicate "${taskTitle}" row:`, deleteError);
+      }
+    }
+    return;
+  }
+
+  await applyTaskWrite(supabase, body, taskTitle, payload);
+}
+
 /** @returns {Promise<boolean>} */
 export async function isLastCompletedColumnAvailable() {
   return probeLastCompletedColumn(requireSupabase());
 }
 
-export async function syncLawnTasksToSupabase(compiledTasks, maintenance = {}) {
+export async function syncLawnTasksToSupabase(compiledTasks, maintenance = {}, todayStr) {
   const supabase = requireSupabase();
+  const today =
+    todayStr ?? new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
 
   for (const task of compiledTasks) {
-    const payload = compiledTaskToRow(task, maintenance);
-    await writeTaskPayload(supabase, payload, task.title);
+    await writeTaskPayload(supabase, task, maintenance, today);
   }
 
   try {

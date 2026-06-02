@@ -109,7 +109,7 @@ export async function fetchLawnMaintenanceRows() {
     .eq('app_source', LAWN_APP_SOURCE)
     .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME]);
 
-  if (result.error?.code === '42703') {
+  if (result.error && (result.error.code === '42703' || isMissingLastCompletedColumnError(result.error))) {
     result = await supabase
       .from('tasks')
       .select(MAINTENANCE_SELECT_FALLBACK)
@@ -125,6 +125,33 @@ export async function fetchLawnMaintenanceRows() {
 }
 
 /**
+ * Best-effort last-done date from one Supabase row (Tasks app or Lawn app).
+ * @param {LawnMaintenanceRow} row
+ * @param {string} todayStr YYYY-MM-DD
+ * @returns {string | null}
+ */
+export function inferLastDoneFromMaintenanceRow(row, todayStr) {
+  if (row.last_completed_date) {
+    return row.last_completed_date;
+  }
+
+  const dueDate = row.due_date;
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+    return null;
+  }
+
+  if (row.is_completed && dueDate <= todayStr) {
+    return pickLatestIsoDate(dueDate, isoDateFromTimestamp(row.updated_at), isoDateFromTimestamp(row.created_at));
+  }
+
+  if (!row.is_completed && dueDate < todayStr) {
+    return pickLatestIsoDate(dueDate, isoDateFromTimestamp(row.updated_at));
+  }
+
+  return null;
+}
+
+/**
  * Read shared last-done dates from Supabase (set by Tasks app or Lawn app).
  * @param {LawnMaintenanceRow[]} rows
  * @param {string} todayStr YYYY-MM-DD
@@ -136,53 +163,15 @@ export function inferMaintenanceDatesFromRows(rows, todayStr) {
   let waterFromTasksApp = false;
 
   for (const row of rows) {
-    if (row.last_completed_date) {
-      if (row.task_name === MOW_TASK_NAME) {
-        lastMowedDate = pickLatestIsoDate(lastMowedDate, row.last_completed_date);
-        mowFromTasksApp = true;
-        continue;
-      }
-      if (row.task_name === WATER_TASK_NAME) {
-        lastWateredDate = pickLatestIsoDate(lastWateredDate, row.last_completed_date);
-        waterFromTasksApp = true;
-        continue;
-      }
-    }
-
-    const dueDate = row.due_date;
-    const updatedDate = isoDateFromTimestamp(row.updated_at);
-    const createdDate = isoDateFromTimestamp(row.created_at);
+    const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+    if (!inferred) continue;
 
     if (row.task_name === MOW_TASK_NAME) {
-      if (row.is_completed && dueDate <= todayStr) {
-        const candidate = pickLatestIsoDate(dueDate, updatedDate, createdDate);
-        if (candidate) {
-          lastMowedDate = pickLatestIsoDate(lastMowedDate, candidate);
-          mowFromTasksApp = true;
-        }
-      } else if (!row.is_completed && dueDate < todayStr) {
-        const candidate = pickLatestIsoDate(dueDate, updatedDate);
-        if (candidate) {
-          lastMowedDate = pickLatestIsoDate(lastMowedDate, candidate);
-          mowFromTasksApp = true;
-        }
-      }
-    }
-
-    if (row.task_name === WATER_TASK_NAME) {
-      if (row.is_completed && dueDate < todayStr) {
-        const candidate = pickLatestIsoDate(dueDate, updatedDate, createdDate);
-        if (candidate) {
-          lastWateredDate = pickLatestIsoDate(lastWateredDate, candidate);
-          waterFromTasksApp = true;
-        }
-      } else if (!row.is_completed && dueDate < todayStr) {
-        const candidate = pickLatestIsoDate(dueDate, updatedDate);
-        if (candidate) {
-          lastWateredDate = pickLatestIsoDate(lastWateredDate, candidate);
-          waterFromTasksApp = true;
-        }
-      }
+      lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
+      mowFromTasksApp = true;
+    } else if (row.task_name === WATER_TASK_NAME) {
+      lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
+      waterFromTasksApp = true;
     }
   }
 
