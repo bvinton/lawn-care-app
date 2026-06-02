@@ -21,6 +21,12 @@ import {
   fetchLawnTasksFromSupabase,
   LAWN_APP_SOURCE,
 } from '../services/lawnTasks';
+import {
+  fetchLawnMaintenanceRows,
+  inferMaintenanceDatesFromRows,
+  mergeMaintenanceDate,
+} from '../services/lawnMaintenanceSync';
+import { getSupabaseConfigError } from '../lib/supabase';
 import { formatSupabaseSyncError } from '../lib/supabase';
 import { compileLawnTasks } from '../utils/compileLawnTasks';
 
@@ -191,6 +197,12 @@ function parseUkDate(input) {
   return formatInputDate(date);
 }
 
+/** @param {number | null} days */
+function formatDaysSinceLabel(days) {
+  if (days === null) return 'no record yet';
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
 /** @param {string} dateString */
 function formatDisplayDate(dateString) {
   const normalized = startOfDay(dateString);
@@ -345,6 +357,15 @@ export default function SprayerCalculator() {
   );
   const [supabaseSyncStatus, setSupabaseSyncStatus] = useState(
     /** @type {'idle' | 'syncing' | 'synced' | 'error'} */ ('idle')
+  );
+  const [maintenanceHydrated, setMaintenanceHydrated] = useState(false);
+  const [maintenanceHints, setMaintenanceHints] = useState(
+    /** @type {{ mow: string | null, water: string | null }} */ ({ mow: null, water: null })
+  );
+  const syncInFlightRef = useRef(false);
+  const lastSyncFingerprintRef = useRef('');
+  const syncedBannerTimerRef = useRef(
+    /** @type {ReturnType<typeof setTimeout> | null} */ (null)
   );
 
   const [pendingDates, setPendingDates] = useState(() =>
@@ -679,20 +700,45 @@ export default function SprayerCalculator() {
   );
 
   const pushLawnTasksToSupabase = useCallback(
-    async (overrides = {}) => {
+    async (overrides = {}, options = {}) => {
+      const { quiet = true } = options;
       const compiledTasks = compileLawnTasksExport(overrides);
+      const fingerprint = JSON.stringify(compiledTasks);
+
+      if (syncInFlightRef.current || fingerprint === lastSyncFingerprintRef.current) {
+        setLawnTasksSnapshot(compiledTasks);
+        return;
+      }
+
+      syncInFlightRef.current = true;
       setLawnTasksSnapshot(compiledTasks);
-      setSupabaseSyncStatus('syncing');
+
+      if (!quiet) {
+        setSupabaseSyncStatus('syncing');
+      }
 
       try {
         await syncLawnTasksToSupabase(compiledTasks);
+        lastSyncFingerprintRef.current = fingerprint;
         setSupabaseSyncError(null);
-        setSupabaseSyncStatus('synced');
+        if (!quiet) {
+          setSupabaseSyncStatus('synced');
+          if (syncedBannerTimerRef.current) {
+            clearTimeout(syncedBannerTimerRef.current);
+          }
+          syncedBannerTimerRef.current = setTimeout(() => {
+            setSupabaseSyncStatus('idle');
+          }, 2500);
+        } else {
+          setSupabaseSyncStatus('idle');
+        }
       } catch (error) {
         const message = formatSupabaseSyncError(error);
         console.error('[Lawn Care] Supabase sync failed:', error);
         setSupabaseSyncError(message);
         setSupabaseSyncStatus('error');
+      } finally {
+        syncInFlightRef.current = false;
       }
     },
     [compileLawnTasksExport]
@@ -769,9 +815,61 @@ export default function SprayerCalculator() {
   }, [lawnSurface]);
 
   useEffect(() => {
-    pushLawnTasksToSupabase();
+    let cancelled = false;
+
+    async function hydrateMaintenanceFromSupabase() {
+      if (getSupabaseConfigError()) {
+        setMaintenanceHydrated(true);
+        return;
+      }
+
+      try {
+        const rows = await fetchLawnMaintenanceRows();
+        if (cancelled) return;
+
+        const inferred = inferMaintenanceDatesFromRows(rows, todayStr);
+        setLastMowedDate((prev) => mergeMaintenanceDate(prev, inferred.lastMowedDate) ?? prev);
+        setLastWateredDate((prev) => mergeMaintenanceDate(prev, inferred.lastWateredDate) ?? prev);
+
+        const mergedMow = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
+        const mergedWater = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
+
+        setMaintenanceHints({
+          mow:
+            inferred.mowFromTasksApp && mergedMow
+              ? `Last mow synced from Tasks app (${formatDisplayDate(mergedMow)}).`
+              : null,
+          water:
+            inferred.waterFromTasksApp && mergedWater
+              ? `Last water synced from Tasks app (${formatDisplayDate(mergedWater)}).`
+              : null,
+        });
+      } catch (error) {
+        console.warn('[Lawn Care] Maintenance hydrate skipped:', error);
+      } finally {
+        if (!cancelled) {
+          setMaintenanceHydrated(true);
+        }
+      }
+    }
+
+    void hydrateMaintenanceFromSupabase();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [todayStr]);
+
+  useEffect(() => {
+    if (!maintenanceHydrated) return;
+
+    const timer = setTimeout(() => {
+      void pushLawnTasksToSupabase({}, { quiet: true });
+    }, 600);
+
+    return () => clearTimeout(timer);
   }, [
-    pushLawnTasksToSupabase,
+    maintenanceHydrated,
     lastMowedDate,
     lastWateredDate,
     lastGypsumDate,
@@ -780,7 +878,17 @@ export default function SprayerCalculator() {
     isNatureProvidingFullSoak,
     seedEstablishmentActive,
     forecastedRainSum,
+    compileLawnTasksExport,
   ]);
+
+  useEffect(
+    () => () => {
+      if (syncedBannerTimerRef.current) {
+        clearTimeout(syncedBannerTimerRef.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1147,7 +1255,12 @@ export default function SprayerCalculator() {
           )}
           {supabaseSyncStatus === 'syncing' && !supabaseSyncError && (
             <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-2 text-[11px] font-medium text-sky-800">
-              Syncing tasks to Supabase…
+              Updating tasks in Supabase…
+            </div>
+          )}
+          {supabaseSyncStatus === 'synced' && !supabaseSyncError && (
+            <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-[11px] font-medium text-emerald-800">
+              Tasks updated in Supabase.
             </div>
           )}
           {petLockoutActive && (
@@ -1346,8 +1459,22 @@ export default function SprayerCalculator() {
               ) : mowingDue ? (
                 <>
                   <p className="text-xs font-bold text-amber-900 leading-snug">
-                    🚨 MOWING DUE: It has been {daysSinceMow ?? '∞'} days since your last cut.
+                    🚨 MOWING DUE: It has been {formatDaysSinceLabel(daysSinceMow)} since your last
+                    cut.
                   </p>
+                  {lastMowedDate ? (
+                    <p className="mt-1 text-xs text-gray-600">
+                      Last cut: {formatDisplayDate(lastMowedDate)}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-gray-600">
+                      No cut logged here yet — use Log below or mark &quot;Mow lawn&quot; done in
+                      the Tasks app.
+                    </p>
+                  )}
+                  {maintenanceHints.mow && (
+                    <p className="mt-1 text-xs font-medium text-emerald-800">{maintenanceHints.mow}</p>
+                  )}
                   {scheduleReason.mow && (
                     <p className="mt-1 text-xs text-blue-700 italic">
                       📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
@@ -1357,8 +1484,14 @@ export default function SprayerCalculator() {
               ) : (
                 <>
                   <p className="text-xs text-gray-600 leading-snug">
-                    Last cut: {formatDisplayDate(lastMowedDate)} ({daysSinceMow} days ago)
+                    Last cut:{' '}
+                    {lastMowedDate
+                      ? `${formatDisplayDate(lastMowedDate)} (${formatDaysSinceLabel(daysSinceMow)} ago)`
+                      : 'not logged yet'}
                   </p>
+                  {maintenanceHints.mow && (
+                    <p className="mt-1 text-xs font-medium text-emerald-800">{maintenanceHints.mow}</p>
+                  )}
                   {scheduleReason.mow && (
                     <p className="mt-1 text-xs text-blue-700 italic">
                       📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
@@ -1413,7 +1546,8 @@ export default function SprayerCalculator() {
                   const loggedDate = pendingMowLogDate;
                   setLastMowedDate(loggedDate);
                   setPendingMowLogDate(todayStr);
-                  void pushLawnTasksToSupabase({ lastMowedDate: loggedDate });
+                  void pushLawnTasksToSupabase({ lastMowedDate: loggedDate }, { quiet: false });
+                  setMaintenanceHints((prev) => ({ ...prev, mow: null }));
                 }}
                 disabled={isDormantSeason || seedEstablishmentActive || !pendingMowLogDate}
                 className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1466,6 +1600,22 @@ export default function SprayerCalculator() {
                     your location&apos;s weather, turn on your {activeSprinkler.name} for exactly{' '}
                     {dynamicMinutes} minutes to achieve optimal root depth without wasting water.
                   </p>
+                  {lastWateredDate ? (
+                    <p className="mt-1 text-xs text-gray-600">
+                      Last water: {formatDisplayDate(lastWateredDate)} (
+                      {formatDaysSinceLabel(daysSinceWater)} ago)
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-gray-600">
+                      No watering logged here yet — use Log below or mark &quot;Water lawn&quot; done
+                      in the Tasks app.
+                    </p>
+                  )}
+                  {maintenanceHints.water && (
+                    <p className="mt-1 text-xs font-medium text-emerald-800">
+                      {maintenanceHints.water}
+                    </p>
+                  )}
                   {scheduleReason.water && (
                     <p className="mt-1 text-xs text-blue-700 italic">
                       📊 {dynamicWateringDays}-day interval: {scheduleReason.water}
@@ -1485,8 +1635,16 @@ export default function SprayerCalculator() {
               ) : (
                 <>
                   <p className="text-xs text-gray-600 leading-snug">
-                    Last water: {formatDisplayDate(lastWateredDate)} ({daysSinceWater} days ago)
+                    Last water:{' '}
+                    {lastWateredDate
+                      ? `${formatDisplayDate(lastWateredDate)} (${formatDaysSinceLabel(daysSinceWater)} ago)`
+                      : 'not logged yet'}
                   </p>
+                  {maintenanceHints.water && (
+                    <p className="mt-1 text-xs font-medium text-emerald-800">
+                      {maintenanceHints.water}
+                    </p>
+                  )}
                   {scheduleReason.water && (
                     <p className="mt-1 text-xs text-blue-700 italic">
                       📊 {dynamicWateringDays}-day interval: {scheduleReason.water}
@@ -1530,7 +1688,8 @@ export default function SprayerCalculator() {
                   const loggedDate = pendingWaterLogDate;
                   setLastWateredDate(loggedDate);
                   setPendingWaterLogDate(todayStr);
-                  void pushLawnTasksToSupabase({ lastWateredDate: loggedDate });
+                  void pushLawnTasksToSupabase({ lastWateredDate: loggedDate }, { quiet: false });
+                  setMaintenanceHints((prev) => ({ ...prev, water: null }));
                 }}
                 disabled={isDormantSeason || isNatureProvidingFullSoak || !pendingWaterLogDate}
                 className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
