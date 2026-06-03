@@ -757,6 +757,8 @@ export default function SprayerCalculator() {
             {
               lastMowedDate: syncedMow,
               lastWateredDate: syncedWater,
+              mowingNextDueIso: mowingNextDueIso ?? null,
+              wateringNextDueIso: wateringNextDueIso ?? null,
               forecastedRainSum,
               currentSoilTemp: currentSoilTemp ?? null,
               isNatureProvidingFullSoak,

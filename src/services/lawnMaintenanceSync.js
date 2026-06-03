@@ -140,12 +140,9 @@ export function inferLastDoneFromMaintenanceRow(row, todayStr) {
     return null;
   }
 
+  // due_date on mow/water rows is the *next* due date — never treat it as last done when open.
   if (row.is_completed && dueDate <= todayStr) {
     return pickLatestIsoDate(dueDate, isoDateFromTimestamp(row.updated_at), isoDateFromTimestamp(row.created_at));
-  }
-
-  if (!row.is_completed && dueDate < todayStr) {
-    return pickLatestIsoDate(dueDate, isoDateFromTimestamp(row.updated_at));
   }
 
   return null;

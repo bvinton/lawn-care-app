@@ -7,6 +7,8 @@ export const LAWN_STATE_ID = 'default';
  * @typedef {Object} LawnScheduleSnapshot
  * @property {string | null} [lastMowedDate]
  * @property {string | null} [lastWateredDate]
+ * @property {string | null} [mowingNextDueIso]
+ * @property {string | null} [wateringNextDueIso]
  * @property {number} [forecastedRainSum]
  * @property {number | null} [currentSoilTemp]
  * @property {boolean} [isNatureProvidingFullSoak]
