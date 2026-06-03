@@ -11,18 +11,6 @@ import {
 } from './lawnMaintenanceSync';
 import { GYPSUM_TASK_NAME } from './lawnTaskInboundSync';
 
-/**
- * @param {string} dueDateIso
- * @param {string | null} lastCompleted
- * @param {string} todayStr
- * @param {boolean} syntheticComplete
- */
-function resolveMaintenanceIsCompleted(dueDateIso, lastCompleted, todayStr, syntheticComplete) {
-  if (syntheticComplete) return true;
-  if (!lastCompleted) return false;
-  return dueDateIso > todayStr;
-}
-
 const MAINTENANCE_TASK_NAMES = new Set([MOW_TASK_NAME, WATER_TASK_NAME]);
 
 export const LAWN_APP_SOURCE = 'lawn';
@@ -119,13 +107,7 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     row.last_completed_date = lastCompleted;
   }
 
-  const synthetic = isSyntheticMaintenanceComplete(task);
-  row.is_completed = resolveMaintenanceIsCompleted(
-    task.dueDate,
-    lastCompleted,
-    todayStr,
-    synthetic
-  );
+  row.is_completed = isSyntheticMaintenanceComplete(task);
 
   return row;
 }
