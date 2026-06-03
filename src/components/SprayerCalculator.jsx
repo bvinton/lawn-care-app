@@ -1104,8 +1104,9 @@ export default function SprayerCalculator() {
     async function loadWeather() {
       setWeatherStatus('loading');
 
+      let cached = null;
       try {
-        const cached = await fetchLawnWeatherSnapshotFromSupabase();
+        cached = await fetchLawnWeatherSnapshotFromSupabase();
         if (!cancelled && cached && isWeatherSnapshotFresh(cached.fetchedAt, 3)) {
           applyWeatherSnapshot(cached);
         }
@@ -1123,9 +1124,15 @@ export default function SprayerCalculator() {
         } catch (saveError) {
           console.warn('[Lawn Care] Weather snapshot save failed:', saveError);
         }
-      } catch {
+      } catch (fetchError) {
+        console.warn('[Lawn Care] Live weather fetch failed:', fetchError);
         if (!cancelled) {
-          setWeatherStatus((prev) => (prev === 'ready' ? 'ready' : 'error'));
+          if (cached) {
+            applyWeatherSnapshot(cached);
+            setWeatherStatus('ready');
+          } else {
+            setWeatherStatus('error');
+          }
         }
       }
     }
@@ -1229,9 +1236,11 @@ export default function SprayerCalculator() {
   const weatherStatusText =
     weatherStatus === 'loading'
       ? 'Fetching 7-day rainfall forecast…'
-      : isRainForecasted
-        ? '🌧️ Rain Forecasted - Watering Paused'
-        : '☀️ Dry Week Predicted - Timers Active';
+      : weatherStatus === 'error'
+        ? '⚠️ Forecast unavailable — tap Sync to retry'
+        : isRainForecasted
+          ? '🌧️ Rain Forecasted - Watering Paused'
+          : '☀️ Dry Week Predicted - Timers Active';
 
   return (
     <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-3xl m-4 p-6 border border-green-100">

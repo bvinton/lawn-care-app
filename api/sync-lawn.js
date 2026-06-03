@@ -22643,25 +22643,16 @@ function inferLastDoneFromMaintenanceRow(row, todayStr) {
 function inferMaintenanceDatesFromRows(rows, todayStr) {
   let lastMowedDate = null;
   let lastWateredDate = null;
-  let mowFromTasksApp = false;
-  let waterFromTasksApp = false;
   for (const row of rows) {
     const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
     if (!inferred) continue;
     if (row.task_name === MOW_TASK_NAME) {
       lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
-      mowFromTasksApp = true;
     } else if (row.task_name === WATER_TASK_NAME) {
       lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
-      waterFromTasksApp = true;
     }
   }
-  return {
-    lastMowedDate,
-    lastWateredDate,
-    mowFromTasksApp,
-    waterFromTasksApp
-  };
+  return { lastMowedDate, lastWateredDate };
 }
 function mergeMaintenanceDate(localDate, remoteDate) {
   return pickLatestIsoDate(localDate, remoteDate);
@@ -22841,14 +22832,10 @@ function buildMaintenanceSchedule(input) {
 
 // src/services/lawnWeather.js
 var LAWN_STATE_ID2 = "default";
-var OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum,soil_temperature_10cm_max&hourly=soil_temperature_6cm&timezone=Europe%2FLondon&forecast_days=7";
+var OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum&hourly=soil_temperature_6cm&timezone=Europe%2FLondon&forecast_days=7";
 var SOAK_DEPTH_MM = 10;
 var RAIN_THRESHOLD_MM = 5;
 function getTodayMaxSoilTemp(data) {
-  const dailyMax = data.daily?.soil_temperature_10cm_max;
-  if (Array.isArray(dailyMax) && dailyMax[0] != null) {
-    return dailyMax[0];
-  }
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
   return hourlyTemps.slice(0, 24).reduce(
@@ -23127,16 +23114,23 @@ async function runLawnCloudSync() {
     await saveLawnWeatherSnapshot(weather);
   } catch (err) {
     console.warn("[Lawn sync API] Weather fetch failed, using cloud snapshot:", err);
-    weather = cloudState.weatherSnapshot ?? {
-      forecastedRainSum: scheduleSnapshot.forecastedRainSum ?? 0,
-      currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
-      currentSoilTempMin: null,
-      isRainForecasted: false,
-      isNatureProvidingFullSoak: scheduleSnapshot.isNatureProvidingFullSoak ?? false,
-      netWaterNeeded: 10,
-      fetchedAt: (/* @__PURE__ */ new Date()).toISOString(),
-      source: "open-meteo"
-    };
+    const fromCloud = cloudState.weatherSnapshot;
+    if (fromCloud && typeof fromCloud.forecastedRainSum === "number") {
+      weather = fromCloud;
+    } else if (typeof scheduleSnapshot.forecastedRainSum === "number") {
+      weather = {
+        forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+        currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
+        currentSoilTempMin: null,
+        isRainForecasted: scheduleSnapshot.forecastedRainSum >= 5,
+        isNatureProvidingFullSoak: scheduleSnapshot.isNatureProvidingFullSoak ?? scheduleSnapshot.forecastedRainSum >= 10,
+        netWaterNeeded: Math.max(0, 10 - scheduleSnapshot.forecastedRainSum),
+        fetchedAt: scheduleSnapshot.savedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
+        source: "open-meteo"
+      };
+    } else {
+      throw new Error("Weather forecast unavailable and no cached snapshot in cloud.");
+    }
   }
   const forecastedRainSum = weather.forecastedRainSum;
   const currentSoilTemp = weather.currentSoilTemp;

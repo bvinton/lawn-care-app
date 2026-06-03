@@ -71,16 +71,25 @@ export async function runLawnCloudSync() {
     await saveLawnWeatherSnapshot(weather);
   } catch (err) {
     console.warn('[Lawn sync API] Weather fetch failed, using cloud snapshot:', err);
-    weather = cloudState.weatherSnapshot ?? {
-      forecastedRainSum: scheduleSnapshot.forecastedRainSum ?? 0,
-      currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
-      currentSoilTempMin: null,
-      isRainForecasted: false,
-      isNatureProvidingFullSoak: scheduleSnapshot.isNatureProvidingFullSoak ?? false,
-      netWaterNeeded: 10,
-      fetchedAt: new Date().toISOString(),
-      source: 'open-meteo',
-    };
+    const fromCloud = cloudState.weatherSnapshot;
+    if (fromCloud && typeof fromCloud.forecastedRainSum === 'number') {
+      weather = fromCloud;
+    } else if (typeof scheduleSnapshot.forecastedRainSum === 'number') {
+      weather = {
+        forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+        currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
+        currentSoilTempMin: null,
+        isRainForecasted: scheduleSnapshot.forecastedRainSum >= 5,
+        isNatureProvidingFullSoak:
+          scheduleSnapshot.isNatureProvidingFullSoak ??
+          scheduleSnapshot.forecastedRainSum >= 10,
+        netWaterNeeded: Math.max(0, 10 - scheduleSnapshot.forecastedRainSum),
+        fetchedAt: scheduleSnapshot.savedAt ?? new Date().toISOString(),
+        source: 'open-meteo',
+      };
+    } else {
+      throw new Error('Weather forecast unavailable and no cached snapshot in cloud.');
+    }
   }
 
   const forecastedRainSum = weather.forecastedRainSum;

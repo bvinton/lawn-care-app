@@ -2,8 +2,9 @@ import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '..
 
 const LAWN_STATE_ID = 'default';
 
+/** soil_temperature_10cm_max is not a valid daily variable on the forecast API — use hourly soil temps only. */
 export const OPEN_METEO_URL =
-  'https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum,soil_temperature_10cm_max&hourly=soil_temperature_6cm&timezone=Europe%2FLondon&forecast_days=7';
+  'https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum&hourly=soil_temperature_6cm&timezone=Europe%2FLondon&forecast_days=7';
 
 export const SOAK_DEPTH_MM = 10;
 export const RAIN_THRESHOLD_MM = 5;
@@ -24,11 +25,6 @@ export const RAIN_THRESHOLD_MM = 5;
  * @param {{ daily?: { soil_temperature_10cm_max?: Array<number | null>, precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
  */
 export function getTodayMaxSoilTemp(data) {
-  const dailyMax = data.daily?.soil_temperature_10cm_max;
-  if (Array.isArray(dailyMax) && dailyMax[0] != null) {
-    return dailyMax[0];
-  }
-
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
 
