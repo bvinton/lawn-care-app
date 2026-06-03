@@ -784,6 +784,7 @@ export default function SprayerCalculator() {
         setSupabaseSyncError(null);
         setLastCloudSyncAt(new Date());
         setCloudSyncStatus('synced');
+        setMaintenanceHints({ mow: null, water: null });
       } catch (error) {
         console.error('[Lawn Care] Supabase sync failed:', error);
         setCloudSyncStatus('error');
@@ -866,16 +867,16 @@ export default function SprayerCalculator() {
         inboundMaintenance = true;
       }
 
-      setMaintenanceHints({
-        mow:
-          inferred.mowFromTasksApp && nextMow
-            ? `Synced from Tasks app — last mow ${formatDisplayDate(nextMow)}.`
+      if (inboundMaintenance) {
+        setMaintenanceHints({
+          mow: nextMow ? `Last mow updated from shared log (${formatDisplayDate(nextMow)}).` : null,
+          water: nextWater
+            ? `Last water updated from shared log (${formatDisplayDate(nextWater)}).`
             : null,
-        water:
-          inferred.waterFromTasksApp && nextWater
-            ? `Synced from Tasks app — last water ${formatDisplayDate(nextWater)}.`
-            : null,
-      });
+        });
+      } else {
+        setMaintenanceHints({ mow: null, water: null });
+      }
     } catch (error) {
       console.warn('[Lawn Care] Maintenance pull failed:', error);
     }
@@ -1569,7 +1570,7 @@ export default function SprayerCalculator() {
                     ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
                     : cloudSyncStatus === 'error'
                       ? 'Sync problem — tap to retry'
-                      : 'Sync with Tasks app & database'
+                      : 'Sync schedule to cloud'
                 }
                 className={`flex flex-col items-center justify-center min-w-[2.75rem] py-1 px-2 rounded-lg border text-[10px] font-bold leading-tight transition-all disabled:opacity-60 ${
                   cloudSyncStatus === 'synced'
@@ -1743,8 +1744,7 @@ export default function SprayerCalculator() {
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-gray-600">
-                      No cut logged here yet — use Log below or mark &quot;Mow lawn&quot; done in
-                      the Tasks app.
+                      No cut logged here yet — use Log below.
                     </p>
                   )}
                   {maintenanceHints.mow && (
@@ -1882,8 +1882,7 @@ export default function SprayerCalculator() {
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-gray-600">
-                      No watering logged here yet — use Log below or mark &quot;Water lawn&quot; done
-                      in the Tasks app.
+                      No watering logged here yet — use Log below.
                     </p>
                   )}
                   {maintenanceHints.water && (

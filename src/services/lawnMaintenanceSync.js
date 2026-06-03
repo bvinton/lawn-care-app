@@ -156,8 +156,6 @@ export function inferLastDoneFromMaintenanceRow(row, todayStr) {
 export function inferMaintenanceDatesFromRows(rows, todayStr) {
   let lastMowedDate = null;
   let lastWateredDate = null;
-  let mowFromTasksApp = false;
-  let waterFromTasksApp = false;
 
   for (const row of rows) {
     const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
@@ -165,19 +163,12 @@ export function inferMaintenanceDatesFromRows(rows, todayStr) {
 
     if (row.task_name === MOW_TASK_NAME) {
       lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
-      mowFromTasksApp = true;
     } else if (row.task_name === WATER_TASK_NAME) {
       lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
-      waterFromTasksApp = true;
     }
   }
 
-  return {
-    lastMowedDate,
-    lastWateredDate,
-    mowFromTasksApp,
-    waterFromTasksApp,
-  };
+  return { lastMowedDate, lastWateredDate };
 }
 
 /**
