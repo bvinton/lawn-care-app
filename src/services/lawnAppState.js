@@ -4,9 +4,20 @@ import { pickLatestIsoDate } from './lawnMaintenanceSync';
 export const LAWN_STATE_ID = 'default';
 
 /**
- * @returns {Promise<Record<string, string>>}
+ * @typedef {Object} LawnScheduleSnapshot
+ * @property {string | null} [lastMowedDate]
+ * @property {string | null} [lastWateredDate]
+ * @property {number} [forecastedRainSum]
+ * @property {number | null} [currentSoilTemp]
+ * @property {boolean} [isNatureProvidingFullSoak]
+ * @property {Record<string, Record<string, string>>} [pendingDates]
+ * @property {string} [savedAt]
  */
-export async function fetchLawnUserLogsFromSupabase() {
+
+/**
+ * @returns {Promise<{ userLogs: Record<string, string>, scheduleSnapshot: LawnScheduleSnapshot | null } | null>}
+ */
+export async function fetchLawnAppStateFromSupabase() {
   const configError = getSupabaseConfigError();
   if (configError) {
     throw new Error(configError);
@@ -19,7 +30,7 @@ export async function fetchLawnUserLogsFromSupabase() {
 
   const { data, error } = await supabase
     .from('lawn_app_state')
-    .select('user_logs')
+    .select('user_logs, schedule_snapshot')
     .eq('id', LAWN_STATE_ID)
     .maybeSingle();
 
@@ -30,27 +41,39 @@ export async function fetchLawnUserLogsFromSupabase() {
     throw new Error(formatSupabaseSyncError(error));
   }
 
-  if (!data?.user_logs || typeof data.user_logs !== 'object') {
-    return {};
-  }
-
-  /** @type {Record<string, unknown>} */
-  const raw = data.user_logs;
   /** @type {Record<string, string>} */
-  const logs = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (typeof value === 'string') {
-      logs[key] = value;
+  const userLogs = {};
+  if (data?.user_logs && typeof data.user_logs === 'object') {
+    for (const [key, value] of Object.entries(data.user_logs)) {
+      if (typeof value === 'string') {
+        userLogs[key] = value;
+      }
     }
   }
-  return logs;
+
+  const scheduleSnapshot =
+    data?.schedule_snapshot && typeof data.schedule_snapshot === 'object'
+      ? /** @type {LawnScheduleSnapshot} */ (data.schedule_snapshot)
+      : null;
+
+  return { userLogs, scheduleSnapshot };
+}
+
+/**
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function fetchLawnUserLogsFromSupabase() {
+  const state = await fetchLawnAppStateFromSupabase();
+  if (!state) return null;
+  return state.userLogs;
 }
 
 /**
  * @param {Record<string, string>} userLogs
+ * @param {LawnScheduleSnapshot | null} [scheduleSnapshot]
  * @returns {Promise<boolean>} false if table missing
  */
-export async function saveLawnUserLogsToSupabase(userLogs) {
+export async function saveLawnAppStateToSupabase(userLogs, scheduleSnapshot = null) {
   const configError = getSupabaseConfigError();
   if (configError) {
     throw new Error(configError);
@@ -61,11 +84,19 @@ export async function saveLawnUserLogsToSupabase(userLogs) {
     throw new Error('Supabase client could not be initialised.');
   }
 
+  /** @type {Record<string, unknown>} */
   const payload = {
     id: LAWN_STATE_ID,
     user_logs: userLogs,
     updated_at: new Date().toISOString(),
   };
+
+  if (scheduleSnapshot) {
+    payload.schedule_snapshot = {
+      ...scheduleSnapshot,
+      savedAt: new Date().toISOString(),
+    };
+  }
 
   const { error } = await supabase.from('lawn_app_state').upsert(payload, { onConflict: 'id' });
 
@@ -73,10 +104,41 @@ export async function saveLawnUserLogsToSupabase(userLogs) {
     if (error.code === 'PGRST205' || /lawn_app_state|schema cache/i.test(error.message)) {
       return false;
     }
+    if (/schedule_snapshot|42703|PGRST204/i.test(error.message)) {
+      const { error: fallbackError } = await supabase.from('lawn_app_state').upsert(
+        {
+          id: LAWN_STATE_ID,
+          user_logs: userLogs,
+          updated_at: payload.updated_at,
+        },
+        { onConflict: 'id' }
+      );
+      if (fallbackError) {
+        throw new Error(formatSupabaseSyncError(fallbackError));
+      }
+      return true;
+    }
     throw new Error(formatSupabaseSyncError(error));
   }
 
   return true;
+}
+
+/**
+ * @param {Record<string, string>} userLogs
+ * @returns {Promise<boolean>}
+ */
+export async function saveLawnUserLogsToSupabase(userLogs) {
+  return saveLawnAppStateToSupabase(userLogs, null);
+}
+
+/**
+ * @param {LawnScheduleSnapshot} snapshot
+ * @param {Record<string, string>} userLogs
+ * @returns {Promise<boolean>}
+ */
+export async function saveLawnScheduleSnapshot(snapshot, userLogs) {
+  return saveLawnAppStateToSupabase(userLogs, snapshot);
 }
 
 /**
@@ -119,5 +181,5 @@ export function mergeLawnUserLogs(remote, local) {
 }
 
 export function getLawnAppStateSetupHint() {
-  return 'Run supabase/lawn_app_state.sql in the Supabase SQL Editor so lawn pack progress (Weedol, steps, etc.) is saved to the cloud.';
+  return 'Run supabase/lawn_app_state.sql and lawn_schedule_snapshot.sql in the Supabase SQL Editor so lawn progress and schedules sync with the Tasks app.';
 }

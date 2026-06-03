@@ -43,6 +43,7 @@ import {
 import {
   fetchLawnUserLogsFromSupabase,
   saveLawnUserLogsToSupabase,
+  saveLawnScheduleSnapshot,
   mergeLawnUserLogs,
   getLawnAppStateSetupHint,
 } from '../services/lawnAppState';
@@ -769,18 +770,36 @@ export default function SprayerCalculator() {
       }
 
       try {
+        const syncedMow =
+          overrides.lastMowedDate !== undefined ? overrides.lastMowedDate : lastMowedDate;
+        const syncedWater =
+          overrides.lastWateredDate !== undefined ? overrides.lastWateredDate : lastWateredDate;
+
         await syncLawnTasksToSupabase(
           compiledTasks,
           {
-            lastMowedDate:
-              overrides.lastMowedDate !== undefined ? overrides.lastMowedDate : lastMowedDate,
-            lastWateredDate:
-              overrides.lastWateredDate !== undefined
-                ? overrides.lastWateredDate
-                : lastWateredDate,
+            lastMowedDate: syncedMow,
+            lastWateredDate: syncedWater,
           },
           todayStr
         );
+
+        try {
+          await saveLawnScheduleSnapshot(
+            {
+              lastMowedDate: syncedMow,
+              lastWateredDate: syncedWater,
+              forecastedRainSum,
+              currentSoilTemp: currentSoilTemp ?? null,
+              isNatureProvidingFullSoak,
+              pendingDates,
+            },
+            userLogs
+          );
+        } catch (snapshotError) {
+          console.warn('[Lawn Care] Schedule snapshot save failed:', snapshotError);
+        }
+
         lastSyncFingerprintRef.current = fingerprint;
         setSupabaseSyncError(null);
         setLastCloudSyncAt(new Date());
@@ -797,7 +816,16 @@ export default function SprayerCalculator() {
         syncInFlightRef.current = false;
       }
     },
-    [compileLawnTasksExport, lastMowedDate, lastWateredDate]
+    [
+      compileLawnTasksExport,
+      lastMowedDate,
+      lastWateredDate,
+      userLogs,
+      pendingDates,
+      forecastedRainSum,
+      currentSoilTemp,
+      isNatureProvidingFullSoak,
+    ]
   );
 
   const pullCloudState = useCallback(async () => {
