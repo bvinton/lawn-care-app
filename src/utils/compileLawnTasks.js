@@ -91,7 +91,7 @@ export function compileLawnTasks({
     compiledTasks.push({
       id: 'lawn-mow',
       title: 'Mow lawn',
-      dueDate: todayStr,
+      dueDate: mowingNextDueIso ?? todayStr,
       status: 'completed',
       module: 'lawn',
       reason: 'Winter dormancy – grass not actively growing',
@@ -121,7 +121,7 @@ export function compileLawnTasks({
     compiledTasks.push({
       id: 'lawn-water',
       title: 'Water lawn',
-      dueDate: todayStr,
+      dueDate: wateringNextDueIso ?? todayStr,
       status: 'completed',
       module: 'lawn',
       reason: isDormantSeason

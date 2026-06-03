@@ -109,6 +109,9 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
 
   if (isSyntheticMaintenanceComplete(task)) {
     row.is_completed = true;
+  } else {
+    // Clear stale completions (e.g. rain pause) so Tasks app still lists open mow/water.
+    row.is_completed = false;
   }
 
   return row;

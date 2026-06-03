@@ -743,6 +743,8 @@ export default function SprayerCalculator() {
       seedEstablishmentActive,
       mowingLockedUntilIso,
       scheduleReason,
+      dynamicMowingDays,
+      dynamicWateringDays,
     ]
   );
 
