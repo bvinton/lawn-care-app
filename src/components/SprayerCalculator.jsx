@@ -47,6 +47,13 @@ import {
   mergeLawnUserLogs,
   getLawnAppStateSetupHint,
 } from '../services/lawnAppState';
+import {
+  fetchLawnWeatherFromOpenMeteo,
+  fetchLawnWeatherSnapshotFromSupabase,
+  isWeatherSnapshotFresh,
+  saveLawnWeatherSnapshot,
+  SOAK_DEPTH_MM,
+} from '../services/lawnWeather';
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { compileAllLawnTasks } from '../utils/compileLawnTasks';
 
@@ -60,45 +67,6 @@ const SEED_GERMINATION_SOIL_TEMP_MIN_C = 10;
 const SEED_GERMINATION_SOIL_TEMP_MAX_C = 25;
 const PET_LOCKOUT_KEY = 'petLockoutUntil';
 const PET_LOCKOUT_HOURS = 24;
-const RAIN_THRESHOLD_MM = 5.0;
-
-const OPEN_METEO_URL =
-  'https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum&hourly=soil_temperature_6cm&timezone=Europe%2FLondon&forecast_days=7';
-
-/**
- * @typedef {Object} OpenMeteoForecast
- * @property {{ soil_temperature_10cm_max?: Array<number | null>, precipitation_sum?: Array<number | null> } | undefined} [daily]
- * @property {{ soil_temperature_6cm?: Array<number | null> } | undefined} [hourly]
- */
-
-/** @param {OpenMeteoForecast} data */
-function getTodayMaxSoilTemp(data) {
-  const dailyMax = data.daily?.soil_temperature_10cm_max;
-  if (Array.isArray(dailyMax) && dailyMax[0] != null) {
-    return dailyMax[0];
-  }
-
-  const hourlyTemps = data.hourly?.soil_temperature_6cm;
-  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
-
-  return hourlyTemps.slice(0, 24).reduce((max, temp) => {
-    if (temp == null) return max;
-    return max === null ? temp : Math.max(max, temp);
-  }, /** @type {number | null} */ (null));
-}
-
-/** @param {OpenMeteoForecast} data */
-function getTodayMinSoilTemp(data) {
-  const hourlyTemps = data.hourly?.soil_temperature_6cm;
-  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
-
-  return hourlyTemps.slice(0, 24).reduce((min, temp) => {
-    if (temp == null) return min;
-    return min === null ? temp : Math.min(min, temp);
-  }, /** @type {number | null} */ (null));
-}
-
-const SOAK_DEPTH_MM = 10;
 
 const MOWER_OPTIONS = {
   RYOBI_33: {
@@ -796,6 +764,16 @@ export default function SprayerCalculator() {
             },
             userLogs
           );
+          await saveLawnWeatherSnapshot({
+            forecastedRainSum,
+            currentSoilTemp: currentSoilTemp ?? null,
+            currentSoilTempMin: currentSoilTempMin ?? null,
+            isRainForecasted,
+            isNatureProvidingFullSoak,
+            netWaterNeeded,
+            fetchedAt: new Date().toISOString(),
+            source: 'open-meteo',
+          });
         } catch (snapshotError) {
           console.warn('[Lawn Care] Schedule snapshot save failed:', snapshotError);
         }
@@ -1109,43 +1087,52 @@ export default function SprayerCalculator() {
     compileLawnTasksExport,
   ]);
 
+  const applyWeatherSnapshot = useCallback((snapshot) => {
+    setForecastedRainSum(snapshot.forecastedRainSum);
+    setCurrentSoilTemp(snapshot.currentSoilTemp);
+    setCurrentSoilTempMin(snapshot.currentSoilTempMin);
+    setIsRainForecasted(snapshot.isRainForecasted);
+    setWeatherStatus('ready');
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchRainForecast() {
+    async function loadWeather() {
       setWeatherStatus('loading');
+
       try {
-        const response = await fetch(OPEN_METEO_URL);
-        if (!response.ok) throw new Error('Forecast unavailable');
+        const cached = await fetchLawnWeatherSnapshotFromSupabase();
+        if (!cancelled && cached && isWeatherSnapshotFresh(cached.fetchedAt, 3)) {
+          applyWeatherSnapshot(cached);
+        }
+      } catch {
+        /* use live fetch below */
+      }
 
-        const data = await response.json();
-        const precipitationTotals = data?.daily?.precipitation_sum;
-        const totalRain = Array.isArray(precipitationTotals)
-          ? precipitationTotals.reduce((sum, mm) => sum + (mm ?? 0), 0)
-          : 0;
-        const todaySoilTemp = getTodayMaxSoilTemp(data);
-        const todaySoilTempMin = getTodayMinSoilTemp(data);
+      try {
+        const snapshot = await fetchLawnWeatherFromOpenMeteo();
+        if (cancelled) return;
 
-        if (!cancelled) {
-          setForecastedRainSum(totalRain);
-          setCurrentSoilTemp(todaySoilTemp);
-          setCurrentSoilTempMin(todaySoilTempMin);
-          setIsRainForecasted(totalRain >= RAIN_THRESHOLD_MM);
-          setWeatherStatus('ready');
+        applyWeatherSnapshot(snapshot);
+        try {
+          await saveLawnWeatherSnapshot(snapshot);
+        } catch (saveError) {
+          console.warn('[Lawn Care] Weather snapshot save failed:', saveError);
         }
       } catch {
         if (!cancelled) {
-          setWeatherStatus('error');
+          setWeatherStatus((prev) => (prev === 'ready' ? 'ready' : 'error'));
         }
       }
     }
 
-    fetchRainForecast();
+    void loadWeather();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyWeatherSnapshot]);
 
   const handlePendingDateChange = (stepId, value) => {
     const steps = SEASONS[currentSeason].steps;

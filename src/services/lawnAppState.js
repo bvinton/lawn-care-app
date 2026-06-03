@@ -30,7 +30,7 @@ export async function fetchLawnAppStateFromSupabase() {
 
   const { data, error } = await supabase
     .from('lawn_app_state')
-    .select('user_logs, schedule_snapshot')
+    .select('user_logs, schedule_snapshot, weather_snapshot')
     .eq('id', LAWN_STATE_ID)
     .maybeSingle();
 
@@ -56,7 +56,12 @@ export async function fetchLawnAppStateFromSupabase() {
       ? /** @type {LawnScheduleSnapshot} */ (data.schedule_snapshot)
       : null;
 
-  return { userLogs, scheduleSnapshot };
+  const weatherSnapshot =
+    data?.weather_snapshot && typeof data.weather_snapshot === 'object'
+      ? /** @type {import('./lawnWeather.js').LawnWeatherSnapshot} */ (data.weather_snapshot)
+      : null;
+
+  return { userLogs, scheduleSnapshot, weatherSnapshot };
 }
 
 /**
@@ -181,5 +186,5 @@ export function mergeLawnUserLogs(remote, local) {
 }
 
 export function getLawnAppStateSetupHint() {
-  return 'Run supabase/lawn_app_state.sql and lawn_schedule_snapshot.sql in the Supabase SQL Editor so lawn progress and schedules sync with the Tasks app.';
+  return 'Run supabase/lawn_app_state.sql, lawn_schedule_snapshot.sql, and lawn_weather_snapshot.sql in the Supabase SQL Editor so lawn progress, weather, and schedules sync with the Tasks app.';
 }
