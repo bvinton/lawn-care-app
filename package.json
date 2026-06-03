@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/generate-pwa-icons.mjs",
+    "prebuild": "node scripts/generate-pwa-icons.mjs && node scripts/bundle-sync-api.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -15,6 +15,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "esbuild": "^0.25.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
