@@ -1,11 +1,48 @@
 import { createClient } from '@supabase/supabase-js';
 
 /** @type {import('@supabase/supabase-js').SupabaseClient | null} */
-let supabaseClient = null;
+let browserClient = null;
+
+/** @type {import('@supabase/supabase-js').SupabaseClient | null} */
+let serverClient = null;
+
+function isServerRuntime() {
+  return typeof window === 'undefined';
+}
+
+/**
+ * Initialise Supabase for Vercel /api routes (service role when set).
+ */
+export function initServerSupabase() {
+  if (serverClient) {
+    return serverClient;
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      'Missing SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_* fallbacks) on the server.',
+    );
+  }
+
+  serverClient = createClient(supabaseUrl, supabaseKey);
+  return serverClient;
+}
 
 export function getSupabase() {
-  if (supabaseClient) {
-    return supabaseClient;
+  if (isServerRuntime()) {
+    try {
+      return initServerSupabase();
+    } catch {
+      return null;
+    }
+  }
+
+  if (browserClient) {
+    return browserClient;
   }
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -15,15 +52,25 @@ export function getSupabase() {
     return null;
   }
 
-  supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
-  return supabaseClient;
+  browserClient = createClient(supabaseUrl, supabaseAnonKey);
+  return browserClient;
 }
 
-export function getSupabaseConfigError() {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+/**
+ * @param {{ server?: boolean }} [options]
+ */
+export function getSupabaseConfigError(options = {}) {
+  const supabaseUrl = isServerRuntime() || options.server
+    ? process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+    : import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = isServerRuntime() || options.server
+    ? process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+    : import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
+    if (options.server || isServerRuntime()) {
+      return 'Missing server Supabase env: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_* fallbacks).';
+    }
     if (import.meta.env.PROD) {
       return 'Missing Supabase credentials on this deployment. In Vercel → Project → Settings → Environment Variables, add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for Production, then redeploy.';
     }
