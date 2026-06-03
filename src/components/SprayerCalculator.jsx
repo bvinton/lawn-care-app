@@ -56,6 +56,7 @@ import {
 } from '../services/lawnWeather';
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { compileAllLawnTasks } from '../utils/compileLawnTasks';
+import { applyLawnFocusFromUrl } from '../utils/lawnDeepLink';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const MS_PER_HOUR = 1000 * 60 * 60;
@@ -1097,6 +1098,10 @@ export default function SprayerCalculator() {
     setIsRainForecasted(snapshot.isRainForecasted);
     setWeatherStatus('ready');
   }, []);
+
+  useEffect(() => {
+    applyLawnFocusFromUrl({ delayMs: 600 });
+  }, [maintenanceHydrated, userLogsHydrated]);
 
   useEffect(() => {
     let cancelled = false;
