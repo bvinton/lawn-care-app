@@ -22794,6 +22794,7 @@ function resolveWeatherLocation(location2) {
 
 // src/services/lawnWeather.js
 var LAWN_STATE_ID2 = "default";
+var FORECAST_RAIN_DAYS = 7;
 function buildOpenMeteoForecastUrl(latitude, longitude) {
   const params = new URLSearchParams({
     latitude: String(latitude),
@@ -22801,23 +22802,58 @@ function buildOpenMeteoForecastUrl(latitude, longitude) {
     daily: "precipitation_sum",
     hourly: "soil_temperature_6cm",
     timezone: "Europe/London",
-    forecast_days: "7"
+    past_days: String(PAST_RAIN_DAYS),
+    forecast_days: String(FORECAST_RAIN_DAYS)
   });
   return `https://api.open-meteo.com/v1/forecast?${params}`;
 }
 var SOAK_DEPTH_MM = 10;
 var RAIN_THRESHOLD_MM = 5;
 var NEAR_TERM_RAIN_DAYS = 3;
+var PAST_RAIN_DAYS = 7;
+var RECENT_PAST_RAIN_DAYS = 3;
+var RECENT_RAIN_WET_SOIL_MM = 5;
 function sumPrecipitation(precipitationTotals, days = 7) {
   if (!Array.isArray(precipitationTotals)) return 0;
   return precipitationTotals.slice(0, days).reduce((sum, mm) => sum + (mm ?? 0), 0);
+}
+function splitPrecipitationSeries(precipitationTotals, pastDays = PAST_RAIN_DAYS, forecastDays = FORECAST_RAIN_DAYS) {
+  if (!Array.isArray(precipitationTotals) || precipitationTotals.length === 0) {
+    return { past: [], forecast: [] };
+  }
+  if (precipitationTotals.length < pastDays + 1) {
+    return { past: [], forecast: precipitationTotals.slice(0, forecastDays) };
+  }
+  return {
+    past: precipitationTotals.slice(0, pastDays),
+    forecast: precipitationTotals.slice(pastDays, pastDays + forecastDays)
+  };
+}
+function computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm) {
+  const pastCredit = Math.min(SOAK_DEPTH_MM, recentPastRainSum);
+  const rainCreditMm = Math.min(SOAK_DEPTH_MM, pastCredit + forecastedRainSumNearTerm);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
+  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
+  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
+  return {
+    rainCreditMm,
+    netWaterNeeded,
+    isNatureProvidingFullSoak,
+    soilRecentlyWet
+  };
 }
 function getEffectiveNearTermRain(weather) {
   if (typeof weather.forecastedRainSumNearTerm === "number") {
     return weather.forecastedRainSumNearTerm;
   }
   if (typeof weather.forecastedRainSum === "number") {
-    return weather.forecastedRainSum / 7 * NEAR_TERM_RAIN_DAYS;
+    return weather.forecastedRainSum / FORECAST_RAIN_DAYS * NEAR_TERM_RAIN_DAYS;
+  }
+  return 0;
+}
+function getEffectiveRecentPastRain(weather) {
+  if (typeof weather.recentPastRainSum === "number") {
+    return weather.recentPastRainSum;
   }
   return 0;
 }
@@ -22847,19 +22883,27 @@ function getTodayMinSoilTemp(data) {
 }
 function buildWeatherSnapshotFromOpenMeteo(data) {
   const precipitationTotals = data?.daily?.precipitation_sum;
-  const forecastedRainSum = sumPrecipitation(precipitationTotals, 7);
-  const forecastedRainSumNearTerm = sumPrecipitation(precipitationTotals, NEAR_TERM_RAIN_DAYS);
+  const { past, forecast } = splitPrecipitationSeries(precipitationTotals);
+  const recentPastRainSum = sumPrecipitation(
+    past.slice(-RECENT_PAST_RAIN_DAYS),
+    RECENT_PAST_RAIN_DAYS
+  );
+  const forecastedRainSumNearTerm = sumPrecipitation(forecast, NEAR_TERM_RAIN_DAYS);
+  const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
-  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - forecastedRainSumNearTerm);
+  const watering = computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm);
   return {
     forecastedRainSum,
     forecastedRainSumNearTerm,
+    recentPastRainSum,
+    rainCreditMm: watering.rainCreditMm,
     currentSoilTemp,
     currentSoilTempMin,
-    isRainForecasted: forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM,
-    isNatureProvidingFullSoak: forecastedRainSumNearTerm >= SOAK_DEPTH_MM,
-    netWaterNeeded,
+    isRainForecasted: forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM || recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM,
+    isNatureProvidingFullSoak: watering.isNatureProvidingFullSoak,
+    soilRecentlyWet: watering.soilRecentlyWet,
+    netWaterNeeded: watering.netWaterNeeded,
     fetchedAt: (/* @__PURE__ */ new Date()).toISOString(),
     source: "open-meteo"
   };
@@ -22933,7 +22977,7 @@ function getDynamicMowingDays(forecastedRainSumNearTerm, currentSoilTemp, spring
   if (temp !== null && temp >= 15 && rain < 3) return 5;
   return 7;
 }
-function getDynamicWateringDays(forecastedRainSumNearTerm, currentSoilTemp, springSeedDate, seedEstablishmentActive, todayStr) {
+function getDynamicWateringDays(forecastedRainSumNearTerm, currentSoilTemp, springSeedDate, seedEstablishmentActive, todayStr, recentPastRainSum = 0) {
   const temp = currentSoilTemp;
   const rain = forecastedRainSumNearTerm;
   if (seedEstablishmentActive) return 1;
@@ -22941,6 +22985,8 @@ function getDynamicWateringDays(forecastedRainSumNearTerm, currentSoilTemp, spri
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
     if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 2;
   }
+  if (recentPastRainSum >= 8) return 5;
+  if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) return 4;
   if (temp !== null && temp > 20 && rain < 2) return 2;
   if (rain >= 4) return 5;
   if (rain >= 1.5) return 4;
@@ -22952,6 +22998,7 @@ function buildMaintenanceSchedule(input) {
     todayStr,
     userLogs,
     forecastedRainSumNearTerm,
+    recentPastRainSum = 0,
     currentSoilTemp,
     isNatureProvidingFullSoak,
     lastMowedDate,
@@ -22971,7 +23018,8 @@ function buildMaintenanceSchedule(input) {
     currentSoilTemp,
     springSeedDate,
     seedEstablishmentActive,
-    todayStr
+    todayStr,
+    recentPastRainSum
   );
   const mowingNextDueIso = lastMowedDate ? addDaysToDateString(lastMowedDate, dynamicMowingDays) : null;
   const wateringNextDueIso = lastWateredDate ? addDaysToDateString(lastWateredDate, dynamicWateringDays) : null;
@@ -23200,14 +23248,21 @@ async function runLawnCloudSync() {
         forecastedRainSum: scheduleSnapshot.forecastedRainSum,
         forecastedRainSumNearTerm: scheduleSnapshot.forecastedRainSumNearTerm
       });
+      const pastRain = getEffectiveRecentPastRain({
+        recentPastRainSum: scheduleSnapshot.recentPastRainSum
+      });
+      const watering = computeWateringRainContext(pastRain, nearTerm);
       weather = {
         forecastedRainSum: scheduleSnapshot.forecastedRainSum,
         forecastedRainSumNearTerm: nearTerm,
+        recentPastRainSum: pastRain,
+        rainCreditMm: watering.rainCreditMm,
         currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
         currentSoilTempMin: null,
-        isRainForecasted: nearTerm >= 5,
-        isNatureProvidingFullSoak: scheduleSnapshot.isNatureProvidingFullSoak ?? nearTerm >= SOAK_DEPTH_MM,
-        netWaterNeeded: Math.max(0, SOAK_DEPTH_MM - nearTerm),
+        isRainForecasted: nearTerm >= 5 || pastRain >= 5,
+        isNatureProvidingFullSoak: scheduleSnapshot.isNatureProvidingFullSoak ?? watering.isNatureProvidingFullSoak,
+        soilRecentlyWet: watering.soilRecentlyWet,
+        netWaterNeeded: watering.netWaterNeeded,
         fetchedAt: scheduleSnapshot.savedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
         source: "open-meteo"
       };
@@ -23217,6 +23272,7 @@ async function runLawnCloudSync() {
   }
   const forecastedRainSum = weather.forecastedRainSum;
   const forecastedRainSumNearTerm = getEffectiveNearTermRain(weather);
+  const recentPastRainSum = getEffectiveRecentPastRain(weather);
   const currentSoilTemp = weather.currentSoilTemp;
   const isNatureProvidingFullSoak = weather.isNatureProvidingFullSoak;
   const pendingDates = scheduleSnapshot.pendingDates ?? createInitialPendingDates(null, userLogs);
@@ -23224,6 +23280,7 @@ async function runLawnCloudSync() {
     todayStr,
     userLogs,
     forecastedRainSumNearTerm,
+    recentPastRainSum,
     currentSoilTemp,
     isNatureProvidingFullSoak,
     lastMowedDate,
@@ -23256,6 +23313,7 @@ async function runLawnCloudSync() {
       wateringNextDueIso: maintenance.wateringNextDueIso,
       forecastedRainSum,
       forecastedRainSumNearTerm,
+      recentPastRainSum,
       weatherLocation,
       currentSoilTemp,
       isNatureProvidingFullSoak,

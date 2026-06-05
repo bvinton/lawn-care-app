@@ -1,7 +1,9 @@
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
-import { DEFAULT_WEATHER_LOCATION, resolveWeatherLocation } from './lawnLocation.js';
+import { resolveWeatherLocation } from './lawnLocation.js';
 
 const LAWN_STATE_ID = 'default';
+
+export const FORECAST_RAIN_DAYS = 7;
 
 /**
  * @param {number} latitude
@@ -14,24 +16,33 @@ export function buildOpenMeteoForecastUrl(latitude, longitude) {
     daily: 'precipitation_sum',
     hourly: 'soil_temperature_6cm',
     timezone: 'Europe/London',
-    forecast_days: '7',
+    past_days: String(PAST_RAIN_DAYS),
+    forecast_days: String(FORECAST_RAIN_DAYS),
   });
   return `https://api.open-meteo.com/v1/forecast?${params}`;
 }
 
 export const SOAK_DEPTH_MM = 10;
 export const RAIN_THRESHOLD_MM = 5;
-/** Rain in the next few days drives postpone / interval decisions — not a storm a week away. */
+/** Rain in the next few days drives forward-looking adjustments. */
 export const NEAR_TERM_RAIN_DAYS = 3;
+/** Observed rain history from Open-Meteo. */
+export const PAST_RAIN_DAYS = 7;
+/** Recent past days that still keep the soil damp for soak / due decisions. */
+export const RECENT_PAST_RAIN_DAYS = 3;
+export const RECENT_RAIN_WET_SOIL_MM = 5;
 
 /**
  * @typedef {Object} LawnWeatherSnapshot
  * @property {number} forecastedRainSum
  * @property {number} forecastedRainSumNearTerm
+ * @property {number} recentPastRainSum
+ * @property {number} rainCreditMm
  * @property {number | null} currentSoilTemp
  * @property {number | null} currentSoilTempMin
  * @property {boolean} isRainForecasted
  * @property {boolean} isNatureProvidingFullSoak
+ * @property {boolean} soilRecentlyWet
  * @property {number} netWaterNeeded
  * @property {string} fetchedAt
  * @property {'open-meteo'} source
@@ -47,6 +58,50 @@ export function sumPrecipitation(precipitationTotals, days = 7) {
 }
 
 /**
+ * @param {Array<number | null> | undefined} precipitationTotals
+ * @param {number} [pastDays]
+ * @param {number} [forecastDays]
+ */
+export function splitPrecipitationSeries(
+  precipitationTotals,
+  pastDays = PAST_RAIN_DAYS,
+  forecastDays = FORECAST_RAIN_DAYS
+) {
+  if (!Array.isArray(precipitationTotals) || precipitationTotals.length === 0) {
+    return { past: [], forecast: [] };
+  }
+
+  // Legacy snapshots / forecast-only responses (no past_days in the series).
+  if (precipitationTotals.length < pastDays + 1) {
+    return { past: [], forecast: precipitationTotals.slice(0, forecastDays) };
+  }
+
+  return {
+    past: precipitationTotals.slice(0, pastDays),
+    forecast: precipitationTotals.slice(pastDays, pastDays + forecastDays),
+  };
+}
+
+/**
+ * @param {number} recentPastRainSum
+ * @param {number} forecastedRainSumNearTerm
+ */
+export function computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm) {
+  const pastCredit = Math.min(SOAK_DEPTH_MM, recentPastRainSum);
+  const rainCreditMm = Math.min(SOAK_DEPTH_MM, pastCredit + forecastedRainSumNearTerm);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
+  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
+  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
+
+  return {
+    rainCreditMm,
+    netWaterNeeded,
+    isNatureProvidingFullSoak,
+    soilRecentlyWet,
+  };
+}
+
+/**
  * @param {Partial<LawnWeatherSnapshot>} weather
  */
 export function getEffectiveNearTermRain(weather) {
@@ -54,13 +109,23 @@ export function getEffectiveNearTermRain(weather) {
     return weather.forecastedRainSumNearTerm;
   }
   if (typeof weather.forecastedRainSum === 'number') {
-    return (weather.forecastedRainSum / 7) * NEAR_TERM_RAIN_DAYS;
+    return (weather.forecastedRainSum / FORECAST_RAIN_DAYS) * NEAR_TERM_RAIN_DAYS;
   }
   return 0;
 }
 
 /**
- * @param {{ daily?: { soil_temperature_10cm_max?: Array<number | null>, precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
+ * @param {Partial<LawnWeatherSnapshot>} weather
+ */
+export function getEffectiveRecentPastRain(weather) {
+  if (typeof weather.recentPastRainSum === 'number') {
+    return weather.recentPastRainSum;
+  }
+  return 0;
+}
+
+/**
+ * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
  */
 export function getTodayMaxSoilTemp(data) {
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
@@ -91,20 +156,29 @@ export function getTodayMinSoilTemp(data) {
  */
 export function buildWeatherSnapshotFromOpenMeteo(data) {
   const precipitationTotals = data?.daily?.precipitation_sum;
-  const forecastedRainSum = sumPrecipitation(precipitationTotals, 7);
-  const forecastedRainSumNearTerm = sumPrecipitation(precipitationTotals, NEAR_TERM_RAIN_DAYS);
+  const { past, forecast } = splitPrecipitationSeries(precipitationTotals);
+  const recentPastRainSum = sumPrecipitation(
+    past.slice(-RECENT_PAST_RAIN_DAYS),
+    RECENT_PAST_RAIN_DAYS
+  );
+  const forecastedRainSumNearTerm = sumPrecipitation(forecast, NEAR_TERM_RAIN_DAYS);
+  const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
-  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - forecastedRainSumNearTerm);
+  const watering = computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm);
 
   return {
     forecastedRainSum,
     forecastedRainSumNearTerm,
+    recentPastRainSum,
+    rainCreditMm: watering.rainCreditMm,
     currentSoilTemp,
     currentSoilTempMin,
-    isRainForecasted: forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM,
-    isNatureProvidingFullSoak: forecastedRainSumNearTerm >= SOAK_DEPTH_MM,
-    netWaterNeeded,
+    isRainForecasted:
+      forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM || recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM,
+    isNatureProvidingFullSoak: watering.isNatureProvidingFullSoak,
+    soilRecentlyWet: watering.soilRecentlyWet,
+    netWaterNeeded: watering.netWaterNeeded,
     fetchedAt: new Date().toISOString(),
     source: 'open-meteo',
   };

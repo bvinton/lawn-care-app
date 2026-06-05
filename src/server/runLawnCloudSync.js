@@ -17,10 +17,11 @@ import {
 } from '../services/lawnTasks.js';
 import { resolveWeatherLocation } from '../services/lawnLocation.js';
 import {
+  computeWateringRainContext,
   fetchLawnWeatherFromOpenMeteo,
   getEffectiveNearTermRain,
+  getEffectiveRecentPastRain,
   saveLawnWeatherSnapshot,
-  SOAK_DEPTH_MM,
 } from '../services/lawnWeather.js';
 import { compileAllLawnTasks } from '../utils/compileLawnTasks.js';
 import { getTodayLondon } from '../services/lawnScheduleEngine.js';
@@ -87,15 +88,22 @@ export async function runLawnCloudSync() {
         forecastedRainSum: scheduleSnapshot.forecastedRainSum,
         forecastedRainSumNearTerm: scheduleSnapshot.forecastedRainSumNearTerm,
       });
+      const pastRain = getEffectiveRecentPastRain({
+        recentPastRainSum: scheduleSnapshot.recentPastRainSum,
+      });
+      const watering = computeWateringRainContext(pastRain, nearTerm);
       weather = {
         forecastedRainSum: scheduleSnapshot.forecastedRainSum,
         forecastedRainSumNearTerm: nearTerm,
+        recentPastRainSum: pastRain,
+        rainCreditMm: watering.rainCreditMm,
         currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
         currentSoilTempMin: null,
-        isRainForecasted: nearTerm >= 5,
+        isRainForecasted: nearTerm >= 5 || pastRain >= 5,
         isNatureProvidingFullSoak:
-          scheduleSnapshot.isNatureProvidingFullSoak ?? nearTerm >= SOAK_DEPTH_MM,
-        netWaterNeeded: Math.max(0, SOAK_DEPTH_MM - nearTerm),
+          scheduleSnapshot.isNatureProvidingFullSoak ?? watering.isNatureProvidingFullSoak,
+        soilRecentlyWet: watering.soilRecentlyWet,
+        netWaterNeeded: watering.netWaterNeeded,
         fetchedAt: scheduleSnapshot.savedAt ?? new Date().toISOString(),
         source: 'open-meteo',
       };
@@ -106,6 +114,7 @@ export async function runLawnCloudSync() {
 
   const forecastedRainSum = weather.forecastedRainSum;
   const forecastedRainSumNearTerm = getEffectiveNearTermRain(weather);
+  const recentPastRainSum = getEffectiveRecentPastRain(weather);
   const currentSoilTemp = weather.currentSoilTemp;
   const isNatureProvidingFullSoak = weather.isNatureProvidingFullSoak;
 
@@ -117,6 +126,7 @@ export async function runLawnCloudSync() {
     todayStr,
     userLogs,
     forecastedRainSumNearTerm,
+    recentPastRainSum,
     currentSoilTemp,
     isNatureProvidingFullSoak,
     lastMowedDate,
@@ -152,6 +162,7 @@ export async function runLawnCloudSync() {
       wateringNextDueIso: maintenance.wateringNextDueIso,
       forecastedRainSum,
       forecastedRainSumNearTerm,
+      recentPastRainSum,
       weatherLocation,
       currentSoilTemp,
       isNatureProvidingFullSoak,

@@ -87,9 +87,25 @@ lawn-care-app/
 ├── src/
 │   ├── App.jsx              # App shell
 │   ├── components/
-│   │   └── SprayerCalculator.jsx   # Main workflow UI & automation engine
-│   └── data/
-│       └── LawnPackData.js  # Seasons, steps, equipment & sprinkler config
+│   │   └── lawn/
+│   │       ├── LawnCareApp.jsx       # Thin shell: settings vs workflow
+│   │       ├── LawnSettings.jsx      # Postcode, lawn size, sprinklers, etc.
+│   │       ├── LawnWorkflow.jsx      # Alerts, header, maintenance, timeline
+│   │       ├── MaintenancePanel.jsx  # Weather, mowing, watering, gypsum
+│   │       ├── SeasonTimeline.jsx    # Season tabs, step timeline, guidelines
+│   │       ├── SprinklerLightbox.jsx # Enlarged sprinkler modal
+│   │       └── UkDateInput.jsx       # UK date picker input
+│   ├── data/
+│   │   ├── LawnPackData.js  # Seasons, steps, equipment & sprinkler config
+│   │   └── lawnUiConfig.jsx # UI constants (mower options, pet safety, etc.)
+│   ├── hooks/
+│   │   └── useLawnCareApp.js # State, effects, handlers, derived schedule values
+│   ├── services/            # Supabase sync, weather, location, schedule engine
+│   └── utils/
+│       ├── lawnDates.js     # Date formatting & parsing helpers
+│       ├── lawnStorage.js   # localStorage JSON helpers
+│       └── lawnStepAmounts.js # Per-step dose calculations
+├── supabase/                # SQL migrations for cloud sync tables
 ├── index.html
 ├── package.json
 └── vite.config.js

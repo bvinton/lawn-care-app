@@ -1,5 +1,5 @@
 import React from 'react';
-import SprayerCalculator from './components/SprayerCalculator';
+import LawnCareApp from './components/lawn/LawnCareApp';
 
 export default function App() {
   return (
@@ -15,7 +15,7 @@ export default function App() {
         </header>
 
         <main>
-          <SprayerCalculator />
+          <LawnCareApp />
         </main>
 
         <footer className="text-center text-[10px] text-gray-400 mt-6 font-semibold">
