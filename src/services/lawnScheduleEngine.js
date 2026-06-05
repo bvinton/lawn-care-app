@@ -1,4 +1,5 @@
 import { addDaysToDateString, makeStepKey } from '../data/LawnPackData.js';
+import { SOAK_DEPTH_MM } from './lawnWeather.js';
 
 export const SEED_ESTABLISHMENT_DAYS = 21;
 
@@ -33,42 +34,48 @@ function daysBetweenIso(todayStr, pastIso) {
 }
 
 /**
- * @param {number} forecastedRainSum
+ * Mowing interval from near-term rain (next few days) and soil temperature.
+ * @param {number} forecastedRainSumNearTerm
  * @param {number | null} currentSoilTemp
  * @param {string | null} springSeedDate
  * @param {string} todayStr
  */
-export function getDynamicMowingDays(forecastedRainSum, currentSoilTemp, springSeedDate, todayStr) {
+export function getDynamicMowingDays(
+  forecastedRainSumNearTerm,
+  currentSoilTemp,
+  springSeedDate,
+  todayStr
+) {
   const temp = currentSoilTemp;
-  const rain = forecastedRainSum;
+  const rain = forecastedRainSumNearTerm;
 
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
     if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
   }
 
-  if ((temp !== null && temp < 8) || rain > 25) return 14;
-  if ((temp !== null && temp < 12) || rain > 15) return 10;
-  if (temp !== null && temp > 18 && rain < 5) return 5;
+  if ((temp !== null && temp < 8) || rain > 8) return 14;
+  if ((temp !== null && temp < 12) || rain > 5) return 10;
+  if (temp !== null && temp >= 15 && rain < 3) return 5;
   return 7;
 }
 
 /**
- * @param {number} forecastedRainSum
+ * @param {number} forecastedRainSumNearTerm
  * @param {number | null} currentSoilTemp
  * @param {string | null} springSeedDate
  * @param {boolean} seedEstablishmentActive
  * @param {string} todayStr
  */
 export function getDynamicWateringDays(
-  forecastedRainSum,
+  forecastedRainSumNearTerm,
   currentSoilTemp,
   springSeedDate,
   seedEstablishmentActive,
   todayStr
 ) {
   const temp = currentSoilTemp;
-  const rain = forecastedRainSum;
+  const rain = forecastedRainSumNearTerm;
 
   if (seedEstablishmentActive) return 1;
 
@@ -78,17 +85,79 @@ export function getDynamicWateringDays(
   }
 
   if (temp !== null && temp > 20 && rain < 2) return 2;
-  if (rain >= 5) return 5;
-  if (rain >= 2) return 4;
+  if (rain >= 4) return 5;
+  if (rain >= 1.5) return 4;
   if (temp !== null && temp < 12) return 5;
   return 3;
 }
 
 /**
  * @param {Object} input
+ * @param {number} input.forecastedRainSumNearTerm
+ * @param {number} [input.forecastedRainSumWeek]
+ * @param {number | null} input.currentSoilTemp
+ * @param {string | null} input.springSeedDate
+ * @param {boolean} input.seedEstablishmentActive
+ * @param {string} input.todayStr
+ */
+export function getScheduleReason(input) {
+  const {
+    forecastedRainSumNearTerm,
+    forecastedRainSumWeek = forecastedRainSumNearTerm,
+    currentSoilTemp,
+    springSeedDate,
+    seedEstablishmentActive,
+    todayStr,
+  } = input;
+
+  const temp = currentSoilTemp;
+  const rainNear = forecastedRainSumNearTerm;
+  const mowReasons = [];
+  const waterReasons = [];
+
+  if (springSeedDate) {
+    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
+    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) {
+      mowReasons.push('gentle recovery schedule after seeding');
+      waterReasons.push('enhanced watering during turf recovery');
+    }
+  }
+
+  if (seedEstablishmentActive) {
+    waterReasons.push('daily watering during seed establishment');
+  }
+
+  if (temp !== null && temp >= 15 && rainNear < 3) {
+    mowReasons.push(`${temp.toFixed(0)}°C soil + dry next few days – fast growth`);
+  } else if (temp !== null && temp < 10) {
+    mowReasons.push(`${temp.toFixed(0)}°C soil – slower growth`);
+  } else if (rainNear > 5) {
+    mowReasons.push(`${rainNear.toFixed(1)}mm rain next 3 days – wet lawn, slower cut`);
+  }
+
+  if (rainNear >= 4) {
+    waterReasons.push(`${rainNear.toFixed(1)}mm rain next 3 days – reduced need`);
+  } else if (temp !== null && temp > 20 && rainNear < 2) {
+    waterReasons.push(`${temp.toFixed(0)}°C soil & dry forecast – increased demand`);
+  }
+
+  if (forecastedRainSumWeek > rainNear + 5 && rainNear < SOAK_DEPTH_MM) {
+    waterReasons.push(
+      `${forecastedRainSumWeek.toFixed(0)}mm later this week – not pausing watering yet`
+    );
+  }
+
+  return {
+    mow: mowReasons.length > 0 ? mowReasons.join(', ') : null,
+    water: waterReasons.length > 0 ? waterReasons.join(', ') : null,
+  };
+}
+
+/**
+ * @param {Object} input
  * @param {string} input.todayStr
  * @param {Record<string, string>} input.userLogs
- * @param {number} input.forecastedRainSum
+ * @param {number} input.forecastedRainSumNearTerm
  * @param {number | null} input.currentSoilTemp
  * @param {boolean} input.isNatureProvidingFullSoak
  * @param {string | null} input.lastMowedDate
@@ -98,7 +167,7 @@ export function buildMaintenanceSchedule(input) {
   const {
     todayStr,
     userLogs,
-    forecastedRainSum,
+    forecastedRainSumNearTerm,
     currentSoilTemp,
     isNatureProvidingFullSoak,
     lastMowedDate,
@@ -110,13 +179,13 @@ export function buildMaintenanceSchedule(input) {
   const isDormantSeason = isDormantSeasonForDate(todayStr);
 
   const dynamicMowingDays = getDynamicMowingDays(
-    forecastedRainSum,
+    forecastedRainSumNearTerm,
     currentSoilTemp,
     springSeedDate,
     todayStr
   );
   const dynamicWateringDays = getDynamicWateringDays(
-    forecastedRainSum,
+    forecastedRainSumNearTerm,
     currentSoilTemp,
     springSeedDate,
     seedEstablishmentActive,

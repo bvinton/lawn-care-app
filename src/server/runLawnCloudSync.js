@@ -15,7 +15,13 @@ import {
   fetchLawnTasksForInboundSync,
   syncLawnTasksToSupabase,
 } from '../services/lawnTasks.js';
-import { fetchLawnWeatherFromOpenMeteo, saveLawnWeatherSnapshot } from '../services/lawnWeather.js';
+import { resolveWeatherLocation } from '../services/lawnLocation.js';
+import {
+  fetchLawnWeatherFromOpenMeteo,
+  getEffectiveNearTermRain,
+  saveLawnWeatherSnapshot,
+  SOAK_DEPTH_MM,
+} from '../services/lawnWeather.js';
 import { compileAllLawnTasks } from '../utils/compileLawnTasks.js';
 import { getTodayLondon } from '../services/lawnScheduleEngine.js';
 
@@ -65,9 +71,11 @@ export async function runLawnCloudSync() {
 
   await saveLawnUserLogsToSupabase(userLogs);
 
+  const weatherLocation = resolveWeatherLocation(scheduleSnapshot.weatherLocation);
+
   let weather;
   try {
-    weather = await fetchLawnWeatherFromOpenMeteo();
+    weather = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
     await saveLawnWeatherSnapshot(weather);
   } catch (err) {
     console.warn('[Lawn sync API] Weather fetch failed, using cloud snapshot:', err);
@@ -75,15 +83,19 @@ export async function runLawnCloudSync() {
     if (fromCloud && typeof fromCloud.forecastedRainSum === 'number') {
       weather = fromCloud;
     } else if (typeof scheduleSnapshot.forecastedRainSum === 'number') {
+      const nearTerm = getEffectiveNearTermRain({
+        forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+        forecastedRainSumNearTerm: scheduleSnapshot.forecastedRainSumNearTerm,
+      });
       weather = {
         forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+        forecastedRainSumNearTerm: nearTerm,
         currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
         currentSoilTempMin: null,
-        isRainForecasted: scheduleSnapshot.forecastedRainSum >= 5,
+        isRainForecasted: nearTerm >= 5,
         isNatureProvidingFullSoak:
-          scheduleSnapshot.isNatureProvidingFullSoak ??
-          scheduleSnapshot.forecastedRainSum >= 10,
-        netWaterNeeded: Math.max(0, 10 - scheduleSnapshot.forecastedRainSum),
+          scheduleSnapshot.isNatureProvidingFullSoak ?? nearTerm >= SOAK_DEPTH_MM,
+        netWaterNeeded: Math.max(0, SOAK_DEPTH_MM - nearTerm),
         fetchedAt: scheduleSnapshot.savedAt ?? new Date().toISOString(),
         source: 'open-meteo',
       };
@@ -93,6 +105,7 @@ export async function runLawnCloudSync() {
   }
 
   const forecastedRainSum = weather.forecastedRainSum;
+  const forecastedRainSumNearTerm = getEffectiveNearTermRain(weather);
   const currentSoilTemp = weather.currentSoilTemp;
   const isNatureProvidingFullSoak = weather.isNatureProvidingFullSoak;
 
@@ -103,7 +116,7 @@ export async function runLawnCloudSync() {
   const maintenance = buildMaintenanceSchedule({
     todayStr,
     userLogs,
-    forecastedRainSum,
+    forecastedRainSumNearTerm,
     currentSoilTemp,
     isNatureProvidingFullSoak,
     lastMowedDate,
@@ -138,6 +151,8 @@ export async function runLawnCloudSync() {
       mowingNextDueIso: maintenance.mowingNextDueIso,
       wateringNextDueIso: maintenance.wateringNextDueIso,
       forecastedRainSum,
+      forecastedRainSumNearTerm,
+      weatherLocation,
       currentSoilTemp,
       isNatureProvidingFullSoak,
       pendingDates,

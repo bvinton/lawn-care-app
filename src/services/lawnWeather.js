@@ -1,17 +1,33 @@
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
+import { DEFAULT_WEATHER_LOCATION, resolveWeatherLocation } from './lawnLocation.js';
 
 const LAWN_STATE_ID = 'default';
 
-/** soil_temperature_10cm_max is not a valid daily variable on the forecast API — use hourly soil temps only. */
-export const OPEN_METEO_URL =
-  'https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum&hourly=soil_temperature_6cm&timezone=Europe%2FLondon&forecast_days=7';
+/**
+ * @param {number} latitude
+ * @param {number} longitude
+ */
+export function buildOpenMeteoForecastUrl(latitude, longitude) {
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    daily: 'precipitation_sum',
+    hourly: 'soil_temperature_6cm',
+    timezone: 'Europe/London',
+    forecast_days: '7',
+  });
+  return `https://api.open-meteo.com/v1/forecast?${params}`;
+}
 
 export const SOAK_DEPTH_MM = 10;
 export const RAIN_THRESHOLD_MM = 5;
+/** Rain in the next few days drives postpone / interval decisions — not a storm a week away. */
+export const NEAR_TERM_RAIN_DAYS = 3;
 
 /**
  * @typedef {Object} LawnWeatherSnapshot
  * @property {number} forecastedRainSum
+ * @property {number} forecastedRainSumNearTerm
  * @property {number | null} currentSoilTemp
  * @property {number | null} currentSoilTempMin
  * @property {boolean} isRainForecasted
@@ -20,6 +36,28 @@ export const RAIN_THRESHOLD_MM = 5;
  * @property {string} fetchedAt
  * @property {'open-meteo'} source
  */
+
+/**
+ * @param {Array<number | null> | undefined} precipitationTotals
+ * @param {number} [days]
+ */
+export function sumPrecipitation(precipitationTotals, days = 7) {
+  if (!Array.isArray(precipitationTotals)) return 0;
+  return precipitationTotals.slice(0, days).reduce((sum, mm) => sum + (mm ?? 0), 0);
+}
+
+/**
+ * @param {Partial<LawnWeatherSnapshot>} weather
+ */
+export function getEffectiveNearTermRain(weather) {
+  if (typeof weather.forecastedRainSumNearTerm === 'number') {
+    return weather.forecastedRainSumNearTerm;
+  }
+  if (typeof weather.forecastedRainSum === 'number') {
+    return (weather.forecastedRainSum / 7) * NEAR_TERM_RAIN_DAYS;
+  }
+  return 0;
+}
 
 /**
  * @param {{ daily?: { soil_temperature_10cm_max?: Array<number | null>, precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
@@ -53,28 +91,34 @@ export function getTodayMinSoilTemp(data) {
  */
 export function buildWeatherSnapshotFromOpenMeteo(data) {
   const precipitationTotals = data?.daily?.precipitation_sum;
-  const forecastedRainSum = Array.isArray(precipitationTotals)
-    ? precipitationTotals.reduce((sum, mm) => sum + (mm ?? 0), 0)
-    : 0;
+  const forecastedRainSum = sumPrecipitation(precipitationTotals, 7);
+  const forecastedRainSumNearTerm = sumPrecipitation(precipitationTotals, NEAR_TERM_RAIN_DAYS);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
-  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - forecastedRainSum);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - forecastedRainSumNearTerm);
 
   return {
     forecastedRainSum,
+    forecastedRainSumNearTerm,
     currentSoilTemp,
     currentSoilTempMin,
-    isRainForecasted: forecastedRainSum >= RAIN_THRESHOLD_MM,
-    isNatureProvidingFullSoak: netWaterNeeded === 0,
+    isRainForecasted: forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM,
+    isNatureProvidingFullSoak: forecastedRainSumNearTerm >= SOAK_DEPTH_MM,
     netWaterNeeded,
     fetchedAt: new Date().toISOString(),
     source: 'open-meteo',
   };
 }
 
-/** @returns {Promise<LawnWeatherSnapshot>} */
-export async function fetchLawnWeatherFromOpenMeteo() {
-  const response = await fetch(OPEN_METEO_URL);
+/**
+ * @param {import('./lawnLocation.js').LawnWeatherLocation | null | undefined} [location]
+ * @returns {Promise<LawnWeatherSnapshot>}
+ */
+export async function fetchLawnWeatherFromOpenMeteo(location) {
+  const resolved = resolveWeatherLocation(location);
+  const response = await fetch(
+    buildOpenMeteoForecastUrl(resolved.latitude, resolved.longitude)
+  );
   if (!response.ok) {
     throw new Error('Weather forecast unavailable');
   }

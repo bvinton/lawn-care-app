@@ -41,6 +41,7 @@ import {
   isMissingLastCompletedColumnError,
 } from '../services/lawnMaintenanceSync';
 import {
+  fetchLawnAppStateFromSupabase,
   fetchLawnUserLogsFromSupabase,
   saveLawnUserLogsToSupabase,
   saveLawnScheduleSnapshot,
@@ -48,12 +49,29 @@ import {
   getLawnAppStateSetupHint,
 } from '../services/lawnAppState';
 import {
+  DEFAULT_WEATHER_LOCATION,
+  getBrowserGeolocation,
+  lookupNearestUkPostcode,
+  lookupUkPostcode,
+  mergeWeatherLocation,
+  parseWeatherLocation,
+  persistWeatherLocation,
+  readStoredWeatherLocation,
+} from '../services/lawnLocation';
+import {
   fetchLawnWeatherFromOpenMeteo,
   fetchLawnWeatherSnapshotFromSupabase,
+  getEffectiveNearTermRain,
   isWeatherSnapshotFresh,
+  NEAR_TERM_RAIN_DAYS,
   saveLawnWeatherSnapshot,
   SOAK_DEPTH_MM,
 } from '../services/lawnWeather';
+import {
+  getDynamicMowingDays,
+  getDynamicWateringDays,
+  getScheduleReason,
+} from '../services/lawnScheduleEngine';
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { compileAllLawnTasks } from '../utils/compileLawnTasks';
 import { applyLawnFocusFromUrl } from '../utils/lawnDeepLink';
@@ -348,6 +366,14 @@ export default function SprayerCalculator() {
     const saved = localStorage.getItem('lawnPackLawnSurface');
     return saved && LAWN_SURFACE_OPTIONS[saved] ? saved : 'UNEVEN';
   });
+  const [weatherLocation, setWeatherLocation] = useState(() => readStoredWeatherLocation());
+  const [postcodeInput, setPostcodeInput] = useState(
+    () => readStoredWeatherLocation().postcode
+  );
+  const [weatherLocationError, setWeatherLocationError] = useState(
+    /** @type {string | null} */ (null)
+  );
+  const [weatherLocationSaving, setWeatherLocationSaving] = useState(false);
   const [activeScreen, setActiveScreen] = useState('main');
   const [showLevellingGuide, setShowLevellingGuide] = useState(false);
   const [jsonCopied, setJsonCopied] = useState(false);
@@ -390,6 +416,7 @@ export default function SprayerCalculator() {
 
   const [isRainForecasted, setIsRainForecasted] = useState(false);
   const [forecastedRainSum, setForecastedRainSum] = useState(0);
+  const [forecastedRainSumNearTerm, setForecastedRainSumNearTerm] = useState(0);
   const [currentSoilTemp, setCurrentSoilTemp] = useState(
     /** @type {number | null} */ (null)
   );
@@ -403,11 +430,11 @@ export default function SprayerCalculator() {
 
   const activeEquipment = EQUIPMENT_OPTIONS[selectedEquipment];
   const activeSprinkler = SPRINKLER_OPTIONS[selectedSprinkler];
-  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - forecastedRainSum);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - forecastedRainSumNearTerm);
   const dynamicMinutes = Math.round(
     (netWaterNeeded / SPRINKLER_OPTIONS[selectedSprinkler].ratePerHour) * 60
   );
-  const isNatureProvidingFullSoak = netWaterNeeded === 0;
+  const isNatureProvidingFullSoak = forecastedRainSumNearTerm >= SOAK_DEPTH_MM;
   const activeSeason = SEASONS[currentSeason];
   const today = startOfDay(new Date());
   const todayStr = formatInputDate(today);
@@ -488,88 +515,27 @@ export default function SprayerCalculator() {
     return month === 12 || month === 1 || month === 2;
   })();
 
-  // Dynamic mowing interval (days) adjusted for soil temperature, rainfall,
-  // and post-seed recovery phase.
-  const dynamicMowingDays = (() => {
-    const temp = currentSoilTemp;
-    const rain = forecastedRainSum;
-
-    // Post-seed recovery (21–42 days after seeding): ease back in gently
-    if (springSeedDate) {
-      const daysSince = Math.floor(
-        (today.getTime() - new Date(`${springSeedDate}T12:00:00`).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      if (daysSince >= SEED_ESTABLISHMENT_DAYS && daysSince < 42) return 14;
-    }
-
-    if ((temp !== null && temp < 8) || rain > 25) return 14;   // very cold / waterlogged
-    if ((temp !== null && temp < 12) || rain > 15) return 10;  // cool / wet
-    if ((temp !== null && temp > 18) && rain < 5) return 5;    // warm & dry – fast growth
-    return 7;                                                   // normal growing season
-  })();
-
-  // Dynamic watering interval (days) adjusted for soil temperature, rainfall,
-  // and seed establishment.
-  const dynamicWateringDays = (() => {
-    const temp = currentSoilTemp;
-    const rain = forecastedRainSum;
-
-    // Active seed establishment: keep the seedbed consistently moist
-    if (seedEstablishmentActive) return 1;
-
-    // Post-seed recovery (21–42 days): continued elevated watering
-    if (springSeedDate) {
-      const daysSince = Math.floor(
-        (today.getTime() - new Date(`${springSeedDate}T12:00:00`).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      if (daysSince >= SEED_ESTABLISHMENT_DAYS && daysSince < 42) return 2;
-    }
-
-    if ((temp !== null && temp > 20) && rain < 2) return 2;  // hot & dry – high demand
-    if (rain >= 5) return 5;                                  // meaningful rain – reduce need
-    if (rain >= 2) return 4;                                  // light rain – slight reduction
-    if (temp !== null && temp < 12) return 5;                 // cool – low evaporation
-    return 3;                                                  // normal
-  })();
-
-  // Human-readable explanations surfaced in the UI for why an interval was adjusted.
-  const scheduleReason = (() => {
-    const temp = currentSoilTemp;
-    const rain = forecastedRainSum;
-    const mowReasons = [];
-    const waterReasons = [];
-
-    if (springSeedDate) {
-      const daysSince = Math.floor(
-        (today.getTime() - new Date(`${springSeedDate}T12:00:00`).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      if (daysSince >= SEED_ESTABLISHMENT_DAYS && daysSince < 42) {
-        mowReasons.push('gentle recovery schedule after seeding');
-        waterReasons.push('enhanced watering during turf recovery');
-      }
-    }
-
-    if (seedEstablishmentActive) {
-      waterReasons.push('daily watering during seed establishment');
-    }
-
-    if (temp !== null && temp > 18 && rain < 5) {
-      mowReasons.push(`${temp.toFixed(0)}°C soil + dry forecast – fast growth`);
-    } else if (temp !== null && temp < 10) {
-      mowReasons.push(`${temp.toFixed(0)}°C soil – slower growth`);
-    }
-
-    if (rain > 5) {
-      waterReasons.push(`${rain.toFixed(0)}mm forecast this week – reduced need`);
-    } else if (temp !== null && temp > 20 && rain < 2) {
-      waterReasons.push(`${temp.toFixed(0)}°C soil & dry forecast – increased demand`);
-    }
-
-    return {
-      mow: mowReasons.length > 0 ? mowReasons.join(', ') : null,
-      water: waterReasons.length > 0 ? waterReasons.join(', ') : null,
-    };
-  })();
+  const dynamicMowingDays = getDynamicMowingDays(
+    forecastedRainSumNearTerm,
+    currentSoilTemp,
+    springSeedDate,
+    todayStr
+  );
+  const dynamicWateringDays = getDynamicWateringDays(
+    forecastedRainSumNearTerm,
+    currentSoilTemp,
+    springSeedDate,
+    seedEstablishmentActive,
+    todayStr
+  );
+  const scheduleReason = getScheduleReason({
+    forecastedRainSumNearTerm,
+    forecastedRainSumWeek: forecastedRainSum,
+    currentSoilTemp,
+    springSeedDate,
+    seedEstablishmentActive,
+    todayStr,
+  });
 
   /** @param {string | null | undefined} lastDateString @param {number} daysToAdd */
   const getNextDueDate = (lastDateString, daysToAdd) => {
@@ -626,6 +592,7 @@ export default function SprayerCalculator() {
     wateringIntervalDays: dynamicWateringDays,
     wateringMinutes: dynamicMinutes,
     forecastedRainSum,
+    forecastedRainSumNearTerm,
     netWaterNeeded,
     currentSoilTemp,
     lastGypsumDate,
@@ -761,6 +728,8 @@ export default function SprayerCalculator() {
               mowingNextDueIso: mowingNextDueIso ?? null,
               wateringNextDueIso: wateringNextDueIso ?? null,
               forecastedRainSum,
+              forecastedRainSumNearTerm,
+              weatherLocation,
               currentSoilTemp: currentSoilTemp ?? null,
               isNatureProvidingFullSoak,
               pendingDates,
@@ -769,6 +738,7 @@ export default function SprayerCalculator() {
           );
           await saveLawnWeatherSnapshot({
             forecastedRainSum,
+            forecastedRainSumNearTerm,
             currentSoilTemp: currentSoilTemp ?? null,
             currentSoilTempMin: currentSoilTempMin ?? null,
             isRainForecasted,
@@ -805,6 +775,8 @@ export default function SprayerCalculator() {
       userLogs,
       pendingDates,
       forecastedRainSum,
+      forecastedRainSumNearTerm,
+      weatherLocation,
       currentSoilTemp,
       isNatureProvidingFullSoak,
     ]
@@ -836,6 +808,19 @@ export default function SprayerCalculator() {
       }
     } catch (error) {
       console.warn('[Lawn Care] Lawn pack state pull failed:', error);
+    }
+
+    try {
+      const appState = await fetchLawnAppStateFromSupabase();
+      const cloudLocation = parseWeatherLocation(appState?.scheduleSnapshot?.weatherLocation);
+      if (cloudLocation) {
+        const merged = mergeWeatherLocation(readStoredWeatherLocation(), cloudLocation);
+        setWeatherLocation(merged);
+        setPostcodeInput(merged.postcode ?? '');
+        persistWeatherLocation(merged);
+      }
+    } catch (error) {
+      console.warn('[Lawn Care] Weather location pull failed:', error);
     }
 
     try {
@@ -1088,11 +1073,13 @@ export default function SprayerCalculator() {
     isNatureProvidingFullSoak,
     seedEstablishmentActive,
     forecastedRainSum,
+    forecastedRainSumNearTerm,
     compileLawnTasksExport,
   ]);
 
   const applyWeatherSnapshot = useCallback((snapshot) => {
     setForecastedRainSum(snapshot.forecastedRainSum);
+    setForecastedRainSumNearTerm(getEffectiveNearTermRain(snapshot));
     setCurrentSoilTemp(snapshot.currentSoilTemp);
     setCurrentSoilTempMin(snapshot.currentSoilTempMin);
     setIsRainForecasted(snapshot.isRainForecasted);
@@ -1120,7 +1107,7 @@ export default function SprayerCalculator() {
       }
 
       try {
-        const snapshot = await fetchLawnWeatherFromOpenMeteo();
+        const snapshot = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
         if (cancelled) return;
 
         applyWeatherSnapshot(snapshot);
@@ -1147,7 +1134,58 @@ export default function SprayerCalculator() {
     return () => {
       cancelled = true;
     };
-  }, [applyWeatherSnapshot]);
+  }, [applyWeatherSnapshot, weatherLocation.latitude, weatherLocation.longitude]);
+
+  const handleSaveWeatherPostcode = async () => {
+    setWeatherLocationSaving(true);
+    setWeatherLocationError(null);
+
+    try {
+      const location = await lookupUkPostcode(postcodeInput);
+      setWeatherLocation(location);
+      setPostcodeInput(location.postcode);
+      persistWeatherLocation(location);
+      lastSyncFingerprintRef.current = '';
+      await pushLawnTasksToSupabase({}, { quiet: true, force: true });
+    } catch (error) {
+      setWeatherLocationError(
+        error instanceof Error ? error.message : 'Could not look up that postcode.'
+      );
+    } finally {
+      setWeatherLocationSaving(false);
+    }
+  };
+
+  const handleUseMyLocationForWeather = async () => {
+    setWeatherLocationSaving(true);
+    setWeatherLocationError(null);
+
+    try {
+      const coords = await getBrowserGeolocation();
+      const location = await lookupNearestUkPostcode(coords.latitude, coords.longitude);
+      setWeatherLocation(location);
+      setPostcodeInput(location.postcode ?? '');
+      persistWeatherLocation(location);
+      lastSyncFingerprintRef.current = '';
+      await pushLawnTasksToSupabase({}, { quiet: true, force: true });
+    } catch (error) {
+      setWeatherLocationError(
+        error instanceof Error ? error.message : 'Could not use your location.'
+      );
+    } finally {
+      setWeatherLocationSaving(false);
+    }
+  };
+
+  const handleResetWeatherLocation = async () => {
+    const location = { ...DEFAULT_WEATHER_LOCATION };
+    setWeatherLocation(location);
+    setPostcodeInput('');
+    setWeatherLocationError(null);
+    persistWeatherLocation(location);
+    lastSyncFingerprintRef.current = '';
+    await pushLawnTasksToSupabase({}, { quiet: true, force: true });
+  };
 
   const handlePendingDateChange = (stepId, value) => {
     const steps = SEASONS[currentSeason].steps;
@@ -1246,6 +1284,7 @@ export default function SprayerCalculator() {
         : isRainForecasted
           ? '🌧️ Rain Forecasted - Watering Paused'
           : '☀️ Dry Week Predicted - Timers Active';
+  const weatherLocationLabel = weatherLocation.label || DEFAULT_WEATHER_LOCATION.label;
 
   return (
     <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-3xl m-4 p-6 border border-green-100">
@@ -1412,6 +1451,65 @@ export default function SprayerCalculator() {
                 ))}
               </select>
             </div>
+            <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
+              <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
+              <p className="text-[11px] text-sky-900/80 mb-3 leading-snug">
+                Rain and soil temperature forecasts use this postcode. Defaults to the Wallsend area
+                until you set your own.
+              </p>
+              <label htmlFor="weather-postcode" className="block text-xs font-semibold text-sky-950 mb-1">
+                UK postcode
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="weather-postcode"
+                  type="text"
+                  value={postcodeInput}
+                  onChange={(event) => {
+                    setPostcodeInput(event.target.value.toUpperCase());
+                    setWeatherLocationError(null);
+                  }}
+                  placeholder="NE28 9AB"
+                  autoComplete="postal-code"
+                  className="flex-1 min-w-0 bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm text-gray-800 font-medium focus:ring-2 focus:ring-sky-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSaveWeatherPostcode()}
+                  disabled={weatherLocationSaving || !postcodeInput.trim()}
+                  className="shrink-0 text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+                >
+                  {weatherLocationSaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => void handleUseMyLocationForWeather()}
+                  disabled={weatherLocationSaving}
+                  className="text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+                >
+                  📍 Use my location
+                </button>
+                {weatherLocation.source !== 'default' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleResetWeatherLocation()}
+                    disabled={weatherLocationSaving}
+                    className="text-xs font-semibold py-2 px-3 rounded-lg text-sky-800 hover:bg-sky-100/80 disabled:opacity-50"
+                  >
+                    Reset to default
+                  </button>
+                )}
+              </div>
+              <p className="mt-2 text-xs font-medium text-sky-900">
+                Forecast for: {weatherLocationLabel}
+              </p>
+              {weatherLocationError && (
+                <p className="mt-2 text-xs font-semibold text-red-700">{weatherLocationError}</p>
+              )}
+            </div>
+
             <div>
               <p className="block text-sm font-bold text-gray-700 mb-1">
                 Irrigation Profile — Select Your Primary Sprinkler:
@@ -1643,7 +1741,7 @@ export default function SprayerCalculator() {
                 : 'bg-emerald-50 border-emerald-200 text-emerald-900'
           }`}
         >
-          🌦️ 7-Day Weather Radar: {weatherStatusText}
+          🌦️ 7-Day Weather ({weatherLocationLabel}): {weatherStatusText}
         </div>
 
         <div
@@ -1914,8 +2012,8 @@ export default function SprayerCalculator() {
                     <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
                       🚰 Next Water Due: {wateringNextDate} ({dynamicMinutes} min soak).{' '}
                       <span className="font-medium italic">
-                        *Adjusted for {forecastedRainSum.toFixed(1)}mm of forecasted rain over the
-                        next 7 days.*
+                        *{forecastedRainSumNearTerm.toFixed(1)}mm rain next {NEAR_TERM_RAIN_DAYS}{' '}
+                        days ({forecastedRainSum.toFixed(1)}mm over the full week).*
                       </span>
                     </div>
                   )}
@@ -1942,8 +2040,8 @@ export default function SprayerCalculator() {
                     <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
                       🚰 Next Water Due: {wateringNextDate} ({dynamicMinutes} min soak).{' '}
                       <span className="font-medium italic">
-                        *Adjusted for {forecastedRainSum.toFixed(1)}mm of forecasted rain over the
-                        next 7 days.*
+                        *{forecastedRainSumNearTerm.toFixed(1)}mm rain next {NEAR_TERM_RAIN_DAYS}{' '}
+                        days ({forecastedRainSum.toFixed(1)}mm over the full week).*
                       </span>
                     </div>
                   )}

@@ -13108,6 +13108,10 @@ function getWorkflowSeasonForDate(isoDate, userLogs) {
   }
   return calendarSeason;
 }
+var WALLSEND_COORDS = {
+  latitude: 54.98,
+  longitude: -1.53
+};
 var SEASONS = {
   SPRING: {
     name: "Spring Pack",
@@ -22744,97 +22748,79 @@ async function saveLawnScheduleSnapshot(snapshot, userLogs) {
   return saveLawnAppStateToSupabase(userLogs, snapshot);
 }
 
-// src/services/lawnScheduleEngine.js
-var SEED_ESTABLISHMENT_DAYS = 21;
-function getTodayLondon() {
-  return (/* @__PURE__ */ new Date()).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
-}
-function isDormantSeasonForDate(todayStr) {
-  const month = Number(todayStr.slice(5, 7));
-  return month === 12 || month === 1 || month === 2;
-}
-function getSeedState(todayStr, springSeedDate) {
-  const daysSinceSeed = springSeedDate ? daysBetweenIso(todayStr, springSeedDate) : null;
-  const seedEstablishmentActive = springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed < SEED_ESTABLISHMENT_DAYS;
-  const mowingLockedUntilIso = seedEstablishmentActive && springSeedDate ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS) : null;
-  return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
-}
-function daysBetweenIso(todayStr, pastIso) {
-  const start = /* @__PURE__ */ new Date(`${pastIso}T12:00:00`);
-  const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
-  return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
-}
-function getDynamicMowingDays(forecastedRainSum, currentSoilTemp, springSeedDate, todayStr) {
-  const temp = currentSoilTemp;
-  const rain = forecastedRainSum;
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
+// src/services/lawnLocation.js
+var WEATHER_LOCATION_STORAGE_KEY = "lawnPackWeatherLocation";
+var DEFAULT_WEATHER_LOCATION = (
+  /** @type {LawnWeatherLocation} */
+  {
+    postcode: "",
+    latitude: WALLSEND_COORDS.latitude,
+    longitude: WALLSEND_COORDS.longitude,
+    label: "Wallsend area (default)",
+    source: "default"
   }
-  if (temp !== null && temp < 8 || rain > 25) return 14;
-  if (temp !== null && temp < 12 || rain > 15) return 10;
-  if (temp !== null && temp > 18 && rain < 5) return 5;
-  return 7;
-}
-function getDynamicWateringDays(forecastedRainSum, currentSoilTemp, springSeedDate, seedEstablishmentActive, todayStr) {
-  const temp = currentSoilTemp;
-  const rain = forecastedRainSum;
-  if (seedEstablishmentActive) return 1;
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 2;
+);
+function parseWeatherLocation(value) {
+  if (!value || typeof value !== "object") return null;
+  const raw = (
+    /** @type {Record<string, unknown>} */
+    value
+  );
+  const latitude = raw.latitude;
+  const longitude = raw.longitude;
+  if (typeof latitude !== "number" || typeof longitude !== "number") {
+    return null;
   }
-  if (temp !== null && temp > 20 && rain < 2) return 2;
-  if (rain >= 5) return 5;
-  if (rain >= 2) return 4;
-  if (temp !== null && temp < 12) return 5;
-  return 3;
-}
-function buildMaintenanceSchedule(input) {
-  const {
-    todayStr,
-    userLogs,
-    forecastedRainSum,
-    currentSoilTemp,
-    isNatureProvidingFullSoak,
-    lastMowedDate,
-    lastWateredDate
-  } = input;
-  const springSeedDate = userLogs[makeStepKey("SPRING", "seed")] ?? null;
-  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(todayStr, springSeedDate);
-  const isDormantSeason = isDormantSeasonForDate(todayStr);
-  const dynamicMowingDays = getDynamicMowingDays(
-    forecastedRainSum,
-    currentSoilTemp,
-    springSeedDate,
-    todayStr
-  );
-  const dynamicWateringDays = getDynamicWateringDays(
-    forecastedRainSum,
-    currentSoilTemp,
-    springSeedDate,
-    seedEstablishmentActive,
-    todayStr
-  );
-  const mowingNextDueIso = lastMowedDate ? addDaysToDateString(lastMowedDate, dynamicMowingDays) : null;
-  const wateringNextDueIso = lastWateredDate ? addDaysToDateString(lastWateredDate, dynamicWateringDays) : null;
   return {
-    isDormantSeason,
-    isNatureProvidingFullSoak,
-    seedEstablishmentActive,
-    mowingLockedUntilIso,
-    mowingNextDueIso,
-    wateringNextDueIso,
-    dynamicMowingDays,
-    dynamicWateringDays
+    postcode: typeof raw.postcode === "string" ? raw.postcode : "",
+    latitude,
+    longitude,
+    label: typeof raw.label === "string" && raw.label.trim() ? raw.label.trim() : DEFAULT_WEATHER_LOCATION.label,
+    source: raw.source === "postcode" || raw.source === "geolocation" || raw.source === "default" ? raw.source : "default"
   };
+}
+function readStoredWeatherLocation() {
+  try {
+    const saved = localStorage.getItem(WEATHER_LOCATION_STORAGE_KEY);
+    if (!saved) return { ...DEFAULT_WEATHER_LOCATION };
+    return parseWeatherLocation(JSON.parse(saved)) ?? { ...DEFAULT_WEATHER_LOCATION };
+  } catch {
+    return { ...DEFAULT_WEATHER_LOCATION };
+  }
+}
+function resolveWeatherLocation(location2) {
+  return parseWeatherLocation(location2) ?? readStoredWeatherLocation();
 }
 
 // src/services/lawnWeather.js
 var LAWN_STATE_ID2 = "default";
-var OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast?latitude=54.99&longitude=-1.53&daily=precipitation_sum&hourly=soil_temperature_6cm&timezone=Europe%2FLondon&forecast_days=7";
+function buildOpenMeteoForecastUrl(latitude, longitude) {
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    daily: "precipitation_sum",
+    hourly: "soil_temperature_6cm",
+    timezone: "Europe/London",
+    forecast_days: "7"
+  });
+  return `https://api.open-meteo.com/v1/forecast?${params}`;
+}
 var SOAK_DEPTH_MM = 10;
 var RAIN_THRESHOLD_MM = 5;
+var NEAR_TERM_RAIN_DAYS = 3;
+function sumPrecipitation(precipitationTotals, days = 7) {
+  if (!Array.isArray(precipitationTotals)) return 0;
+  return precipitationTotals.slice(0, days).reduce((sum, mm) => sum + (mm ?? 0), 0);
+}
+function getEffectiveNearTermRain(weather) {
+  if (typeof weather.forecastedRainSumNearTerm === "number") {
+    return weather.forecastedRainSumNearTerm;
+  }
+  if (typeof weather.forecastedRainSum === "number") {
+    return weather.forecastedRainSum / 7 * NEAR_TERM_RAIN_DAYS;
+  }
+  return 0;
+}
 function getTodayMaxSoilTemp(data) {
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
@@ -22861,23 +22847,28 @@ function getTodayMinSoilTemp(data) {
 }
 function buildWeatherSnapshotFromOpenMeteo(data) {
   const precipitationTotals = data?.daily?.precipitation_sum;
-  const forecastedRainSum = Array.isArray(precipitationTotals) ? precipitationTotals.reduce((sum, mm) => sum + (mm ?? 0), 0) : 0;
+  const forecastedRainSum = sumPrecipitation(precipitationTotals, 7);
+  const forecastedRainSumNearTerm = sumPrecipitation(precipitationTotals, NEAR_TERM_RAIN_DAYS);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
-  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - forecastedRainSum);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - forecastedRainSumNearTerm);
   return {
     forecastedRainSum,
+    forecastedRainSumNearTerm,
     currentSoilTemp,
     currentSoilTempMin,
-    isRainForecasted: forecastedRainSum >= RAIN_THRESHOLD_MM,
-    isNatureProvidingFullSoak: netWaterNeeded === 0,
+    isRainForecasted: forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM,
+    isNatureProvidingFullSoak: forecastedRainSumNearTerm >= SOAK_DEPTH_MM,
     netWaterNeeded,
     fetchedAt: (/* @__PURE__ */ new Date()).toISOString(),
     source: "open-meteo"
   };
 }
-async function fetchLawnWeatherFromOpenMeteo() {
-  const response = await fetch(OPEN_METEO_URL);
+async function fetchLawnWeatherFromOpenMeteo(location2) {
+  const resolved = resolveWeatherLocation(location2);
+  const response = await fetch(
+    buildOpenMeteoForecastUrl(resolved.latitude, resolved.longitude)
+  );
   if (!response.ok) {
     throw new Error("Weather forecast unavailable");
   }
@@ -22908,6 +22899,92 @@ async function saveLawnWeatherSnapshot(snapshot) {
     throw new Error(formatSupabaseSyncError(error));
   }
   return true;
+}
+
+// src/services/lawnScheduleEngine.js
+var SEED_ESTABLISHMENT_DAYS = 21;
+function getTodayLondon() {
+  return (/* @__PURE__ */ new Date()).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+}
+function isDormantSeasonForDate(todayStr) {
+  const month = Number(todayStr.slice(5, 7));
+  return month === 12 || month === 1 || month === 2;
+}
+function getSeedState(todayStr, springSeedDate) {
+  const daysSinceSeed = springSeedDate ? daysBetweenIso(todayStr, springSeedDate) : null;
+  const seedEstablishmentActive = springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed < SEED_ESTABLISHMENT_DAYS;
+  const mowingLockedUntilIso = seedEstablishmentActive && springSeedDate ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS) : null;
+  return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
+}
+function daysBetweenIso(todayStr, pastIso) {
+  const start = /* @__PURE__ */ new Date(`${pastIso}T12:00:00`);
+  const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
+  return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
+}
+function getDynamicMowingDays(forecastedRainSumNearTerm, currentSoilTemp, springSeedDate, todayStr) {
+  const temp = currentSoilTemp;
+  const rain = forecastedRainSumNearTerm;
+  if (springSeedDate) {
+    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
+    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
+  }
+  if (temp !== null && temp < 8 || rain > 8) return 14;
+  if (temp !== null && temp < 12 || rain > 5) return 10;
+  if (temp !== null && temp >= 15 && rain < 3) return 5;
+  return 7;
+}
+function getDynamicWateringDays(forecastedRainSumNearTerm, currentSoilTemp, springSeedDate, seedEstablishmentActive, todayStr) {
+  const temp = currentSoilTemp;
+  const rain = forecastedRainSumNearTerm;
+  if (seedEstablishmentActive) return 1;
+  if (springSeedDate) {
+    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
+    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 2;
+  }
+  if (temp !== null && temp > 20 && rain < 2) return 2;
+  if (rain >= 4) return 5;
+  if (rain >= 1.5) return 4;
+  if (temp !== null && temp < 12) return 5;
+  return 3;
+}
+function buildMaintenanceSchedule(input) {
+  const {
+    todayStr,
+    userLogs,
+    forecastedRainSumNearTerm,
+    currentSoilTemp,
+    isNatureProvidingFullSoak,
+    lastMowedDate,
+    lastWateredDate
+  } = input;
+  const springSeedDate = userLogs[makeStepKey("SPRING", "seed")] ?? null;
+  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(todayStr, springSeedDate);
+  const isDormantSeason = isDormantSeasonForDate(todayStr);
+  const dynamicMowingDays = getDynamicMowingDays(
+    forecastedRainSumNearTerm,
+    currentSoilTemp,
+    springSeedDate,
+    todayStr
+  );
+  const dynamicWateringDays = getDynamicWateringDays(
+    forecastedRainSumNearTerm,
+    currentSoilTemp,
+    springSeedDate,
+    seedEstablishmentActive,
+    todayStr
+  );
+  const mowingNextDueIso = lastMowedDate ? addDaysToDateString(lastMowedDate, dynamicMowingDays) : null;
+  const wateringNextDueIso = lastWateredDate ? addDaysToDateString(lastWateredDate, dynamicWateringDays) : null;
+  return {
+    isDormantSeason,
+    isNatureProvidingFullSoak,
+    seedEstablishmentActive,
+    mowingLockedUntilIso,
+    mowingNextDueIso,
+    wateringNextDueIso,
+    dynamicMowingDays,
+    dynamicWateringDays
+  };
 }
 
 // src/utils/compileLawnTasks.js
@@ -23108,9 +23185,10 @@ async function runLawnCloudSync() {
   lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
   lastWateredDate = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
   await saveLawnUserLogsToSupabase(userLogs);
+  const weatherLocation = resolveWeatherLocation(scheduleSnapshot.weatherLocation);
   let weather;
   try {
-    weather = await fetchLawnWeatherFromOpenMeteo();
+    weather = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
     await saveLawnWeatherSnapshot(weather);
   } catch (err) {
     console.warn("[Lawn sync API] Weather fetch failed, using cloud snapshot:", err);
@@ -23118,13 +23196,18 @@ async function runLawnCloudSync() {
     if (fromCloud && typeof fromCloud.forecastedRainSum === "number") {
       weather = fromCloud;
     } else if (typeof scheduleSnapshot.forecastedRainSum === "number") {
+      const nearTerm = getEffectiveNearTermRain({
+        forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+        forecastedRainSumNearTerm: scheduleSnapshot.forecastedRainSumNearTerm
+      });
       weather = {
         forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+        forecastedRainSumNearTerm: nearTerm,
         currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
         currentSoilTempMin: null,
-        isRainForecasted: scheduleSnapshot.forecastedRainSum >= 5,
-        isNatureProvidingFullSoak: scheduleSnapshot.isNatureProvidingFullSoak ?? scheduleSnapshot.forecastedRainSum >= 10,
-        netWaterNeeded: Math.max(0, 10 - scheduleSnapshot.forecastedRainSum),
+        isRainForecasted: nearTerm >= 5,
+        isNatureProvidingFullSoak: scheduleSnapshot.isNatureProvidingFullSoak ?? nearTerm >= SOAK_DEPTH_MM,
+        netWaterNeeded: Math.max(0, SOAK_DEPTH_MM - nearTerm),
         fetchedAt: scheduleSnapshot.savedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
         source: "open-meteo"
       };
@@ -23133,13 +23216,14 @@ async function runLawnCloudSync() {
     }
   }
   const forecastedRainSum = weather.forecastedRainSum;
+  const forecastedRainSumNearTerm = getEffectiveNearTermRain(weather);
   const currentSoilTemp = weather.currentSoilTemp;
   const isNatureProvidingFullSoak = weather.isNatureProvidingFullSoak;
   const pendingDates = scheduleSnapshot.pendingDates ?? createInitialPendingDates(null, userLogs);
   const maintenance = buildMaintenanceSchedule({
     todayStr,
     userLogs,
-    forecastedRainSum,
+    forecastedRainSumNearTerm,
     currentSoilTemp,
     isNatureProvidingFullSoak,
     lastMowedDate,
@@ -23171,6 +23255,8 @@ async function runLawnCloudSync() {
       mowingNextDueIso: maintenance.mowingNextDueIso,
       wateringNextDueIso: maintenance.wateringNextDueIso,
       forecastedRainSum,
+      forecastedRainSumNearTerm,
+      weatherLocation,
       currentSoilTemp,
       isNatureProvidingFullSoak,
       pendingDates

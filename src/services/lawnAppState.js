@@ -10,6 +10,8 @@ export const LAWN_STATE_ID = 'default';
  * @property {string | null} [mowingNextDueIso]
  * @property {string | null} [wateringNextDueIso]
  * @property {number} [forecastedRainSum]
+ * @property {number} [forecastedRainSumNearTerm]
+ * @property {import('./lawnLocation.js').LawnWeatherLocation} [weatherLocation]
  * @property {number | null} [currentSoilTemp]
  * @property {boolean} [isNatureProvidingFullSoak]
  * @property {Record<string, Record<string, string>>} [pendingDates]
