@@ -38,30 +38,39 @@ function daysBetweenIso(todayStr, pastIso) {
 }
 
 /**
- * Mowing interval from near-term rain (next few days) and soil temperature.
- * @param {number} forecastedRainSumNearTerm
+ * Mowing interval from growth rate (soil temperature) — not rainfall.
+ * Rain only affects when it is practical to mow, not whether grass needs cutting.
  * @param {number | null} currentSoilTemp
  * @param {string | null} springSeedDate
  * @param {string} todayStr
  */
-export function getDynamicMowingDays(
-  forecastedRainSumNearTerm,
-  currentSoilTemp,
-  springSeedDate,
-  todayStr
-) {
+export function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
   const temp = currentSoilTemp;
-  const rain = forecastedRainSumNearTerm;
 
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
     if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
   }
 
-  if ((temp !== null && temp < 8) || rain > 8) return 14;
-  if ((temp !== null && temp < 12) || rain > 5) return 10;
-  if (temp !== null && temp >= 15 && rain < 3) return 5;
+  if (temp !== null && temp < 8) return 14;
+  if (temp !== null && temp < 12) return 10;
+  if (temp !== null && temp >= 15) return 5;
   return 7;
+}
+
+/**
+ * Optional note when rain makes today a poor mowing window — does not change due date.
+ * @param {number} forecastedRainSumNearTerm
+ * @param {number} [recentPastRainSum]
+ */
+export function getMowingWeatherAdvisory(forecastedRainSumNearTerm, recentPastRainSum = 0) {
+  if (forecastedRainSumNearTerm >= 3) {
+    return `${forecastedRainSumNearTerm.toFixed(1)}mm rain forecast soon — still cut when due; pick the next dry window`;
+  }
+  if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) {
+    return 'Lawn may still be damp — mow when due and the surface is dry enough';
+  }
+  return null;
 }
 
 /**
@@ -137,12 +146,10 @@ export function getScheduleReason(input) {
     waterReasons.push('daily watering during seed establishment');
   }
 
-  if (temp !== null && temp >= 15 && rainNear < 3) {
-    mowReasons.push(`${temp.toFixed(0)}°C soil + dry next few days – fast growth`);
+  if (temp !== null && temp >= 15) {
+    mowReasons.push(`${temp.toFixed(0)}°C soil – active growth`);
   } else if (temp !== null && temp < 10) {
     mowReasons.push(`${temp.toFixed(0)}°C soil – slower growth`);
-  } else if (rainNear > 5) {
-    mowReasons.push(`${rainNear.toFixed(1)}mm rain next 3 days – wet lawn, slower cut`);
   }
 
   if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) {
@@ -194,12 +201,7 @@ export function buildMaintenanceSchedule(input) {
   const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(todayStr, springSeedDate);
   const isDormantSeason = isDormantSeasonForDate(todayStr);
 
-  const dynamicMowingDays = getDynamicMowingDays(
-    forecastedRainSumNearTerm,
-    currentSoilTemp,
-    springSeedDate,
-    todayStr
-  );
+  const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
   const dynamicWateringDays = getDynamicWateringDays(
     forecastedRainSumNearTerm,
     currentSoilTemp,

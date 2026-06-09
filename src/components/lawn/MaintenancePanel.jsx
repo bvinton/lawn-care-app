@@ -45,6 +45,7 @@ export default function MaintenancePanel({ app }) {
     isDormantSeason,
     seedEstablishmentActive,
     mowingDue,
+    mowingWeatherAdvisory,
     daysSinceMow,
     lastMowedDate,
     maintenanceHints,
@@ -231,6 +232,9 @@ export default function MaintenancePanel({ app }) {
                 {maintenanceHints.mow && (
                   <p className="mt-1 text-xs font-medium text-emerald-800">{maintenanceHints.mow}</p>
                 )}
+                {mowingWeatherAdvisory && (
+                  <p className="mt-1 text-xs font-medium text-sky-800">{mowingWeatherAdvisory}</p>
+                )}
                 {scheduleReason.mow && (
                   <p className="mt-1 text-xs text-blue-700 italic">
                     📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
@@ -247,6 +251,9 @@ export default function MaintenancePanel({ app }) {
                 </p>
                 {maintenanceHints.mow && (
                   <p className="mt-1 text-xs font-medium text-emerald-800">{maintenanceHints.mow}</p>
+                )}
+                {mowingWeatherAdvisory && (
+                  <p className="mt-1 text-xs font-medium text-sky-800">{mowingWeatherAdvisory}</p>
                 )}
                 {scheduleReason.mow && (
                   <p className="mt-1 text-xs text-blue-700 italic">

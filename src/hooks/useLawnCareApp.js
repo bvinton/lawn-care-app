@@ -68,6 +68,7 @@ import {
 import {
   getDynamicMowingDays,
   getDynamicWateringDays,
+  getMowingWeatherAdvisory,
   getScheduleReason,
 } from '../services/lawnScheduleEngine';
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
@@ -272,11 +273,10 @@ export function useLawnCareApp() {
     return month === 12 || month === 1 || month === 2;
   })();
 
-  const dynamicMowingDays = getDynamicMowingDays(
+  const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
+  const mowingWeatherAdvisory = getMowingWeatherAdvisory(
     forecastedRainSumNearTerm,
-    currentSoilTemp,
-    springSeedDate,
-    todayStr
+    recentPastRainSum
   );
   const dynamicWateringDays = getDynamicWateringDays(
     forecastedRainSumNearTerm,
@@ -324,6 +324,11 @@ export function useLawnCareApp() {
     recommendedSetting = 'Height: 🚫 LOCKED - Do not mow fresh seed';
   } else if (isOnScarificationPrepStep) {
     recommendedSetting = 'Height: Setting 1 (25mm) - Scalp for renovation';
+  } else if (currentSoilTemp !== null && currentSoilTemp >= 22) {
+    recommendedSetting =
+      lawnSurface === 'FLAT'
+        ? 'Height: Setting 3 (45mm) - Hot spell: leave slightly longer to reduce stress'
+        : 'Height: Setting 4 (50mm) - Hot spell: leave longer on uneven turf';
   } else if (lawnSurface === 'FLAT') {
     recommendedSetting = 'Height: Setting 2 (35mm) - Standard low maintenance cut';
   } else if (lawnSurface === 'UNEVEN') {
@@ -1170,6 +1175,7 @@ export function useLawnCareApp() {
     recommendedSetting,
     maintenanceDueDates,
     mowingDue,
+    mowingWeatherAdvisory,
     wateringDue,
     summerGranularRepeat,
     granularRepeatDue,
