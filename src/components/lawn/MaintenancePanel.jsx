@@ -12,8 +12,10 @@ import {
   SOAK_DEPTH_MM,
 } from '../../services/lawnWeather';
 import {
+  daysBetween,
   formatDaysSinceLabel,
   formatDisplayDate,
+  formatUkDate,
 } from '../../utils/lawnDates';
 import {
   SEED_ESTABLISHMENT_DAYS,
@@ -38,6 +40,7 @@ export default function MaintenancePanel({ app }) {
     isSoilTooHotForSeed,
     isSoilPrimeForSeed,
     mowingNextDueIso,
+    mowingNextDate,
     mowingLockedUntilIso,
     mowerModel,
     lawnSurface,
@@ -91,6 +94,13 @@ export default function MaintenancePanel({ app }) {
     summerGranularRepeat,
     granularRepeatDue,
   } = app;
+
+  const mowingDaysOverdue =
+    mowingNextDueIso && mowingDue ? daysBetween(mowingNextDueIso, todayStr) : null;
+  const mowingDueDateLabel =
+    mowingNextDate ??
+    (mowingNextDueIso ? formatDisplayDate(mowingNextDueIso) : null) ??
+    (lastMowedDate ? formatUkDate(addDaysToDateString(lastMowedDate, dynamicMowingDays)) : null);
 
   return (
     <section
@@ -194,7 +204,7 @@ export default function MaintenancePanel({ app }) {
         >
           <p className="text-xs font-bold text-gray-800 mb-1">✂️ Mowing Tracker</p>
 
-          <div className="min-h-[2.75rem] mb-3">
+          <div className={`mb-3 ${mowingDue ? 'min-h-[5.5rem]' : 'min-h-[2.75rem]'}`}>
             {isDormantSeason ? (
               <>
                 <p className="text-xs font-medium leading-snug">
@@ -216,13 +226,28 @@ export default function MaintenancePanel({ app }) {
               </>
             ) : mowingDue ? (
               <>
-                <p className="text-xs font-bold text-amber-900 leading-snug">
-                  🚨 MOWING DUE: It has been {formatDaysSinceLabel(daysSinceMow)} since your last
-                  cut.
-                </p>
+                <p className="text-xs font-bold text-amber-900 leading-snug">🚨 MOWING DUE</p>
+                {mowingDueDateLabel ? (
+                  <div className="mt-2 p-2 bg-amber-100 border border-amber-300 rounded text-sm text-amber-900 font-semibold leading-snug">
+                    📅 Was due: {mowingDueDateLabel}
+                    {mowingDaysOverdue !== null && mowingDaysOverdue > 0 && (
+                      <span className="block text-xs font-bold mt-0.5 text-amber-950">
+                        {mowingDaysOverdue} day{mowingDaysOverdue !== 1 ? 's' : ''} overdue
+                      </span>
+                    )}
+                    {mowingDaysOverdue === 0 && (
+                      <span className="block text-xs font-medium mt-0.5">Due today</span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-amber-800">
+                    Log your last cut below to calculate the due date.
+                  </p>
+                )}
                 {lastMowedDate ? (
                   <p className="mt-1 text-xs text-gray-600">
-                    Last cut: {formatDisplayDate(lastMowedDate)}
+                    Last cut: {formatDisplayDate(lastMowedDate)} (
+                    {formatDaysSinceLabel(daysSinceMow)} ago)
                   </p>
                 ) : (
                   <p className="mt-1 text-xs text-gray-600">
@@ -260,9 +285,9 @@ export default function MaintenancePanel({ app }) {
                     📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
                   </p>
                 )}
-                {app.mowingNextDate && (
+                {mowingNextDate && (
                   <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-800 font-semibold">
-                    📅 Next Cut Due: {app.mowingNextDate}
+                    📅 Next Cut Due: {mowingNextDate}
                   </div>
                 )}
               </>
