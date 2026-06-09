@@ -22965,16 +22965,15 @@ function daysBetweenIso(todayStr, pastIso) {
   const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
   return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
 }
-function getDynamicMowingDays(forecastedRainSumNearTerm, currentSoilTemp, springSeedDate, todayStr) {
+function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
   const temp = currentSoilTemp;
-  const rain = forecastedRainSumNearTerm;
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
     if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
   }
-  if (temp !== null && temp < 8 || rain > 8) return 14;
-  if (temp !== null && temp < 12 || rain > 5) return 10;
-  if (temp !== null && temp >= 15 && rain < 3) return 5;
+  if (temp !== null && temp < 8) return 14;
+  if (temp !== null && temp < 12) return 10;
+  if (temp !== null && temp >= 15) return 5;
   return 7;
 }
 function getDynamicWateringDays(forecastedRainSumNearTerm, currentSoilTemp, springSeedDate, seedEstablishmentActive, todayStr, recentPastRainSum = 0) {
@@ -23007,12 +23006,7 @@ function buildMaintenanceSchedule(input) {
   const springSeedDate = userLogs[makeStepKey("SPRING", "seed")] ?? null;
   const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(todayStr, springSeedDate);
   const isDormantSeason = isDormantSeasonForDate(todayStr);
-  const dynamicMowingDays = getDynamicMowingDays(
-    forecastedRainSumNearTerm,
-    currentSoilTemp,
-    springSeedDate,
-    todayStr
-  );
+  const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
   const dynamicWateringDays = getDynamicWateringDays(
     forecastedRainSumNearTerm,
     currentSoilTemp,
