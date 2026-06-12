@@ -66,8 +66,7 @@ import {
   saveLawnWeatherSnapshot,
 } from '../services/lawnWeather';
 import {
-  getDynamicMowingDays,
-  getDynamicWateringDays,
+  buildMaintenanceSchedule,
   getMowingWeatherAdvisory,
   getScheduleReason,
 } from '../services/lawnScheduleEngine';
@@ -149,6 +148,7 @@ export function useLawnCareApp() {
   );
   const syncInFlightRef = useRef(false);
   const lastSyncFingerprintRef = useRef('');
+  const weatherReadyRef = useRef(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState(
     /** @type {'idle' | 'pulling' | 'pushing' | 'synced' | 'error'} */ ('idle')
   );
@@ -268,22 +268,8 @@ export function useLawnCareApp() {
     !isSoilTooColdForSeed &&
     !isSoilTooHotForSeed;
 
-  const isDormantSeason = (() => {
-    const month = today.getMonth() + 1;
-    return month === 12 || month === 1 || month === 2;
-  })();
-
-  const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
   const mowingWeatherAdvisory = getMowingWeatherAdvisory(
     forecastedRainSumNearTerm,
-    recentPastRainSum
-  );
-  const dynamicWateringDays = getDynamicWateringDays(
-    forecastedRainSumNearTerm,
-    currentSoilTemp,
-    springSeedDate,
-    seedEstablishmentActive,
-    todayStr,
     recentPastRainSum
   );
   const scheduleReason = getScheduleReason({
@@ -296,16 +282,23 @@ export function useLawnCareApp() {
     todayStr,
   });
 
-  const mowingNextDueIso = lastMowedDate
-    ? addDaysToDateString(lastMowedDate, dynamicMowingDays)
-    : null;
-  const wateringNextDueIso = lastWateredDate
-    ? addDaysToDateString(lastWateredDate, dynamicWateringDays)
-    : null;
-  const mowingLockedUntilIso =
-    seedEstablishmentActive && springSeedDate
-      ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS)
-      : null;
+  const maintenanceSchedule = buildMaintenanceSchedule({
+    todayStr,
+    userLogs,
+    forecastedRainSumNearTerm,
+    recentPastRainSum,
+    currentSoilTemp,
+    isNatureProvidingFullSoak,
+    lastMowedDate,
+    lastWateredDate,
+  });
+
+  const isDormantSeason = maintenanceSchedule.isDormantSeason;
+  const dynamicMowingDays = maintenanceSchedule.dynamicMowingDays;
+  const dynamicWateringDays = maintenanceSchedule.dynamicWateringDays;
+  const mowingNextDueIso = maintenanceSchedule.mowingNextDueIso;
+  const wateringNextDueIso = maintenanceSchedule.wateringNextDueIso;
+  const mowingLockedUntilIso = maintenanceSchedule.mowingLockedUntilIso;
 
   const mowingNextDate = formatNextDueDate(lastMowedDate, dynamicMowingDays);
   const wateringNextDate = formatNextDueDate(lastWateredDate, dynamicWateringDays);
@@ -400,23 +393,35 @@ export function useLawnCareApp() {
           ? overrides.gypsumPostponedUntil
           : userLogs[GYPSUM_POSTPONE_KEY] ?? null;
 
-      const nextMowingNextDueIso = nextLastMowedDate
-        ? addDaysToDateString(nextLastMowedDate, dynamicMowingDays)
-        : null;
-      const nextWateringNextDueIso = nextLastWateredDate
-        ? addDaysToDateString(nextLastWateredDate, dynamicWateringDays)
-        : null;
+      const nextRainNear =
+        overrides.forecastedRainSumNearTerm ?? forecastedRainSumNearTerm;
+      const nextPastRain = overrides.recentPastRainSum ?? recentPastRainSum;
+      const nextSoilTemp =
+        overrides.currentSoilTemp !== undefined ? overrides.currentSoilTemp : currentSoilTemp;
+      const nextFullSoak =
+        overrides.isNatureProvidingFullSoak ?? isNatureProvidingFullSoak;
+
+      const maintenance = buildMaintenanceSchedule({
+        todayStr,
+        userLogs,
+        forecastedRainSumNearTerm: nextRainNear,
+        recentPastRainSum: nextPastRain,
+        currentSoilTemp: nextSoilTemp,
+        isNatureProvidingFullSoak: nextFullSoak,
+        lastMowedDate: nextLastMowedDate,
+        lastWateredDate: nextLastWateredDate,
+      });
 
       return compileAllLawnTasks({
         todayStr,
         userLogs,
         pendingDates,
-        isDormantSeason,
-        isNatureProvidingFullSoak,
-        seedEstablishmentActive,
-        mowingLockedUntilIso,
-        mowingNextDueIso: nextMowingNextDueIso,
-        wateringNextDueIso: nextWateringNextDueIso,
+        isDormantSeason: maintenance.isDormantSeason,
+        isNatureProvidingFullSoak: maintenance.isNatureProvidingFullSoak,
+        seedEstablishmentActive: maintenance.seedEstablishmentActive,
+        mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
+        mowingNextDueIso: maintenance.mowingNextDueIso,
+        wateringNextDueIso: maintenance.wateringNextDueIso,
         lastGypsumDate: nextLastGypsumDate,
         gypsumPostponedUntil: nextGypsumPostponedUntil,
         scheduleReason,
@@ -429,19 +434,22 @@ export function useLawnCareApp() {
       todayStr,
       userLogs,
       pendingDates,
-      isDormantSeason,
+      forecastedRainSumNearTerm,
+      recentPastRainSum,
+      currentSoilTemp,
       isNatureProvidingFullSoak,
-      seedEstablishmentActive,
-      mowingLockedUntilIso,
       scheduleReason,
-      dynamicMowingDays,
-      dynamicWateringDays,
     ]
   );
 
   const pushLawnTasksToSupabase = useCallback(
     async (overrides = {}, options = {}) => {
-      const { quiet = true, force = false } = options;
+      const { quiet = true, force = false, allowBeforeWeather = false } = options;
+
+      if (!allowBeforeWeather && !weatherReadyRef.current) {
+        return;
+      }
+
       const compiledTasks = compileLawnTasksExport(overrides);
       const fingerprint = JSON.stringify(compiledTasks);
 
@@ -649,6 +657,32 @@ export function useLawnCareApp() {
     return { inboundPack, inboundMaintenance };
   }, [todayStr]);
 
+  const applyWeatherSnapshot = useCallback((snapshot) => {
+    const nearTerm = getEffectiveNearTermRain(snapshot);
+    const pastRain = getEffectiveRecentPastRain(snapshot);
+    const watering =
+      typeof snapshot.netWaterNeeded === 'number' &&
+      typeof snapshot.isNatureProvidingFullSoak === 'boolean'
+        ? {
+            netWaterNeeded: snapshot.netWaterNeeded,
+            isNatureProvidingFullSoak: snapshot.isNatureProvidingFullSoak,
+            soilRecentlyWet: snapshot.soilRecentlyWet ?? pastRain >= 5,
+          }
+        : computeWateringRainContext(pastRain, nearTerm);
+
+    setForecastedRainSum(snapshot.forecastedRainSum);
+    setForecastedRainSumNearTerm(nearTerm);
+    setRecentPastRainSum(pastRain);
+    setNetWaterNeeded(watering.netWaterNeeded);
+    setIsNatureProvidingFullSoak(watering.isNatureProvidingFullSoak);
+    setSoilRecentlyWet(watering.soilRecentlyWet);
+    setCurrentSoilTemp(snapshot.currentSoilTemp);
+    setCurrentSoilTempMin(snapshot.currentSoilTempMin);
+    setIsRainForecasted(snapshot.isRainForecasted);
+    setWeatherStatus('ready');
+    weatherReadyRef.current = true;
+  }, []);
+
   const runFullCloudSync = useCallback(
     async (options = {}) => {
       const { forcePush = true } = options;
@@ -660,9 +694,47 @@ export function useLawnCareApp() {
       setCloudSyncStatus('pulling');
       try {
         await pullCloudState();
+
         if (forcePush) {
+          let weatherOverrides = null;
+
+          try {
+            const snapshot = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
+            const nearTerm = getEffectiveNearTermRain(snapshot);
+            const pastRain = getEffectiveRecentPastRain(snapshot);
+            const watering = computeWateringRainContext(pastRain, nearTerm);
+            weatherOverrides = {
+              forecastedRainSumNearTerm: nearTerm,
+              recentPastRainSum: pastRain,
+              currentSoilTemp: snapshot.currentSoilTemp,
+              isNatureProvidingFullSoak: watering.isNatureProvidingFullSoak,
+            };
+            applyWeatherSnapshot(snapshot);
+            try {
+              await saveLawnWeatherSnapshot(snapshot);
+            } catch (saveError) {
+              console.warn('[Lawn Care] Weather snapshot save failed:', saveError);
+            }
+          } catch (fetchError) {
+            console.warn('[Lawn Care] Live weather fetch failed during sync:', fetchError);
+            if (!weatherReadyRef.current) {
+              try {
+                const cached = await fetchLawnWeatherSnapshotFromSupabase();
+                if (cached) {
+                  applyWeatherSnapshot(cached);
+                }
+              } catch {
+                /* use whatever weather state we already have */
+              }
+            }
+          }
+
           lastSyncFingerprintRef.current = '';
-          await pushLawnTasksToSupabase({}, { quiet: false, force: true });
+          await pushLawnTasksToSupabase(weatherOverrides ?? {}, {
+            quiet: false,
+            force: true,
+            allowBeforeWeather: weatherReadyRef.current,
+          });
         } else {
           setLastCloudSyncAt(new Date());
           setCloudSyncStatus('synced');
@@ -672,7 +744,7 @@ export function useLawnCareApp() {
         setCloudSyncStatus('error');
       }
     },
-    [pullCloudState, pushLawnTasksToSupabase]
+    [pullCloudState, pushLawnTasksToSupabase, applyWeatherSnapshot, weatherLocation]
   );
 
   const handleCopyTasksJson = async () => {
@@ -783,10 +855,18 @@ export function useLawnCareApp() {
     let cancelled = false;
 
     async function hydrateFromSupabase() {
+      try {
+        const cached = await fetchLawnWeatherSnapshotFromSupabase();
+        if (!cancelled && cached && isWeatherSnapshotFresh(cached.fetchedAt, 6)) {
+          applyWeatherSnapshot(cached);
+        }
+      } catch {
+        /* live weather fetch runs in a separate effect */
+      }
+
       await pullCloudState();
-      if (cancelled) return;
-      lastSyncFingerprintRef.current = '';
-      await pushLawnTasksToSupabase({}, { quiet: true, force: true });
+      // Do not push here — wait until weather is ready so we never overwrite Supabase
+      // with a schedule that ignores recent rain (which makes "Water lawn" reappear).
     }
 
     void hydrateFromSupabase();
@@ -814,7 +894,7 @@ export function useLawnCareApp() {
   }, [runFullCloudSync]);
 
   useEffect(() => {
-    if (!maintenanceHydrated) return;
+    if (!maintenanceHydrated || !userLogsHydrated || weatherStatus !== 'ready') return;
 
     const timer = setTimeout(() => {
       void pushLawnTasksToSupabase({}, { quiet: true });
@@ -824,6 +904,7 @@ export function useLawnCareApp() {
   }, [
     maintenanceHydrated,
     userLogsHydrated,
+    weatherStatus,
     lastMowedDate,
     lastWateredDate,
     lastGypsumDate,
@@ -840,31 +921,6 @@ export function useLawnCareApp() {
     netWaterNeeded,
     compileLawnTasksExport,
   ]);
-
-  const applyWeatherSnapshot = useCallback((snapshot) => {
-    const nearTerm = getEffectiveNearTermRain(snapshot);
-    const pastRain = getEffectiveRecentPastRain(snapshot);
-    const watering =
-      typeof snapshot.netWaterNeeded === 'number' &&
-      typeof snapshot.isNatureProvidingFullSoak === 'boolean'
-        ? {
-            netWaterNeeded: snapshot.netWaterNeeded,
-            isNatureProvidingFullSoak: snapshot.isNatureProvidingFullSoak,
-            soilRecentlyWet: snapshot.soilRecentlyWet ?? pastRain >= 5,
-          }
-        : computeWateringRainContext(pastRain, nearTerm);
-
-    setForecastedRainSum(snapshot.forecastedRainSum);
-    setForecastedRainSumNearTerm(nearTerm);
-    setRecentPastRainSum(pastRain);
-    setNetWaterNeeded(watering.netWaterNeeded);
-    setIsNatureProvidingFullSoak(watering.isNatureProvidingFullSoak);
-    setSoilRecentlyWet(watering.soilRecentlyWet);
-    setCurrentSoilTemp(snapshot.currentSoilTemp);
-    setCurrentSoilTempMin(snapshot.currentSoilTempMin);
-    setIsRainForecasted(snapshot.isRainForecasted);
-    setWeatherStatus('ready');
-  }, []);
 
   useEffect(() => {
     if (!maintenanceHydrated || !userLogsHydrated) return;
@@ -943,7 +999,7 @@ export function useLawnCareApp() {
       setPostcodeInput(location.postcode);
       persistWeatherLocation(location);
       lastSyncFingerprintRef.current = '';
-      await pushLawnTasksToSupabase({}, { quiet: true, force: true });
+      await pushLawnTasksToSupabase({}, { quiet: true, force: true, allowBeforeWeather: true });
     } catch (error) {
       setWeatherLocationError(
         error instanceof Error ? error.message : 'Could not look up that postcode.'
@@ -964,7 +1020,7 @@ export function useLawnCareApp() {
       setPostcodeInput(location.postcode ?? '');
       persistWeatherLocation(location);
       lastSyncFingerprintRef.current = '';
-      await pushLawnTasksToSupabase({}, { quiet: true, force: true });
+      await pushLawnTasksToSupabase({}, { quiet: true, force: true, allowBeforeWeather: true });
     } catch (error) {
       setWeatherLocationError(
         error instanceof Error ? error.message : 'Could not use your location.'
@@ -981,7 +1037,7 @@ export function useLawnCareApp() {
     setWeatherLocationError(null);
     persistWeatherLocation(location);
     lastSyncFingerprintRef.current = '';
-    await pushLawnTasksToSupabase({}, { quiet: true, force: true });
+    await pushLawnTasksToSupabase({}, { quiet: true, force: true, allowBeforeWeather: true });
   };
 
   const handlePendingDateChange = (stepId, value) => {
@@ -1030,7 +1086,7 @@ export function useLawnCareApp() {
 
     setUserLogs(nextLogs);
     lastSyncFingerprintRef.current = '';
-    void pushLawnTasksToSupabase({}, { quiet: true, force: true });
+    void pushLawnTasksToSupabase({}, { quiet: true, force: true, allowBeforeWeather: true });
 
     if (isFirstStep) {
       recascadeSeason(currentSeason, dateValue, nextLogs);
@@ -1050,7 +1106,7 @@ export function useLawnCareApp() {
     if (step) {
       void clearLawnTaskCompletion(step.label).then(() => {
         lastSyncFingerprintRef.current = '';
-        void pushLawnTasksToSupabase({}, { quiet: true, force: true });
+        void pushLawnTasksToSupabase({}, { quiet: true, force: true, allowBeforeWeather: true });
       });
     }
 
