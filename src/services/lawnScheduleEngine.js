@@ -214,8 +214,15 @@ export function buildMaintenanceSchedule(input) {
   const mowingNextDueIso = lastMowedDate
     ? addDaysToDateString(lastMowedDate, dynamicMowingDays)
     : null;
-  const wateringNextDueIso = lastWateredDate
-    ? addDaysToDateString(lastWateredDate, dynamicWateringDays)
+
+  // If rain has recently soaked the soil, treat today as the effective watering date so
+  // the next-due calculation counts forward from now rather than from the last manual water.
+  // Without this, when rain clears the task immediately reappears overdue.
+  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
+  const effectiveLastWateredDate =
+    (isNatureProvidingFullSoak || soilRecentlyWet) ? todayStr : lastWateredDate;
+  const wateringNextDueIso = effectiveLastWateredDate
+    ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays)
     : null;
 
   return {

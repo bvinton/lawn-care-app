@@ -23016,7 +23016,9 @@ function buildMaintenanceSchedule(input) {
     recentPastRainSum
   );
   const mowingNextDueIso = lastMowedDate ? addDaysToDateString(lastMowedDate, dynamicMowingDays) : null;
-  const wateringNextDueIso = lastWateredDate ? addDaysToDateString(lastWateredDate, dynamicWateringDays) : null;
+  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
+  const effectiveLastWateredDate = isNatureProvidingFullSoak || soilRecentlyWet ? todayStr : lastWateredDate;
+  const wateringNextDueIso = effectiveLastWateredDate ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays) : null;
   return {
     isDormantSeason,
     isNatureProvidingFullSoak,

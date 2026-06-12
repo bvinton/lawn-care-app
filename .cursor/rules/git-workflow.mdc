@@ -1,0 +1,31 @@
+---
+description: How to commit and push — use push-all.ps1 to deploy both apps together
+alwaysApply: true
+---
+
+# Git / deploy workflow
+
+Both apps (Tasks App and Lawn Care App) should always be committed and pushed together using the shared script at `C:\Projects\push-all.ps1`.
+
+## Committing via the agent
+
+When the user says "commit", "push", "deploy", or similar, run:
+
+```powershell
+C:\Projects\push-all.ps1 "commit message here"
+```
+
+This stages all changes, commits, and pushes **both repos** in one command.
+
+## Committing manually (terminal)
+
+The user can open a terminal and run:
+
+```powershell
+C:\Projects\push-all.ps1 "describe what changed"
+```
+
+## Notes
+
+- Always push to `main` (Tasks App) / `master` (Lawn Care App) — never create branches unless explicitly asked.
+- If only one repo has changes the script skips the other automatically.
