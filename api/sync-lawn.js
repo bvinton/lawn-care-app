@@ -23015,7 +23015,11 @@ function buildMaintenanceSchedule(input) {
     todayStr,
     recentPastRainSum
   );
-  const mowingNextDueIso = lastMowedDate ? addDaysToDateString(lastMowedDate, dynamicMowingDays) : null;
+  const springScarifyDate = userLogs[makeStepKey("SPRING", "prep")] ?? null;
+  const wasScalped = springScarifyDate !== null && (lastMowedDate === null || springScarifyDate >= lastMowedDate);
+  const effectiveLastMowedDate = lastMowedDate && springScarifyDate ? lastMowedDate > springScarifyDate ? lastMowedDate : springScarifyDate : lastMowedDate ?? springScarifyDate ?? null;
+  const effectiveMowingDays = wasScalped ? Math.max(dynamicMowingDays, 10) : dynamicMowingDays;
+  const mowingNextDueIso = effectiveLastMowedDate ? addDaysToDateString(effectiveLastMowedDate, effectiveMowingDays) : null;
   const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
   const effectiveLastWateredDate = isNatureProvidingFullSoak || soilRecentlyWet ? todayStr : lastWateredDate;
   const wateringNextDueIso = effectiveLastWateredDate ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays) : null;

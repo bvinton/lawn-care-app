@@ -211,8 +211,25 @@ export function buildMaintenanceSchedule(input) {
     recentPastRainSum
   );
 
-  const mowingNextDueIso = lastMowedDate
-    ? addDaysToDateString(lastMowedDate, dynamicMowingDays)
+  // The Spring prep step (Step 2) requires scalping the lawn first, so logging it
+  // counts as a mow. Use whichever date is more recent: last logged mow or scarify date.
+  const springScarifyDate = userLogs[makeStepKey('SPRING', 'prep')] ?? null;
+  const wasScalped =
+    springScarifyDate !== null &&
+    (lastMowedDate === null || springScarifyDate >= lastMowedDate);
+  const effectiveLastMowedDate =
+    lastMowedDate && springScarifyDate
+      ? lastMowedDate > springScarifyDate ? lastMowedDate : springScarifyDate
+      : lastMowedDate ?? springScarifyDate ?? null;
+
+  // After a scalp cut the grass is much shorter than usual (setting 1 vs standard setting 3),
+  // so it needs longer to recover before the next proper cut. Use at least 10 days.
+  const effectiveMowingDays = wasScalped
+    ? Math.max(dynamicMowingDays, 10)
+    : dynamicMowingDays;
+
+  const mowingNextDueIso = effectiveLastMowedDate
+    ? addDaysToDateString(effectiveLastMowedDate, effectiveMowingDays)
     : null;
 
   // If rain has recently soaked the soil, treat today as the effective watering date so
