@@ -95,7 +95,7 @@ export default function SeasonTimeline({ app }) {
             : pendingDates[currentSeason]?.[step.id];
 
           return (
-            <div key={stepKey} className="flex gap-3">
+            <div key={stepKey} id={`step-${stepKey.replace(':', '-')}`} className="flex gap-3">
               <div className="flex flex-col items-center">
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${

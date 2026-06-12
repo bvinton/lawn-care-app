@@ -6,7 +6,32 @@ export const LAWN_FOCUS_ALIASES = {
   maintenance: 'maintenance-panel',
 };
 
+const PACK_STEP_FOCUS_PATTERN = /^step-(SPRING|SUMMER|AUTUMN|WINTER)-([a-z]+)$/i;
+
 const HIGHLIGHT_CLASS = 'lawn-focus-highlight';
+
+/**
+ * @param {string} seasonKey
+ * @param {string} stepId
+ * @returns {string}
+ */
+export function packStepDomId(seasonKey, stepId) {
+  return `step-${seasonKey}-${stepId}`;
+}
+
+/**
+ * @param {string | null | undefined} raw
+ * @returns {{ season: string, stepId: string, domId: string } | null}
+ */
+export function parsePackStepFocus(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const match = raw.trim().match(PACK_STEP_FOCUS_PATTERN);
+  if (!match) return null;
+
+  const season = match[1].toUpperCase();
+  const stepId = match[2].toLowerCase();
+  return { season, stepId, domId: packStepDomId(season, stepId) };
+}
 
 /**
  * @param {string | null | undefined} raw
@@ -19,6 +44,9 @@ export function resolveLawnFocusTarget(raw) {
 
   const alias = LAWN_FOCUS_ALIASES[trimmed.toLowerCase()];
   if (alias) return alias;
+
+  const pack = parsePackStepFocus(trimmed);
+  if (pack) return pack.domId;
 
   if (/^[a-z][a-z0-9-]*$/i.test(trimmed)) {
     return trimmed;
@@ -78,13 +106,13 @@ export function applyLawnFocusFromUrl(options = {}) {
   const targetId = resolveLawnFocusTarget(focusRaw);
   if (!targetId) return;
 
-  const delayMs = options.delayMs ?? 500;
+  const delayMs = options.delayMs ?? 300;
   const retries = options.retries ?? 8;
 
   const attempt = (left) => {
     if (scrollToLawnFocus(targetId, { delayMs: 0 })) return;
     if (left > 0) {
-      window.setTimeout(() => attempt(left - 1), 350);
+      window.setTimeout(() => attempt(left - 1), 200);
     }
   };
 

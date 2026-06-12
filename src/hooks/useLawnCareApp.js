@@ -73,7 +73,7 @@ import {
 } from '../services/lawnScheduleEngine';
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { compileAllLawnTasks } from '../utils/compileLawnTasks';
-import { applyLawnFocusFromUrl } from '../utils/lawnDeepLink';
+import { applyLawnFocusFromUrl, getFocusFromUrl, parsePackStepFocus } from '../utils/lawnDeepLink';
 import { readStoredJson } from '../utils/lawnStorage';
 import {
   startOfDay,
@@ -776,13 +776,15 @@ export function useLawnCareApp() {
   }, [lawnSurface]);
 
   useEffect(() => {
+    // Render from localStorage immediately; cloud pull runs in the background.
+    setUserLogsHydrated(true);
+    setMaintenanceHydrated(true);
+
     let cancelled = false;
 
     async function hydrateFromSupabase() {
       await pullCloudState();
       if (cancelled) return;
-      setUserLogsHydrated(true);
-      setMaintenanceHydrated(true);
       lastSyncFingerprintRef.current = '';
       await pushLawnTasksToSupabase({}, { quiet: true, force: true });
     }
@@ -865,8 +867,25 @@ export function useLawnCareApp() {
   }, []);
 
   useEffect(() => {
-    applyLawnFocusFromUrl({ delayMs: 600 });
+    if (!maintenanceHydrated || !userLogsHydrated) return;
+
+    const focusRaw = getFocusFromUrl();
+    const pack = parsePackStepFocus(focusRaw);
+    if (pack) {
+      setCurrentSeason(pack.season);
+      setSeasonManuallySelected(true);
+    }
   }, [maintenanceHydrated, userLogsHydrated]);
+
+  useEffect(() => {
+    if (!maintenanceHydrated || !userLogsHydrated) return;
+
+    const focusRaw = getFocusFromUrl();
+    const pack = parsePackStepFocus(focusRaw);
+    if (pack && currentSeason !== pack.season) return;
+
+    applyLawnFocusFromUrl({ delayMs: 150, retries: 8 });
+  }, [maintenanceHydrated, userLogsHydrated, currentSeason]);
 
   useEffect(() => {
     let cancelled = false;
