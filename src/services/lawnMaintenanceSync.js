@@ -7,6 +7,7 @@ import { LAWN_APP_SOURCE } from './lawnTasks';
 
 export const MOW_TASK_NAME = 'Mow lawn';
 export const WATER_TASK_NAME = 'Water lawn';
+export const VERTICUT_TASK_NAME = 'Verticutting';
 
 /** @type {boolean | null} */
 let lastCompletedColumnAvailable = null;
@@ -107,14 +108,14 @@ export async function fetchLawnMaintenanceRows() {
     .from('tasks')
     .select(MAINTENANCE_SELECT_FULL)
     .eq('app_source', LAWN_APP_SOURCE)
-    .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME]);
+    .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME]);
 
   if (result.error && (result.error.code === '42703' || isMissingLastCompletedColumnError(result.error))) {
     result = await supabase
       .from('tasks')
       .select(MAINTENANCE_SELECT_FALLBACK)
       .eq('app_source', LAWN_APP_SOURCE)
-      .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME]);
+      .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME]);
   }
 
   if (result.error) {
@@ -156,6 +157,7 @@ export function inferLastDoneFromMaintenanceRow(row, todayStr) {
 export function inferMaintenanceDatesFromRows(rows, todayStr) {
   let lastMowedDate = null;
   let lastWateredDate = null;
+  let lastVerticutDate = null;
 
   for (const row of rows) {
     const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
@@ -165,10 +167,12 @@ export function inferMaintenanceDatesFromRows(rows, todayStr) {
       lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
     } else if (row.task_name === WATER_TASK_NAME) {
       lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
+    } else if (row.task_name === VERTICUT_TASK_NAME) {
+      lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);
     }
   }
 
-  return { lastMowedDate, lastWateredDate };
+  return { lastMowedDate, lastWateredDate, lastVerticutDate };
 }
 
 /**

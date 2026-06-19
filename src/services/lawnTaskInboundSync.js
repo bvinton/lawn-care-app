@@ -1,5 +1,5 @@
 import { SEASONS, makeStepKey } from '../data/LawnPackData';
-import { MOW_TASK_NAME, WATER_TASK_NAME, pickLatestIsoDate } from './lawnMaintenanceSync';
+import { MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME, pickLatestIsoDate } from './lawnMaintenanceSync';
 
 export const GYPSUM_TASK_NAME = 'Apply Liquid Gypsum';
 export const GYPSUM_LOG_KEY = 'lastGypsumDate';
@@ -40,7 +40,7 @@ function getTaskNameToStepKeyMap() {
  * @param {InboundTaskRow[]} rows
  * @param {string} todayStr
  * @param {Record<string, string>} userLogs
- * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} maintenance
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
  */
 export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenance = {}) {
   const stepMap = getTaskNameToStepKeyMap();
@@ -48,6 +48,7 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
   const nextLogs = { ...userLogs };
   let lastMowedDate = maintenance.lastMowedDate ?? null;
   let lastWateredDate = maintenance.lastWateredDate ?? null;
+  let lastVerticutDate = maintenance.lastVerticutDate ?? null;
   let packStepsUpdated = 0;
   let maintenanceUpdated = false;
 
@@ -77,6 +78,15 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
       continue;
     }
 
+    if (row.task_name === VERTICUT_TASK_NAME) {
+      const merged = pickLatestIsoDate(lastVerticutDate, completionDate);
+      if (merged !== lastVerticutDate) {
+        lastVerticutDate = merged;
+        maintenanceUpdated = true;
+      }
+      continue;
+    }
+
     if (row.task_name === GYPSUM_TASK_NAME) {
       const merged = pickLatestIsoDate(nextLogs[GYPSUM_LOG_KEY], completionDate);
       if (merged && merged !== nextLogs[GYPSUM_LOG_KEY]) {
@@ -100,6 +110,7 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
     userLogs: nextLogs,
     lastMowedDate,
     lastWateredDate,
+    lastVerticutDate,
     packStepsUpdated,
     maintenanceUpdated,
   };

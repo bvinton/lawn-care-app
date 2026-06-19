@@ -2,6 +2,7 @@ import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '..
 import {
   MOW_TASK_NAME,
   WATER_TASK_NAME,
+  VERTICUT_TASK_NAME,
   isMissingLastCompletedColumnError,
   withoutLastCompletedDate,
   probeLastCompletedColumn,
@@ -11,7 +12,7 @@ import {
 } from './lawnMaintenanceSync';
 import { GYPSUM_TASK_NAME } from './lawnTaskInboundSync';
 
-const MAINTENANCE_TASK_NAMES = new Set([MOW_TASK_NAME, WATER_TASK_NAME]);
+const MAINTENANCE_TASK_NAMES = new Set([MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME]);
 
 export const LAWN_APP_SOURCE = 'lawn';
 
@@ -61,13 +62,15 @@ function isSyntheticMaintenanceComplete(task) {
   return (
     task.status === 'completed' &&
     typeof task.reason === 'string' &&
-    /dormancy|winter|rain|not actively growing|nature providing/i.test(task.reason)
+    /dormancy|winter|rain|not actively growing|nature providing|outside active season|drought|heat stress|paused to protect/i.test(
+      task.reason
+    )
   );
 }
 
 /**
  * @param {CompiledLawnTask} task
- * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} maintenance
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
  * @param {Array<{ due_date: string, is_completed: boolean, last_completed_date?: string | null }>} [existingRows]
  * @param {string} todayStr
  */
@@ -77,7 +80,9 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
       ? maintenance.lastMowedDate
       : task.title === WATER_TASK_NAME
         ? maintenance.lastWateredDate
-        : null;
+        : task.title === VERTICUT_TASK_NAME
+          ? maintenance.lastVerticutDate
+          : null;
 
   let lastCompleted = localLast ?? null;
   for (const existing of existingRows ?? []) {
@@ -114,7 +119,7 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
 
 /**
  * @param {CompiledLawnTask} task
- * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} maintenance
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
  */
 /**
  * @param {CompiledLawnTask} task
@@ -170,6 +175,9 @@ function compiledTaskToRow(task, maintenance = {}) {
   if (task.title === WATER_TASK_NAME && maintenance.lastWateredDate) {
     row.last_completed_date = maintenance.lastWateredDate;
   }
+  if (task.title === VERTICUT_TASK_NAME && maintenance.lastVerticutDate) {
+    row.last_completed_date = maintenance.lastVerticutDate;
+  }
   if (task.title === GYPSUM_TASK_NAME && task.completedDate) {
     row.last_completed_date = task.completedDate;
   }
@@ -205,7 +213,7 @@ async function applyTaskWrite(supabase, body, taskTitle, fullPayload) {
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  * @param {CompiledLawnTask} task
- * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} maintenance
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
  * @param {string} todayStr
  */
 async function writeTaskPayload(supabase, task, maintenance, todayStr) {

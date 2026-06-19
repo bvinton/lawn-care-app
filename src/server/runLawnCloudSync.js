@@ -2,14 +2,17 @@
  * Server-side full lawn sync (same pipeline as Lawn app “Sync” button).
  * Used by POST /api/sync-lawn — not imported by the browser bundle.
  */
-import { createInitialPendingDates, stripStalePetLockout } from '../data/LawnPackData.js';
+import { createInitialPendingDates, stripStalePetLockout, makeStepKey } from '../data/LawnPackData.js';
 import { getSupabaseConfigError, initServerSupabase } from '../lib/supabase.js';
 import { fetchLawnAppStateFromSupabase, saveLawnScheduleSnapshot, saveLawnUserLogsToSupabase } from '../services/lawnAppState.js';
 import {
   inferMaintenanceDatesFromRows,
   mergeMaintenanceDate,
+  MOW_TASK_NAME,
+  WATER_TASK_NAME,
+  VERTICUT_TASK_NAME,
 } from '../services/lawnMaintenanceSync.js';
-import { buildMaintenanceSchedule } from '../services/lawnScheduleEngine.js';
+import { buildMaintenanceSchedule, getScheduleReason } from '../services/lawnScheduleEngine.js';
 import { applyInboundTaskCompletions, GYPSUM_POSTPONE_KEY } from '../services/lawnTaskInboundSync.js';
 import {
   fetchLawnTasksForInboundSync,
@@ -53,22 +56,26 @@ export async function runLawnCloudSync() {
 
   let lastMowedDate = scheduleSnapshot.lastMowedDate ?? null;
   let lastWateredDate = scheduleSnapshot.lastWateredDate ?? null;
+  let lastVerticutDate = scheduleSnapshot.lastVerticutDate ?? null;
 
   const inboundRows = await fetchLawnTasksForInboundSync();
   const inbound = applyInboundTaskCompletions(inboundRows, todayStr, userLogs, {
     lastMowedDate,
     lastWateredDate,
+    lastVerticutDate,
   });
   userLogs = stripStalePetLockout(inbound.userLogs, todayStr);
   lastMowedDate = inbound.lastMowedDate ?? lastMowedDate;
   lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
+  lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
 
   const maintenanceRows = inboundRows.filter((row) =>
-    ['Mow lawn', 'Water lawn'].includes(row.task_name)
+    [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name)
   );
   const inferred = inferMaintenanceDatesFromRows(maintenanceRows, todayStr);
   lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
   lastWateredDate = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
+  lastVerticutDate = mergeMaintenanceDate(lastVerticutDate, inferred.lastVerticutDate);
 
   await saveLawnUserLogsToSupabase(userLogs);
 
@@ -131,6 +138,18 @@ export async function runLawnCloudSync() {
     isNatureProvidingFullSoak,
     lastMowedDate,
     lastWateredDate,
+    lastVerticutDate,
+  });
+
+  const scheduleReason = getScheduleReason({
+    forecastedRainSumNearTerm,
+    forecastedRainSumWeek: forecastedRainSum,
+    recentPastRainSum,
+    currentSoilTemp,
+    springSeedDate: userLogs[makeStepKey('SPRING', 'seed')] ?? null,
+    seedEstablishmentActive: maintenance.seedEstablishmentActive,
+    todayStr,
+    userLogs,
   });
 
   const compiledTasks = compileAllLawnTasks({
@@ -143,14 +162,20 @@ export async function runLawnCloudSync() {
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,
     wateringNextDueIso: maintenance.wateringNextDueIso,
+    isVerticutSeason: maintenance.isVerticutSeason,
+    renovationHoldActive: maintenance.renovationHoldActive,
+    verticutLockedUntilIso: maintenance.verticutLockedUntilIso,
+    verticutHeatDroughtPaused: maintenance.verticutHeatDroughtPaused,
+    verticutNextDueIso: maintenance.verticutNextDueIso,
+    verticutPairedWithMow: maintenance.verticutPairedWithMow,
     lastGypsumDate: userLogs.lastGypsumDate ?? null,
     gypsumPostponedUntil: userLogs[GYPSUM_POSTPONE_KEY] ?? null,
-    scheduleReason: null,
+    scheduleReason,
   });
 
   await syncLawnTasksToSupabase(
     compiledTasks,
-    { lastMowedDate, lastWateredDate },
+    { lastMowedDate, lastWateredDate, lastVerticutDate },
     todayStr
   );
 
@@ -158,8 +183,10 @@ export async function runLawnCloudSync() {
     {
       lastMowedDate,
       lastWateredDate,
+      lastVerticutDate,
       mowingNextDueIso: maintenance.mowingNextDueIso,
       wateringNextDueIso: maintenance.wateringNextDueIso,
+      verticutNextDueIso: maintenance.verticutNextDueIso,
       forecastedRainSum,
       forecastedRainSumNearTerm,
       recentPastRainSum,

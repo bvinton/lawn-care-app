@@ -2,6 +2,7 @@
 export const LAWN_FOCUS_ALIASES = {
   water: 'maintenance-watering-tracker',
   mow: 'maintenance-mowing-tracker',
+  verticut: 'maintenance-verticut-tracker',
   gypsum: 'soil-treatments-tracker',
   maintenance: 'maintenance-panel',
 };

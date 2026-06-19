@@ -144,7 +144,11 @@ export function useLawnCareApp() {
   const [userLogsHydrated, setUserLogsHydrated] = useState(false);
   const userLogsSaveTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
   const [maintenanceHints, setMaintenanceHints] = useState(
-    /** @type {{ mow: string | null, water: string | null }} */ ({ mow: null, water: null })
+    /** @type {{ mow: string | null, water: string | null, verticut: string | null }} */ ({
+      mow: null,
+      water: null,
+      verticut: null,
+    })
   );
   const syncInFlightRef = useRef(false);
   const lastSyncFingerprintRef = useRef('');
@@ -168,8 +172,14 @@ export function useLawnCareApp() {
   const [lastWateredDate, setLastWateredDate] = useState(() =>
     localStorage.getItem('lawnPackLastWateredDate')
   );
+  const [lastVerticutDate, setLastVerticutDate] = useState(() =>
+    localStorage.getItem('lawnPackLastVerticutDate')
+  );
   const [pendingMowLogDate, setPendingMowLogDate] = useState(() => formatInputDate(new Date()));
   const [pendingWaterLogDate, setPendingWaterLogDate] = useState(() => formatInputDate(new Date()));
+  const [pendingVerticutLogDate, setPendingVerticutLogDate] = useState(() =>
+    formatInputDate(new Date())
+  );
   const [pendingGypsumLogDate, setPendingGypsumLogDate] = useState(() => formatInputDate(new Date()));
 
   const [isRainForecasted, setIsRainForecasted] = useState(false);
@@ -229,6 +239,7 @@ export function useLawnCareApp() {
 
   const daysSinceMow = lastMowedDate ? daysBetween(lastMowedDate, today) : null;
   const daysSinceWater = lastWateredDate ? daysBetween(lastWateredDate, today) : null;
+  const daysSinceVerticut = lastVerticutDate ? daysBetween(lastVerticutDate, today) : null;
 
   const lastGypsumDate = userLogs[GYPSUM_LOG_KEY] ?? null;
   const petLockoutUntil = userLogs[PET_LOCKOUT_KEY] ?? null;
@@ -280,6 +291,7 @@ export function useLawnCareApp() {
     springSeedDate,
     seedEstablishmentActive,
     todayStr,
+    userLogs,
   });
 
   const maintenanceSchedule = buildMaintenanceSchedule({
@@ -291,6 +303,7 @@ export function useLawnCareApp() {
     isNatureProvidingFullSoak,
     lastMowedDate,
     lastWateredDate,
+    lastVerticutDate,
   });
 
   const isDormantSeason = maintenanceSchedule.isDormantSeason;
@@ -299,9 +312,17 @@ export function useLawnCareApp() {
   const mowingNextDueIso = maintenanceSchedule.mowingNextDueIso;
   const wateringNextDueIso = maintenanceSchedule.wateringNextDueIso;
   const mowingLockedUntilIso = maintenanceSchedule.mowingLockedUntilIso;
+  const isVerticutSeason = maintenanceSchedule.isVerticutSeason;
+  const renovationHoldActive = maintenanceSchedule.renovationHoldActive;
+  const verticutLockedUntilIso = maintenanceSchedule.verticutLockedUntilIso;
+  const verticutHeatDroughtPaused = maintenanceSchedule.verticutHeatDroughtPaused;
+  const verticutNextDueIso = maintenanceSchedule.verticutNextDueIso;
+  const verticutPairedWithMow = maintenanceSchedule.verticutPairedWithMow;
+  const verticutIntervalElapsed = maintenanceSchedule.verticutIntervalElapsed;
 
   const mowingNextDate = formatNextDueDate(lastMowedDate, dynamicMowingDays);
   const wateringNextDate = formatNextDueDate(lastWateredDate, dynamicWateringDays);
+  const verticutNextDate = verticutNextDueIso ? formatDisplayDate(verticutNextDueIso) : null;
   const seedLockEndDate = formatNextDueDate(springSeedDate, SEED_ESTABLISHMENT_DAYS);
 
   const activeSeasonStep =
@@ -353,6 +374,16 @@ export function useLawnCareApp() {
       : isNatureProvidingFullSoak
         ? 'paused'
         : 'active',
+    verticutNextDue: verticutNextDueIso,
+    verticutLockedUntil: verticutLockedUntilIso,
+    verticutIntervalDays: 14,
+    verticutStatus: !isVerticutSeason
+      ? 'off-season'
+      : renovationHoldActive
+        ? 'locked'
+        : verticutHeatDroughtPaused
+          ? 'paused'
+          : 'active',
     scheduleReason,
   };
   const mowingDue =
@@ -364,6 +395,12 @@ export function useLawnCareApp() {
     !isNatureProvidingFullSoak &&
     !soilRecentlyWet &&
     (daysSinceWater === null || daysSinceWater >= dynamicWateringDays);
+  const verticutDue =
+    isVerticutSeason &&
+    !renovationHoldActive &&
+    !verticutHeatDroughtPaused &&
+    verticutIntervalElapsed &&
+    (daysSinceVerticut === null || daysSinceVerticut >= 14);
 
   const summerGranularRepeat = getGranularRepeatDate('SUMMER', userLogs);
   const granularRepeatDue =
@@ -386,6 +423,8 @@ export function useLawnCareApp() {
         overrides.lastMowedDate !== undefined ? overrides.lastMowedDate : lastMowedDate;
       const nextLastWateredDate =
         overrides.lastWateredDate !== undefined ? overrides.lastWateredDate : lastWateredDate;
+      const nextLastVerticutDate =
+        overrides.lastVerticutDate !== undefined ? overrides.lastVerticutDate : lastVerticutDate;
       const nextLastGypsumDate =
         overrides.lastGypsumDate !== undefined ? overrides.lastGypsumDate : lastGypsumDate;
       const nextGypsumPostponedUntil =
@@ -410,6 +449,7 @@ export function useLawnCareApp() {
         isNatureProvidingFullSoak: nextFullSoak,
         lastMowedDate: nextLastMowedDate,
         lastWateredDate: nextLastWateredDate,
+        lastVerticutDate: nextLastVerticutDate,
       });
 
       return compileAllLawnTasks({
@@ -422,6 +462,12 @@ export function useLawnCareApp() {
         mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
         mowingNextDueIso: maintenance.mowingNextDueIso,
         wateringNextDueIso: maintenance.wateringNextDueIso,
+        isVerticutSeason: maintenance.isVerticutSeason,
+        renovationHoldActive: maintenance.renovationHoldActive,
+        verticutLockedUntilIso: maintenance.verticutLockedUntilIso,
+        verticutHeatDroughtPaused: maintenance.verticutHeatDroughtPaused,
+        verticutNextDueIso: maintenance.verticutNextDueIso,
+        verticutPairedWithMow: maintenance.verticutPairedWithMow,
         lastGypsumDate: nextLastGypsumDate,
         gypsumPostponedUntil: nextGypsumPostponedUntil,
         scheduleReason,
@@ -430,6 +476,7 @@ export function useLawnCareApp() {
     [
       lastMowedDate,
       lastWateredDate,
+      lastVerticutDate,
       lastGypsumDate,
       todayStr,
       userLogs,
@@ -472,12 +519,15 @@ export function useLawnCareApp() {
           overrides.lastMowedDate !== undefined ? overrides.lastMowedDate : lastMowedDate;
         const syncedWater =
           overrides.lastWateredDate !== undefined ? overrides.lastWateredDate : lastWateredDate;
+        const syncedVerticut =
+          overrides.lastVerticutDate !== undefined ? overrides.lastVerticutDate : lastVerticutDate;
 
         await syncLawnTasksToSupabase(
           compiledTasks,
           {
             lastMowedDate: syncedMow,
             lastWateredDate: syncedWater,
+            lastVerticutDate: syncedVerticut,
           },
           todayStr
         );
@@ -487,8 +537,10 @@ export function useLawnCareApp() {
             {
               lastMowedDate: syncedMow,
               lastWateredDate: syncedWater,
+              lastVerticutDate: syncedVerticut,
               mowingNextDueIso: mowingNextDueIso ?? null,
               wateringNextDueIso: wateringNextDueIso ?? null,
+              verticutNextDueIso: verticutNextDueIso ?? null,
               forecastedRainSum,
               forecastedRainSumNearTerm,
               recentPastRainSum,
@@ -522,7 +574,7 @@ export function useLawnCareApp() {
         setSupabaseSyncError(null);
         setLastCloudSyncAt(new Date());
         setCloudSyncStatus('synced');
-        setMaintenanceHints({ mow: null, water: null });
+        setMaintenanceHints({ mow: null, water: null, verticut: null });
       } catch (error) {
         console.error('[Lawn Care] Supabase sync failed:', error);
         setCloudSyncStatus('error');
@@ -539,6 +591,7 @@ export function useLawnCareApp() {
       compileLawnTasksExport,
       lastMowedDate,
       lastWateredDate,
+      lastVerticutDate,
       userLogs,
       pendingDates,
       forecastedRainSum,
@@ -563,6 +616,7 @@ export function useLawnCareApp() {
     let nextUserLogs = stripStalePetLockout(readStoredJson('lawnPackUserLogs', {}), todayStr);
     let nextMow = localStorage.getItem('lawnPackLastMowedDate');
     let nextWater = localStorage.getItem('lawnPackLastWateredDate');
+    let nextVerticut = localStorage.getItem('lawnPackLastVerticutDate');
     let inboundPack = 0;
     let inboundMaintenance = false;
 
@@ -595,10 +649,12 @@ export function useLawnCareApp() {
       const inbound = applyInboundTaskCompletions(rows, todayStr, nextUserLogs, {
         lastMowedDate: nextMow,
         lastWateredDate: nextWater,
+        lastVerticutDate: nextVerticut,
       });
       nextUserLogs = stripStalePetLockout(inbound.userLogs, todayStr);
       nextMow = inbound.lastMowedDate ?? nextMow;
       nextWater = inbound.lastWateredDate ?? nextWater;
+      nextVerticut = inbound.lastVerticutDate ?? nextVerticut;
       inboundPack = inbound.packStepsUpdated;
       inboundMaintenance = inbound.maintenanceUpdated;
     } catch (error) {
@@ -619,6 +675,10 @@ export function useLawnCareApp() {
         nextWater = mergeMaintenanceDate(nextWater, inferred.lastWateredDate);
         inboundMaintenance = true;
       }
+      if (inferred.lastVerticutDate) {
+        nextVerticut = mergeMaintenanceDate(nextVerticut, inferred.lastVerticutDate);
+        inboundMaintenance = true;
+      }
 
       if (inboundMaintenance) {
         setMaintenanceHints({
@@ -626,9 +686,12 @@ export function useLawnCareApp() {
           water: nextWater
             ? `Last water updated from shared log (${formatDisplayDate(nextWater)}).`
             : null,
+          verticut: nextVerticut
+            ? `Last verticut updated from shared log (${formatDisplayDate(nextVerticut)}).`
+            : null,
         });
       } else {
-        setMaintenanceHints({ mow: null, water: null });
+        setMaintenanceHints({ mow: null, water: null, verticut: null });
       }
     } catch (error) {
       console.warn('[Lawn Care] Maintenance pull failed:', error);
@@ -638,6 +701,7 @@ export function useLawnCareApp() {
     localStorage.setItem('lawnPackUserLogs', JSON.stringify(nextUserLogs));
     if (nextMow) setLastMowedDate(nextMow);
     if (nextWater) setLastWateredDate(nextWater);
+    if (nextVerticut) setLastVerticutDate(nextVerticut);
 
     try {
       await saveLawnUserLogsToSupabase(nextUserLogs);
@@ -825,6 +889,14 @@ export function useLawnCareApp() {
   }, [lastWateredDate]);
 
   useEffect(() => {
+    if (lastVerticutDate) {
+      localStorage.setItem('lawnPackLastVerticutDate', lastVerticutDate);
+    } else {
+      localStorage.removeItem('lawnPackLastVerticutDate');
+    }
+  }, [lastVerticutDate]);
+
+  useEffect(() => {
     if (!enlargedSprinkler) return;
 
     const handleEscape = (event) => {
@@ -907,6 +979,7 @@ export function useLawnCareApp() {
     weatherStatus,
     lastMowedDate,
     lastWateredDate,
+    lastVerticutDate,
     lastGypsumDate,
     userLogs,
     pendingDates,
@@ -1179,10 +1252,14 @@ export function useLawnCareApp() {
     setLastMowedDate,
     lastWateredDate,
     setLastWateredDate,
+    lastVerticutDate,
+    setLastVerticutDate,
     pendingMowLogDate,
     setPendingMowLogDate,
     pendingWaterLogDate,
     setPendingWaterLogDate,
+    pendingVerticutLogDate,
+    setPendingVerticutLogDate,
     pendingGypsumLogDate,
     setPendingGypsumLogDate,
     isRainForecasted,
@@ -1221,6 +1298,7 @@ export function useLawnCareApp() {
     weedolClearanceDate,
     daysSinceMow,
     daysSinceWater,
+    daysSinceVerticut,
     lastGypsumDate,
     petLockoutUntil,
     petLockoutActive,
@@ -1242,8 +1320,16 @@ export function useLawnCareApp() {
     mowingNextDueIso,
     wateringNextDueIso,
     mowingLockedUntilIso,
+    isVerticutSeason,
+    renovationHoldActive,
+    verticutLockedUntilIso,
+    verticutHeatDroughtPaused,
+    verticutNextDueIso,
+    verticutPairedWithMow,
+    verticutIntervalElapsed,
     mowingNextDate,
     wateringNextDate,
+    verticutNextDate,
     seedLockEndDate,
     activeSeasonStep,
     isOnScarificationPrepStep,
@@ -1252,6 +1338,7 @@ export function useLawnCareApp() {
     mowingDue,
     mowingWeatherAdvisory,
     wateringDue,
+    verticutDue,
     summerGranularRepeat,
     granularRepeatDue,
     pushLawnTasksToSupabase,

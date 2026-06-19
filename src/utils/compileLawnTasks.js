@@ -8,6 +8,11 @@ import {
   cascadeSeasonDates,
   isSeasonPackComplete,
 } from '../data/LawnPackData';
+import {
+  VERTICUT_BLADE_HEIGHT_RULE,
+  VERTICUT_MOW_PAIRING_NOTE,
+} from '../services/lawnScheduleEngine';
+import { VERTICUT_TASK_NAME } from '../services/lawnMaintenanceSync';
 
 const GYPSUM_CYCLE_DAYS = 182;
 
@@ -64,9 +69,15 @@ function daysBetween(from, to) {
  * @param {string | null} input.mowingLockedUntilIso
  * @param {string | null} input.mowingNextDueIso    - pre-computed from dynamic interval
  * @param {string | null} input.wateringNextDueIso  - pre-computed from dynamic interval
- * @param {string | null} input.lastGypsumDate
+ * @param {boolean} [input.isVerticutSeason]
+ * @param {boolean} [input.renovationHoldActive]
+ * @param {string | null} [input.verticutLockedUntilIso]
+ * @param {boolean} [input.verticutHeatDroughtPaused]
+ * @param {string | null} [input.verticutNextDueIso]
+ * @param {boolean} [input.verticutPairedWithMow]
+ * @param {string | null} [input.lastGypsumDate]
  * @param {string | null} [input.gypsumPostponedUntil]
- * @param {{ mow: string | null, water: string | null } | null} [input.scheduleReason]
+ * @param {{ mow: string | null, water: string | null, verticut?: string | null } | null} [input.scheduleReason]
  */
 export function compileLawnTasks({
   todayStr,
@@ -76,6 +87,12 @@ export function compileLawnTasks({
   mowingLockedUntilIso,
   mowingNextDueIso,
   wateringNextDueIso,
+  isVerticutSeason = false,
+  renovationHoldActive = false,
+  verticutLockedUntilIso = null,
+  verticutHeatDroughtPaused = false,
+  verticutNextDueIso = null,
+  verticutPairedWithMow = false,
   lastGypsumDate,
   gypsumPostponedUntil = null,
   scheduleReason = null,
@@ -86,6 +103,37 @@ export function compileLawnTasks({
 
   /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
   const compiledTasks = [];
+
+  const mowPairedWithVerticut =
+    verticutPairedWithMow &&
+    isVerticutSeason &&
+    !renovationHoldActive &&
+    !verticutHeatDroughtPaused &&
+    verticutNextDueIso &&
+    mowingNextDueIso &&
+    verticutNextDueIso === mowingNextDueIso;
+
+  const buildMowReason = () => {
+    const parts = [];
+    if (mowPairedWithVerticut) {
+      parts.push(VERTICUT_MOW_PAIRING_NOTE);
+    }
+    if (scheduleReason?.mow) {
+      parts.push(scheduleReason.mow);
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
+  };
+
+  const buildVerticutReason = () => {
+    const parts = [VERTICUT_BLADE_HEIGHT_RULE];
+    if (mowPairedWithVerticut) {
+      parts.push(VERTICUT_MOW_PAIRING_NOTE);
+    }
+    if (scheduleReason?.verticut) {
+      parts.push(scheduleReason.verticut);
+    }
+    return parts.join(' · ');
+  };
 
   if (isDormantSeason) {
     compiledTasks.push({
@@ -113,7 +161,48 @@ export function compileLawnTasks({
       dueDate: mowDueDate,
       status: taskStatusFromDue(mowDueDate),
       module: 'lawn',
-      reason: scheduleReason?.mow ?? null,
+      reason: buildMowReason(),
+    });
+  }
+
+  if (!isVerticutSeason) {
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutNextDueIso ?? todayStr,
+      status: 'completed',
+      module: 'lawn',
+      reason: 'Outside active season (Apr 1 – Sep 30)',
+    });
+  } else if (renovationHoldActive && verticutLockedUntilIso) {
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutLockedUntilIso,
+      status: 'pending',
+      module: 'lawn',
+      reason: 'Post-renovation hold – allow 6–8 weeks for root maturation',
+    });
+  } else if (verticutHeatDroughtPaused) {
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutNextDueIso ?? todayStr,
+      status: 'completed',
+      module: 'lawn',
+      reason:
+        scheduleReason?.verticut ??
+        'Paused during extreme heat or drought risk to protect the lawn from stress',
+    });
+  } else {
+    const verticutDueDate = verticutNextDueIso ?? todayStr;
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutDueDate,
+      status: taskStatusFromDue(verticutDueDate),
+      module: 'lawn',
+      reason: buildVerticutReason(),
     });
   }
 
@@ -219,6 +308,12 @@ export function compileAllLawnTasks(input) {
     mowingLockedUntilIso,
     mowingNextDueIso,
     wateringNextDueIso,
+    isVerticutSeason,
+    renovationHoldActive,
+    verticutLockedUntilIso,
+    verticutHeatDroughtPaused,
+    verticutNextDueIso,
+    verticutPairedWithMow,
     lastGypsumDate,
     gypsumPostponedUntil = null,
     scheduleReason = null,
@@ -234,6 +329,12 @@ export function compileAllLawnTasks(input) {
       mowingLockedUntilIso,
       mowingNextDueIso,
       wateringNextDueIso,
+      isVerticutSeason,
+      renovationHoldActive,
+      verticutLockedUntilIso,
+      verticutHeatDroughtPaused,
+      verticutNextDueIso,
+      verticutPairedWithMow,
       lastGypsumDate,
       gypsumPostponedUntil,
       scheduleReason,

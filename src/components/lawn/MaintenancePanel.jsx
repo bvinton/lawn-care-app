@@ -23,6 +23,12 @@ import {
   SEED_GERMINATION_SOIL_TEMP_MAX_C,
   DECKING_EDGE_WATERING_SUBTASK,
 } from '../../data/lawnUiConfig';
+import {
+  VERTICUT_BLADE_HEIGHT_RULE,
+  VERTICUT_INTERVAL_DAYS,
+  VERTICUT_MOW_PAIRING_NOTE,
+  VERTICUT_RENOVATION_HOLD_DAYS,
+} from '../../services/lawnScheduleEngine';
 import { UkDateInput } from './UkDateInput';
 
 /** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
@@ -93,10 +99,25 @@ export default function MaintenancePanel({ app }) {
     setPendingGypsumLogDate,
     summerGranularRepeat,
     granularRepeatDue,
+    isVerticutSeason,
+    renovationHoldActive,
+    verticutLockedUntilIso,
+    verticutHeatDroughtPaused,
+    verticutNextDueIso,
+    verticutNextDate,
+    verticutPairedWithMow,
+    verticutDue,
+    daysSinceVerticut,
+    lastVerticutDate,
+    pendingVerticutLogDate,
+    setPendingVerticutLogDate,
+    setLastVerticutDate,
   } = app;
 
   const mowingDaysOverdue =
     mowingNextDueIso && mowingDue ? daysBetween(mowingNextDueIso, todayStr) : null;
+  const verticutDaysOverdue =
+    verticutNextDueIso && verticutDue ? daysBetween(verticutNextDueIso, todayStr) : null;
   const mowingDueDateLabel =
     mowingNextDate ??
     (mowingNextDueIso ? formatDisplayDate(mowingNextDueIso) : null) ??
@@ -182,7 +203,11 @@ export default function MaintenancePanel({ app }) {
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 sm:items-stretch">
+      <p className="text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
+        Regular Maintenance
+      </p>
+
+      <div className="grid gap-3 lg:grid-cols-3 sm:grid-cols-2 sm:items-stretch">
         <div
           id="maintenance-mowing-tracker"
           data-maintenance-due-dates={JSON.stringify(maintenanceDueDates)}
@@ -260,6 +285,11 @@ export default function MaintenancePanel({ app }) {
                 {mowingWeatherAdvisory && (
                   <p className="mt-1 text-xs font-medium text-sky-800">{mowingWeatherAdvisory}</p>
                 )}
+                {verticutPairedWithMow && (
+                  <p className="mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 rounded p-2 leading-snug">
+                    🔗 {VERTICUT_MOW_PAIRING_NOTE}
+                  </p>
+                )}
                 {scheduleReason.mow && (
                   <p className="mt-1 text-xs text-blue-700 italic">
                     📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
@@ -279,6 +309,11 @@ export default function MaintenancePanel({ app }) {
                 )}
                 {mowingWeatherAdvisory && (
                   <p className="mt-1 text-xs font-medium text-sky-800">{mowingWeatherAdvisory}</p>
+                )}
+                {verticutPairedWithMow && (
+                  <p className="mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 rounded p-2 leading-snug">
+                    🔗 {VERTICUT_MOW_PAIRING_NOTE}
+                  </p>
                 )}
                 {scheduleReason.mow && (
                   <p className="mt-1 text-xs text-blue-700 italic">
@@ -495,6 +530,174 @@ export default function MaintenancePanel({ app }) {
               className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               💦 Log Watered
+            </button>
+          </div>
+        </div>
+
+        <div
+          id="maintenance-verticut-tracker"
+          data-next-verticut-due={verticutNextDueIso ?? ''}
+          data-verticut-locked-until={verticutLockedUntilIso ?? ''}
+          data-verticut-status={maintenanceDueDates.verticutStatus}
+          data-verticut-paired-with-mow={verticutPairedWithMow ? 'true' : 'false'}
+          className={`flex flex-col rounded-lg border p-3 sm:col-span-2 lg:col-span-1 ${
+            !isVerticutSeason
+              ? 'bg-gray-100 border-gray-300 text-gray-500'
+              : renovationHoldActive
+                ? 'bg-red-50 border-red-300'
+                : verticutHeatDroughtPaused
+                  ? 'bg-orange-50 border-orange-300'
+                  : verticutDue
+                    ? 'bg-amber-50 border-amber-300'
+                    : 'bg-white border-gray-200'
+          }`}
+        >
+          <p className="text-xs font-bold text-gray-800 mb-1">🪓 Verticutting Tracker</p>
+
+          <div className={`mb-3 ${verticutDue ? 'min-h-[5.5rem]' : 'min-h-[2.75rem]'}`}>
+            {!isVerticutSeason ? (
+              <>
+                <p className="text-xs font-medium leading-snug">
+                  📅 OFF SEASON: Verticutting runs Apr 1 – Sep 30 only.
+                </p>
+                <p className="mt-2 text-xs font-semibold text-gray-600">Next Due: N/A (Off season)</p>
+              </>
+            ) : renovationHoldActive ? (
+              <>
+                <p className="text-xs font-bold text-red-900 leading-snug">
+                  🌱 POST-RENOVATION HOLD: No verticutting for {VERTICUT_RENOVATION_HOLD_DAYS} days
+                  (6–8 weeks) while roots establish.
+                </p>
+                <p className="mt-2 text-xs font-semibold text-red-800">
+                  Next Due: Locked until{' '}
+                  {verticutLockedUntilIso ? formatDisplayDate(verticutLockedUntilIso) : 'hold clears'}
+                </p>
+              </>
+            ) : verticutHeatDroughtPaused ? (
+              <>
+                <p className="text-xs font-bold text-orange-900 leading-snug">
+                  🌡️ HEAT / DROUGHT PAUSE: Verticutting skipped to protect turf from stress.
+                </p>
+                {scheduleReason.verticut && (
+                  <p className="mt-1 text-xs text-orange-800 italic">📊 {scheduleReason.verticut}</p>
+                )}
+              </>
+            ) : verticutDue ? (
+              <>
+                <p className="text-xs font-bold text-amber-900 leading-snug">🚨 VERTICUTTING DUE</p>
+                {verticutNextDate ? (
+                  <div className="mt-2 p-2 bg-amber-100 border border-amber-300 rounded text-sm text-amber-900 font-semibold leading-snug">
+                    📅 Was due: {verticutNextDate}
+                    {verticutDaysOverdue !== null && verticutDaysOverdue > 0 && (
+                      <span className="block text-xs font-bold mt-0.5 text-amber-950">
+                        {verticutDaysOverdue} day{verticutDaysOverdue !== 1 ? 's' : ''} overdue
+                      </span>
+                    )}
+                    {verticutDaysOverdue === 0 && (
+                      <span className="block text-xs font-medium mt-0.5">Due today</span>
+                    )}
+                  </div>
+                ) : null}
+                {lastVerticutDate ? (
+                  <p className="mt-1 text-xs text-gray-600">
+                    Last verticut: {formatDisplayDate(lastVerticutDate)} (
+                    {formatDaysSinceLabel(daysSinceVerticut)} ago)
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-600">
+                    No verticut logged yet — use Log below.
+                  </p>
+                )}
+                {maintenanceHints.verticut && (
+                  <p className="mt-1 text-xs font-medium text-emerald-800">
+                    {maintenanceHints.verticut}
+                  </p>
+                )}
+                {verticutPairedWithMow && (
+                  <p className="mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 rounded p-2 leading-snug">
+                    🔗 {VERTICUT_MOW_PAIRING_NOTE}
+                  </p>
+                )}
+                {scheduleReason.verticut && (
+                  <p className="mt-1 text-xs text-blue-700 italic">
+                    📊 {VERTICUT_INTERVAL_DAYS}-day interval: {scheduleReason.verticut}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-gray-600 leading-snug">
+                  Last verticut:{' '}
+                  {lastVerticutDate
+                    ? `${formatDisplayDate(lastVerticutDate)} (${formatDaysSinceLabel(daysSinceVerticut)} ago)`
+                    : 'not logged yet'}
+                </p>
+                {maintenanceHints.verticut && (
+                  <p className="mt-1 text-xs font-medium text-emerald-800">
+                    {maintenanceHints.verticut}
+                  </p>
+                )}
+                {verticutPairedWithMow && verticutNextDate && (
+                  <p className="mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 rounded p-2 leading-snug">
+                    🔗 Paired with next mow ({verticutNextDate}): {VERTICUT_MOW_PAIRING_NOTE}
+                  </p>
+                )}
+                {scheduleReason.verticut && (
+                  <p className="mt-1 text-xs text-blue-700 italic">
+                    📊 {VERTICUT_INTERVAL_DAYS}-day interval: {scheduleReason.verticut}
+                  </p>
+                )}
+                {verticutNextDate && (
+                  <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-800 font-semibold">
+                    📅 Next Verticut Due: {verticutNextDate}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="mb-3">
+            <p className="text-xs font-medium text-gray-600 leading-snug">{VERTICUT_BLADE_HEIGHT_RULE}</p>
+          </div>
+
+          <div className="mt-auto space-y-2">
+            <div>
+              <label
+                htmlFor="verticut-log-date"
+                className="block text-xs font-semibold text-gray-600 mb-1"
+              >
+                Log Date (DD/MM/YYYY)
+              </label>
+              <UkDateInput
+                id="verticut-log-date"
+                value={pendingVerticutLogDate}
+                max={todayStr}
+                onChange={setPendingVerticutLogDate}
+                disabled={
+                  !isVerticutSeason || renovationHoldActive || verticutHeatDroughtPaused
+                }
+                className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!pendingVerticutLogDate) return;
+                const loggedDate = pendingVerticutLogDate;
+                setLastVerticutDate(loggedDate);
+                setPendingVerticutLogDate(todayStr);
+                void pushLawnTasksToSupabase({ lastVerticutDate: loggedDate }, { quiet: true });
+                setMaintenanceHints((prev) => ({ ...prev, verticut: null }));
+              }}
+              disabled={
+                !isVerticutSeason ||
+                renovationHoldActive ||
+                verticutHeatDroughtPaused ||
+                !pendingVerticutLogDate
+              }
+              className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              🪓 Log Verticut
             </button>
           </div>
         </div>

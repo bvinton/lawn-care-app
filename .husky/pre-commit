@@ -1,0 +1,2 @@
+npx repomix --output "lawn-care-app.txt"
+git add "lawn-care-app.txt"

@@ -1,4 +1,5 @@
 import { addDaysToDateString, makeStepKey } from '../data/LawnPackData.js';
+import { pickLatestIsoDate } from './lawnMaintenanceSync.js';
 import {
   RECENT_PAST_RAIN_DAYS,
   RECENT_RAIN_WET_SOIL_MM,
@@ -6,6 +7,15 @@ import {
 } from './lawnWeather.js';
 
 export const SEED_ESTABLISHMENT_DAYS = 21;
+export const VERTICUT_INTERVAL_DAYS = 14;
+export const VERTICUT_RENOVATION_HOLD_DAYS = 42;
+export const VERTICUT_HEAT_THRESHOLD_C = 25;
+export const VERTICUT_SEASON_START = '04-01';
+export const VERTICUT_SEASON_END = '09-30';
+export const VERTICUT_BLADE_HEIGHT_RULE =
+  'Set blades 1-2mm below current mowing height (must remain above soil line).';
+export const VERTICUT_MOW_PAIRING_NOTE =
+  'Verticut first to lift weeds/runners, then follow up immediately with a regular mow to clean up the debris.';
 
 export function getTodayLondon() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
@@ -14,6 +24,61 @@ export function getTodayLondon() {
 export function isDormantSeasonForDate(todayStr) {
   const month = Number(todayStr.slice(5, 7));
   return month === 12 || month === 1 || month === 2;
+}
+
+/** @param {string} todayStr */
+export function isVerticutSeasonForDate(todayStr) {
+  const monthDay = todayStr.slice(5);
+  return monthDay >= VERTICUT_SEASON_START && monthDay <= VERTICUT_SEASON_END;
+}
+
+/**
+ * @param {string} todayStr
+ * @param {Record<string, string>} userLogs
+ */
+export function getVerticutRenovationState(todayStr, userLogs) {
+  const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
+  const springPrepDate = userLogs[makeStepKey('SPRING', 'prep')] ?? null;
+  const renovationDate = pickLatestIsoDate(springSeedDate, springPrepDate);
+
+  if (!renovationDate) {
+    return {
+      renovationDate: null,
+      renovationHoldActive: false,
+      verticutLockedUntilIso: null,
+    };
+  }
+
+  const daysSinceRenovation = daysBetweenIso(todayStr, renovationDate);
+  const renovationHoldActive = daysSinceRenovation < VERTICUT_RENOVATION_HOLD_DAYS;
+  const verticutLockedUntilIso = renovationHoldActive
+    ? addDaysToDateString(renovationDate, VERTICUT_RENOVATION_HOLD_DAYS)
+    : null;
+
+  return { renovationDate, renovationHoldActive, verticutLockedUntilIso };
+}
+
+/**
+ * Pause verticutting during extreme heat or drought stress.
+ * @param {number | null} currentSoilTemp
+ * @param {number} forecastedRainSumNearTerm
+ * @param {number} [recentPastRainSum]
+ */
+export function isVerticutHeatDroughtPaused(
+  currentSoilTemp,
+  forecastedRainSumNearTerm,
+  recentPastRainSum = 0
+) {
+  if (currentSoilTemp !== null && currentSoilTemp >= VERTICUT_HEAT_THRESHOLD_C) {
+    return true;
+  }
+
+  return (
+    currentSoilTemp !== null &&
+    currentSoilTemp >= 22 &&
+    forecastedRainSumNearTerm < 2 &&
+    recentPastRainSum < RECENT_RAIN_WET_SOIL_MM
+  );
 }
 
 /**
@@ -117,6 +182,7 @@ export function getDynamicWateringDays(
  * @param {string | null} input.springSeedDate
  * @param {boolean} input.seedEstablishmentActive
  * @param {string} input.todayStr
+ * @param {Record<string, string>} [input.userLogs]
  */
 export function getScheduleReason(input) {
   const {
@@ -127,12 +193,14 @@ export function getScheduleReason(input) {
     springSeedDate,
     seedEstablishmentActive,
     todayStr,
+    userLogs = {},
   } = input;
 
   const temp = currentSoilTemp;
   const rainNear = forecastedRainSumNearTerm;
   const mowReasons = [];
   const waterReasons = [];
+  const verticutReasons = [];
 
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
@@ -168,9 +236,30 @@ export function getScheduleReason(input) {
     );
   }
 
+  if (!isVerticutSeasonForDate(todayStr)) {
+    verticutReasons.push('outside active season (Apr 1 – Sep 30)');
+  } else if (temp !== null && temp >= VERTICUT_HEAT_THRESHOLD_C) {
+    verticutReasons.push(
+      `${temp.toFixed(0)}°C soil – paused to protect turf from heat stress`
+    );
+  } else if (
+    temp !== null &&
+    temp >= 22 &&
+    rainNear < 2 &&
+    recentPastRainSum < RECENT_RAIN_WET_SOIL_MM
+  ) {
+    verticutReasons.push('drought-risk conditions – paused until cooler or wetter weather');
+  }
+
+  const { renovationHoldActive } = getVerticutRenovationState(todayStr, userLogs);
+  if (renovationHoldActive) {
+    verticutReasons.push('post-renovation hold – root system still maturing (6–8 weeks)');
+  }
+
   return {
     mow: mowReasons.length > 0 ? mowReasons.join(', ') : null,
     water: waterReasons.length > 0 ? waterReasons.join(', ') : null,
+    verticut: verticutReasons.length > 0 ? verticutReasons.join(', ') : null,
   };
 }
 
@@ -184,6 +273,7 @@ export function getScheduleReason(input) {
  * @param {boolean} input.isNatureProvidingFullSoak
  * @param {string | null} input.lastMowedDate
  * @param {string | null} input.lastWateredDate
+ * @param {string | null} input.lastVerticutDate
  */
 export function buildMaintenanceSchedule(input) {
   const {
@@ -195,6 +285,7 @@ export function buildMaintenanceSchedule(input) {
     isNatureProvidingFullSoak,
     lastMowedDate,
     lastWateredDate,
+    lastVerticutDate,
   } = input;
 
   const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
@@ -242,6 +333,37 @@ export function buildMaintenanceSchedule(input) {
     ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays)
     : null;
 
+  const isVerticutSeason = isVerticutSeasonForDate(todayStr);
+  const { renovationHoldActive, verticutLockedUntilIso } = getVerticutRenovationState(
+    todayStr,
+    userLogs
+  );
+  const verticutHeatDroughtPaused = isVerticutHeatDroughtPaused(
+    currentSoilTemp,
+    forecastedRainSumNearTerm,
+    recentPastRainSum
+  );
+
+  const verticutNaturalNextDueIso = lastVerticutDate
+    ? addDaysToDateString(lastVerticutDate, VERTICUT_INTERVAL_DAYS)
+    : mowingNextDueIso;
+
+  const verticutIntervalElapsed =
+    lastVerticutDate === null ||
+    daysBetweenIso(todayStr, lastVerticutDate) >= VERTICUT_INTERVAL_DAYS;
+
+  let verticutNextDueIso = null;
+  let verticutPairedWithMow = false;
+
+  if (isVerticutSeason && !renovationHoldActive && !verticutHeatDroughtPaused) {
+    if (verticutIntervalElapsed) {
+      verticutNextDueIso = mowingNextDueIso ?? verticutNaturalNextDueIso ?? todayStr;
+      verticutPairedWithMow = Boolean(mowingNextDueIso);
+    } else if (verticutNaturalNextDueIso) {
+      verticutNextDueIso = verticutNaturalNextDueIso;
+    }
+  }
+
   return {
     isDormantSeason,
     isNatureProvidingFullSoak,
@@ -251,5 +373,12 @@ export function buildMaintenanceSchedule(input) {
     wateringNextDueIso,
     dynamicMowingDays,
     dynamicWateringDays,
+    isVerticutSeason,
+    renovationHoldActive,
+    verticutLockedUntilIso,
+    verticutHeatDroughtPaused,
+    verticutNextDueIso,
+    verticutPairedWithMow,
+    verticutIntervalElapsed,
   };
 }
