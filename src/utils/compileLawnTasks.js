@@ -260,16 +260,27 @@ export function compilePackStepTasks({ todayStr, userLogs, pendingDates }) {
 
   for (let i = 0; i <= workflowIndex; i++) {
     const seasonKey = SEASON_ORDER[i];
-    if (isSeasonPackComplete(seasonKey, userLogs)) {
-      continue;
-    }
-
+    const seasonComplete = isSeasonPackComplete(seasonKey, userLogs);
     const anchor = getSeasonAnchorDate(seasonKey, userLogs, pendingDates);
     const seasonPending = cascadeSeasonDates(seasonKey, anchor, userLogs, pendingDates);
 
     for (const step of SEASONS[seasonKey].steps) {
       const logKey = makeStepKey(seasonKey, step.id);
       const completedDate = userLogs[logKey] ?? null;
+
+      if (seasonComplete) {
+        if (!completedDate) continue;
+        compiledTasks.push({
+          id: `lawn-pack-${seasonKey}-${step.id}`,
+          title: step.label,
+          dueDate: completedDate,
+          status: 'completed',
+          module: 'lawn',
+          completedDate,
+        });
+        continue;
+      }
+
       const dueDate = completedDate ?? seasonPending[step.id];
       if (!dueDate) continue;
 

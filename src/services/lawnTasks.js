@@ -464,11 +464,20 @@ export async function deleteLawnTaskByName(taskName) {
  */
 export async function deleteStaleLawnTasks(compiledTasks) {
   const activeNames = new Set(compiledTasks.map((task) => task.title));
-  const existingByName = await fetchLawnTaskIdsByName();
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, task_name, is_completed')
+    .eq('app_source', LAWN_APP_SOURCE);
 
-  for (const [taskName, taskId] of existingByName.entries()) {
-    if (!activeNames.has(taskName)) {
-      await deleteLawnTask(taskId);
-    }
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+
+  for (const row of data ?? []) {
+    if (activeNames.has(row.task_name)) continue;
+    // Keep completed rows for Done-tab history even if compile export changes.
+    if (row.is_completed) continue;
+    await deleteLawnTask(row.id);
   }
 }

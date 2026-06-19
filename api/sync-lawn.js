@@ -22565,20 +22565,6 @@ async function syncLawnTasksToSupabase(compiledTasks, maintenance = {}, todayStr
     console.warn("[Lawn Care] Stale task cleanup skipped:", error);
   }
 }
-async function fetchLawnTaskIdsByName() {
-  const supabase = requireSupabase();
-  const { data, error } = await supabase.from("tasks").select("id, task_name").eq("app_source", LAWN_APP_SOURCE);
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
-  }
-  const byName = /* @__PURE__ */ new Map();
-  for (const row of data ?? []) {
-    if (!byName.has(row.task_name)) {
-      byName.set(row.task_name, row.id);
-    }
-  }
-  return byName;
-}
 async function fetchLawnTasksForInboundSync() {
   const supabase = requireSupabase();
   let result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
@@ -22599,11 +22585,15 @@ async function deleteLawnTask(taskId) {
 }
 async function deleteStaleLawnTasks(compiledTasks) {
   const activeNames = new Set(compiledTasks.map((task) => task.title));
-  const existingByName = await fetchLawnTaskIdsByName();
-  for (const [taskName, taskId] of existingByName.entries()) {
-    if (!activeNames.has(taskName)) {
-      await deleteLawnTask(taskId);
-    }
+  const supabase = requireSupabase();
+  const { data, error } = await supabase.from("tasks").select("id, task_name, is_completed").eq("app_source", LAWN_APP_SOURCE);
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+  for (const row of data ?? []) {
+    if (activeNames.has(row.task_name)) continue;
+    if (row.is_completed) continue;
+    await deleteLawnTask(row.id);
   }
 }
 
@@ -23351,14 +23341,24 @@ function compilePackStepTasks({ todayStr, userLogs, pendingDates }) {
   const compiledTasks = [];
   for (let i = 0; i <= workflowIndex; i++) {
     const seasonKey = SEASON_ORDER[i];
-    if (isSeasonPackComplete(seasonKey, userLogs)) {
-      continue;
-    }
+    const seasonComplete = isSeasonPackComplete(seasonKey, userLogs);
     const anchor = getSeasonAnchorDate(seasonKey, userLogs, pendingDates);
     const seasonPending = cascadeSeasonDates(seasonKey, anchor, userLogs, pendingDates);
     for (const step of SEASONS[seasonKey].steps) {
       const logKey = makeStepKey(seasonKey, step.id);
       const completedDate = userLogs[logKey] ?? null;
+      if (seasonComplete) {
+        if (!completedDate) continue;
+        compiledTasks.push({
+          id: `lawn-pack-${seasonKey}-${step.id}`,
+          title: step.label,
+          dueDate: completedDate,
+          status: "completed",
+          module: "lawn",
+          completedDate
+        });
+        continue;
+      }
       const dueDate = completedDate ?? seasonPending[step.id];
       if (!dueDate) continue;
       const status = completedDate ? "completed" : daysBetween(dueDate, todayStr) >= 0 ? "urgent" : "pending";

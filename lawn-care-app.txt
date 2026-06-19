@@ -61,6 +61,7 @@ public/pwa-512x512.png
 public/static.jfif
 README.md
 scripts/bundle-sync-api.mjs
+scripts/check-lawn-tasks.mjs
 scripts/generate-pwa-icons.mjs
 src/App.jsx
 src/components/lawn/LawnCareApp.jsx
@@ -103,9 +104,96 @@ vite.config.js
 <files>
 This section contains the contents of the repository's files.
 
-<file path=".husky/pre-commit">
-npx repomix --output "lawn-care-app.txt"
-git add "lawn-care-app.txt"
+<file path="scripts/check-lawn-tasks.mjs">
+/**
+ * Diagnostic: dumps what lawn task rows exist in Supabase and their
+ * is_completed / last_completed_date values, plus the user_logs from lawn_app_state.
+ *
+ * Run from the project root:
+ *   node scripts/check-lawn-tasks.mjs
+ *
+ * You'll be prompted for your Supabase anon key if VITE_SUPABASE_ANON_KEY
+ * isn't found in a .env.local file.
+ */
+
+import { createInterface } from 'readline';
+import { readFileSync, existsSync } from 'fs';
+
+const SUPABASE_URL = 'https://sbcpszlqycaynyurqfws.supabase.co';
+
+// Try to read the anon key from .env.local
+let anonKey = '';
+for (const envFile of ['.env.local', '.env']) {
+  if (existsSync(envFile)) {
+    const lines = readFileSync(envFile, 'utf8').split('\n');
+    for (const line of lines) {
+      const m = line.match(/^VITE_SUPABASE_ANON_KEY\s*=\s*(.+)/);
+      if (m) { anonKey = m[1].trim(); break; }
+    }
+    if (anonKey) break;
+  }
+}
+
+// Also accept as CLI arg: node check-lawn-tasks.mjs eyJhbG...
+if (!anonKey && process.argv[2]) {
+  anonKey = process.argv[2].trim();
+}
+
+if (!anonKey) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  anonKey = await new Promise(resolve =>
+    rl.question('Paste your Supabase anon key: ', ans => { rl.close(); resolve(ans.trim()); })
+  );
+}
+
+async function supabaseGet(path) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+      Accept: 'application/json',
+    },
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+console.log('\n--- lawn_app_state user_logs ---');
+try {
+  const state = await supabaseGet(`lawn_app_state?id=eq.default&select=user_logs`);
+  const logs = state[0]?.user_logs ?? {};
+  const springKeys = Object.entries(logs)
+    .filter(([k]) => k.startsWith('SPRING:') || k.startsWith('SUMMER:') || k.startsWith('AUTUMN:'));
+  if (springKeys.length === 0) {
+    console.log('No pack step logs found in user_logs.');
+  } else {
+    for (const [k, v] of springKeys.sort()) {
+      console.log(`  ${k} = ${v}`);
+    }
+  }
+} catch (e) {
+  console.error('Error reading lawn_app_state:', e.message);
+}
+
+console.log('\n--- tasks table (lawn, all rows) ---');
+try {
+  const tasks = await supabaseGet(
+    `tasks?app_source=eq.lawn&select=task_name,due_date,is_completed,last_completed_date&order=due_date.asc&limit=100`
+  );
+  if (tasks.length === 0) {
+    console.log('No rows found.');
+  } else {
+    for (const t of tasks) {
+      const lcd = t.last_completed_date ?? '(null)';
+      const done = t.is_completed ? '✓' : '○';
+      console.log(`  ${done}  last_completed=${lcd.padEnd(12)}  due=${t.due_date}  ${t.task_name}`);
+    }
+  }
+} catch (e) {
+  console.error('Error reading tasks:', e.message);
+}
+
+console.log('\nDone. If Spring pack rows are missing, open the Lawn Care App and press Sync.');
 </file>
 
 <file path=".cursor/rules/git-workflow.mdc">
@@ -140,6 +228,11 @@ C:\Projects\push-all.ps1 "describe what changed"
 
 - Always push to `main` (Tasks App) / `master` (Lawn Care App) — never create branches unless explicitly asked.
 - If only one repo has changes the script skips the other automatically.
+</file>
+
+<file path=".husky/pre-commit">
+npx repomix --output "lawn-care-app.txt"
+git add "lawn-care-app.txt"
 </file>
 
 <file path="jsconfig.json">
@@ -1943,6 +2036,153 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 </file>
 
+<file path="vercel.json">
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "functions": {
+    "api/sync-lawn.js": {
+      "maxDuration": 60
+    }
+  }
+}
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>The Lawn Pack Companion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+</file>
+
+<file path="src/lib/supabase.js">
+import { createClient } from '@supabase/supabase-js';
+
+/** @type {import('@supabase/supabase-js').SupabaseClient | null} */
+let browserClient = null;
+
+/** @type {import('@supabase/supabase-js').SupabaseClient | null} */
+let serverClient = null;
+
+function isServerRuntime() {
+  return typeof window === 'undefined';
+}
+
+/**
+ * Initialise Supabase for Vercel /api routes (service role when set).
+ */
+export function initServerSupabase() {
+  if (serverClient) {
+    return serverClient;
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      'Missing SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_* fallbacks) on the server.',
+    );
+  }
+
+  serverClient = createClient(supabaseUrl, supabaseKey);
+  return serverClient;
+}
+
+export function getSupabase() {
+  if (isServerRuntime()) {
+    try {
+      return initServerSupabase();
+    } catch {
+      return null;
+    }
+  }
+
+  if (browserClient) {
+    return browserClient;
+  }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return null;
+  }
+
+  browserClient = createClient(supabaseUrl, supabaseAnonKey);
+  return browserClient;
+}
+
+/**
+ * @param {{ server?: boolean }} [options]
+ */
+export function getSupabaseConfigError(options = {}) {
+  const supabaseUrl = isServerRuntime() || options.server
+    ? process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+    : import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = isServerRuntime() || options.server
+    ? process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+    : import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (options.server || isServerRuntime()) {
+      return 'Missing server Supabase env: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_* fallbacks).';
+    }
+    if (import.meta.env.PROD) {
+      return 'Missing Supabase credentials on this deployment. In Vercel → Project → Settings → Environment Variables, add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for Production, then redeploy.';
+    }
+    return 'Missing Supabase credentials. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local, then restart the dev server.';
+  }
+
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(supabaseUrl)) {
+    return `VITE_SUPABASE_URL looks invalid: "${supabaseUrl}". Use https://<project-ref>.supabase.co from Supabase Dashboard → Project Settings → API.`;
+  }
+
+  return null;
+}
+
+/** @param {unknown} error */
+export function formatSupabaseSyncError(error) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String(/** @type {{ message: unknown }} */ (error).message)
+        : String(error);
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '(not set)';
+
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(message)) {
+    return [
+      'Cannot reach Supabase (network error).',
+      `Configured URL: ${supabaseUrl}`,
+      'Confirm the project ref in Supabase Dashboard → Project Settings → API, update .env.local, then restart npm run dev.',
+      'Also check the project is not paused and your network allows supabase.co.',
+    ].join(' ');
+  }
+
+  return message;
+}
+</file>
+
 <file path="src/services/lawnTaskInboundSync.js">
 import { SEASONS, makeStepKey } from '../data/LawnPackData';
 import { MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME, pickLatestIsoDate } from './lawnMaintenanceSync';
@@ -2187,41 +2427,67 @@ export function applyLawnFocusFromUrl(options = {}) {
 }
 </file>
 
-<file path="vercel.json">
-{
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
-  "functions": {
-    "api/sync-lawn.js": {
-      "maxDuration": 60
-    }
-  }
-}
-</file>
+<file path="vite.config.js">
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 
-<file path="index.html">
-<!doctype html>
-<html lang="en-GB">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#14532d" />
-    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>The Lawn Pack Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'The Lawn Pack Companion',
+        short_name: 'Lawn Pack',
+        description:
+          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
+        theme_color: '#14532d',
+        background_color: '#f3f4f6',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
+        lang: 'en-GB',
+        categories: ['lifestyle', 'utilities'],
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'open-meteo-forecast',
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
+            },
+          },
+        ],
+      },
+    }),
+  ],
+});
 </file>
 
 <file path="src/components/lawn/MaintenancePanel.jsx">
@@ -3096,211 +3362,6 @@ export default function MaintenancePanel({ app }) {
 }
 </file>
 
-<file path="src/lib/supabase.js">
-import { createClient } from '@supabase/supabase-js';
-
-/** @type {import('@supabase/supabase-js').SupabaseClient | null} */
-let browserClient = null;
-
-/** @type {import('@supabase/supabase-js').SupabaseClient | null} */
-let serverClient = null;
-
-function isServerRuntime() {
-  return typeof window === 'undefined';
-}
-
-/**
- * Initialise Supabase for Vercel /api routes (service role when set).
- */
-export function initServerSupabase() {
-  if (serverClient) {
-    return serverClient;
-  }
-
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
-      'Missing SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_* fallbacks) on the server.',
-    );
-  }
-
-  serverClient = createClient(supabaseUrl, supabaseKey);
-  return serverClient;
-}
-
-export function getSupabase() {
-  if (isServerRuntime()) {
-    try {
-      return initServerSupabase();
-    } catch {
-      return null;
-    }
-  }
-
-  if (browserClient) {
-    return browserClient;
-  }
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return null;
-  }
-
-  browserClient = createClient(supabaseUrl, supabaseAnonKey);
-  return browserClient;
-}
-
-/**
- * @param {{ server?: boolean }} [options]
- */
-export function getSupabaseConfigError(options = {}) {
-  const supabaseUrl = isServerRuntime() || options.server
-    ? process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-    : import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = isServerRuntime() || options.server
-    ? process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
-    : import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    if (options.server || isServerRuntime()) {
-      return 'Missing server Supabase env: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_* fallbacks).';
-    }
-    if (import.meta.env.PROD) {
-      return 'Missing Supabase credentials on this deployment. In Vercel → Project → Settings → Environment Variables, add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for Production, then redeploy.';
-    }
-    return 'Missing Supabase credentials. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local, then restart the dev server.';
-  }
-
-  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(supabaseUrl)) {
-    return `VITE_SUPABASE_URL looks invalid: "${supabaseUrl}". Use https://<project-ref>.supabase.co from Supabase Dashboard → Project Settings → API.`;
-  }
-
-  return null;
-}
-
-/** @param {unknown} error */
-export function formatSupabaseSyncError(error) {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'object' && error !== null && 'message' in error
-        ? String(/** @type {{ message: unknown }} */ (error).message)
-        : String(error);
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '(not set)';
-
-  if (/failed to fetch|networkerror|load failed|network request failed/i.test(message)) {
-    return [
-      'Cannot reach Supabase (network error).',
-      `Configured URL: ${supabaseUrl}`,
-      'Confirm the project ref in Supabase Dashboard → Project Settings → API, update .env.local, then restart npm run dev.',
-      'Also check the project is not paused and your network allows supabase.co.',
-    ].join(' ');
-  }
-
-  return message;
-}
-</file>
-
-<file path="vite.config.js">
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
-
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'The Lawn Pack Companion',
-        short_name: 'Lawn Pack',
-        description:
-          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
-        theme_color: '#14532d',
-        background_color: '#f3f4f6',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
-        lang: 'en-GB',
-        categories: ['lifestyle', 'utilities'],
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'open-meteo-forecast',
-              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
-            },
-          },
-        ],
-      },
-    }),
-  ],
-});
-</file>
-
-<file path="package.json">
-{
-  "name": "lawn-care-app",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "prebuild": "node scripts/generate-pwa-icons.mjs && node scripts/bundle-sync-api.mjs",
-    "build": "vite build",
-    "preview": "vite preview",
-    "prepare": "husky"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.106.2",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
-    "husky": "^9.1.7",
-    "postcss": "^8.5.6",
-    "sharp": "^0.34.2",
-    "tailwindcss": "^3.4.17",
-    "vite": "^5.4.19",
-    "vite-plugin-pwa": "^0.21.1"
-  }
-}
-</file>
-
 <file path="src/data/LawnPackData.js">
 // src/data/LawnPackData.js
 
@@ -3813,6 +3874,317 @@ export function getGranularRepeatDate(seasonKey, userLogs) {
   if (!loggedDate) return null;
 
   return addDaysToDateString(loggedDate, firstStep.granularRepeatDays);
+}
+</file>
+
+<file path="src/services/lawnWeather.js">
+import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
+import { resolveWeatherLocation } from './lawnLocation.js';
+
+const LAWN_STATE_ID = 'default';
+
+export const FORECAST_RAIN_DAYS = 7;
+
+/**
+ * @param {number} latitude
+ * @param {number} longitude
+ */
+export function buildOpenMeteoForecastUrl(latitude, longitude) {
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    daily: 'precipitation_sum',
+    hourly: 'soil_temperature_6cm',
+    timezone: 'Europe/London',
+    past_days: String(PAST_RAIN_DAYS),
+    forecast_days: String(FORECAST_RAIN_DAYS),
+  });
+  return `https://api.open-meteo.com/v1/forecast?${params}`;
+}
+
+export const SOAK_DEPTH_MM = 10;
+export const RAIN_THRESHOLD_MM = 5;
+/** Rain in the next few days drives forward-looking adjustments. */
+export const NEAR_TERM_RAIN_DAYS = 3;
+/** Observed rain history from Open-Meteo. */
+export const PAST_RAIN_DAYS = 7;
+/** Recent past days that still keep the soil damp for soak / due decisions. */
+export const RECENT_PAST_RAIN_DAYS = 3;
+export const RECENT_RAIN_WET_SOIL_MM = 5;
+
+/**
+ * @typedef {Object} LawnWeatherSnapshot
+ * @property {number} forecastedRainSum
+ * @property {number} forecastedRainSumNearTerm
+ * @property {number} recentPastRainSum
+ * @property {number} rainCreditMm
+ * @property {number | null} currentSoilTemp
+ * @property {number | null} currentSoilTempMin
+ * @property {boolean} isRainForecasted
+ * @property {boolean} isNatureProvidingFullSoak
+ * @property {boolean} soilRecentlyWet
+ * @property {number} netWaterNeeded
+ * @property {string} fetchedAt
+ * @property {'open-meteo'} source
+ */
+
+/**
+ * @param {Array<number | null> | undefined} precipitationTotals
+ * @param {number} [days]
+ */
+export function sumPrecipitation(precipitationTotals, days = 7) {
+  if (!Array.isArray(precipitationTotals)) return 0;
+  return precipitationTotals.slice(0, days).reduce((sum, mm) => sum + (mm ?? 0), 0);
+}
+
+/**
+ * @param {Array<number | null> | undefined} precipitationTotals
+ * @param {number} [pastDays]
+ * @param {number} [forecastDays]
+ */
+export function splitPrecipitationSeries(
+  precipitationTotals,
+  pastDays = PAST_RAIN_DAYS,
+  forecastDays = FORECAST_RAIN_DAYS
+) {
+  if (!Array.isArray(precipitationTotals) || precipitationTotals.length === 0) {
+    return { past: [], forecast: [] };
+  }
+
+  // Legacy snapshots / forecast-only responses (no past_days in the series).
+  if (precipitationTotals.length < pastDays + 1) {
+    return { past: [], forecast: precipitationTotals.slice(0, forecastDays) };
+  }
+
+  return {
+    past: precipitationTotals.slice(0, pastDays),
+    forecast: precipitationTotals.slice(pastDays, pastDays + forecastDays),
+  };
+}
+
+/**
+ * @param {number} recentPastRainSum
+ * @param {number} forecastedRainSumNearTerm
+ */
+export function computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm) {
+  const pastCredit = Math.min(SOAK_DEPTH_MM, recentPastRainSum);
+  const rainCreditMm = Math.min(SOAK_DEPTH_MM, pastCredit + forecastedRainSumNearTerm);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
+  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
+  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
+
+  return {
+    rainCreditMm,
+    netWaterNeeded,
+    isNatureProvidingFullSoak,
+    soilRecentlyWet,
+  };
+}
+
+/**
+ * @param {Partial<LawnWeatherSnapshot>} weather
+ */
+export function getEffectiveNearTermRain(weather) {
+  if (typeof weather.forecastedRainSumNearTerm === 'number') {
+    return weather.forecastedRainSumNearTerm;
+  }
+  if (typeof weather.forecastedRainSum === 'number') {
+    return (weather.forecastedRainSum / FORECAST_RAIN_DAYS) * NEAR_TERM_RAIN_DAYS;
+  }
+  return 0;
+}
+
+/**
+ * @param {Partial<LawnWeatherSnapshot>} weather
+ */
+export function getEffectiveRecentPastRain(weather) {
+  if (typeof weather.recentPastRainSum === 'number') {
+    return weather.recentPastRainSum;
+  }
+  return 0;
+}
+
+/**
+ * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
+ */
+export function getTodayMaxSoilTemp(data) {
+  const hourlyTemps = data.hourly?.soil_temperature_6cm;
+  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
+
+  return hourlyTemps.slice(0, 24).reduce((max, temp) => {
+    if (temp == null) return max;
+    return max === null ? temp : Math.max(max, temp);
+  }, /** @type {number | null} */ (null));
+}
+
+/**
+ * @param {{ hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
+ */
+export function getTodayMinSoilTemp(data) {
+  const hourlyTemps = data.hourly?.soil_temperature_6cm;
+  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
+
+  return hourlyTemps.slice(0, 24).reduce((min, temp) => {
+    if (temp == null) return min;
+    return min === null ? temp : Math.min(min, temp);
+  }, /** @type {number | null} */ (null));
+}
+
+/**
+ * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
+ * @returns {LawnWeatherSnapshot}
+ */
+export function buildWeatherSnapshotFromOpenMeteo(data) {
+  const precipitationTotals = data?.daily?.precipitation_sum;
+  const { past, forecast } = splitPrecipitationSeries(precipitationTotals);
+  const recentPastRainSum = sumPrecipitation(
+    past.slice(-RECENT_PAST_RAIN_DAYS),
+    RECENT_PAST_RAIN_DAYS
+  );
+  const forecastedRainSumNearTerm = sumPrecipitation(forecast, NEAR_TERM_RAIN_DAYS);
+  const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
+  const currentSoilTemp = getTodayMaxSoilTemp(data);
+  const currentSoilTempMin = getTodayMinSoilTemp(data);
+  const watering = computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm);
+
+  return {
+    forecastedRainSum,
+    forecastedRainSumNearTerm,
+    recentPastRainSum,
+    rainCreditMm: watering.rainCreditMm,
+    currentSoilTemp,
+    currentSoilTempMin,
+    isRainForecasted:
+      forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM || recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM,
+    isNatureProvidingFullSoak: watering.isNatureProvidingFullSoak,
+    soilRecentlyWet: watering.soilRecentlyWet,
+    netWaterNeeded: watering.netWaterNeeded,
+    fetchedAt: new Date().toISOString(),
+    source: 'open-meteo',
+  };
+}
+
+/**
+ * @param {import('./lawnLocation.js').LawnWeatherLocation | null | undefined} [location]
+ * @returns {Promise<LawnWeatherSnapshot>}
+ */
+export async function fetchLawnWeatherFromOpenMeteo(location) {
+  const resolved = resolveWeatherLocation(location);
+  const response = await fetch(
+    buildOpenMeteoForecastUrl(resolved.latitude, resolved.longitude)
+  );
+  if (!response.ok) {
+    throw new Error('Weather forecast unavailable');
+  }
+  const data = await response.json();
+  return buildWeatherSnapshotFromOpenMeteo(data);
+}
+
+/**
+ * @param {LawnWeatherSnapshot} snapshot
+ * @returns {Promise<boolean>}
+ */
+export async function saveLawnWeatherSnapshot(snapshot) {
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase client could not be initialised.');
+  }
+
+  const { error } = await supabase.from('lawn_app_state').upsert(
+    {
+      id: LAWN_STATE_ID,
+      weather_snapshot: snapshot,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' }
+  );
+
+  if (error) {
+    if (/weather_snapshot|42703|PGRST204|PGRST205|schema cache/i.test(error.message)) {
+      return false;
+    }
+    throw new Error(formatSupabaseSyncError(error));
+  }
+
+  return true;
+}
+
+/** @returns {Promise<LawnWeatherSnapshot | null>} */
+export async function fetchLawnWeatherSnapshotFromSupabase() {
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase client could not be initialised.');
+  }
+
+  const { data, error } = await supabase
+    .from('lawn_app_state')
+    .select('weather_snapshot')
+    .eq('id', LAWN_STATE_ID)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === 'PGRST205' || /lawn_app_state|weather_snapshot/i.test(error.message)) {
+      return null;
+    }
+    throw new Error(formatSupabaseSyncError(error));
+  }
+
+  const raw = data?.weather_snapshot;
+  if (!raw || typeof raw !== 'object') return null;
+
+  const snap = /** @type {LawnWeatherSnapshot} */ (raw);
+  if (typeof snap.forecastedRainSum !== 'number') return null;
+
+  return snap;
+}
+
+/** @param {string | undefined} fetchedAt @param {number} maxAgeHours */
+export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
+  if (!fetchedAt) return false;
+  const ageMs = Date.now() - new Date(fetchedAt).getTime();
+  return ageMs >= 0 && ageMs < maxAgeHours * 60 * 60 * 1000;
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "lawn-care-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "node scripts/generate-pwa-icons.mjs && node scripts/bundle-sync-api.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "husky": "^9.1.7",
+    "postcss": "^8.5.6",
+    "sharp": "^0.34.2",
+    "tailwindcss": "^3.4.17",
+    "vite": "^5.4.19",
+    "vite-plugin-pwa": "^0.21.1"
+  }
 }
 </file>
 
@@ -5382,285 +5754,6 @@ export async function runLawnCloudSync() {
 }
 </file>
 
-<file path="src/services/lawnWeather.js">
-import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
-import { resolveWeatherLocation } from './lawnLocation.js';
-
-const LAWN_STATE_ID = 'default';
-
-export const FORECAST_RAIN_DAYS = 7;
-
-/**
- * @param {number} latitude
- * @param {number} longitude
- */
-export function buildOpenMeteoForecastUrl(latitude, longitude) {
-  const params = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
-    daily: 'precipitation_sum',
-    hourly: 'soil_temperature_6cm',
-    timezone: 'Europe/London',
-    past_days: String(PAST_RAIN_DAYS),
-    forecast_days: String(FORECAST_RAIN_DAYS),
-  });
-  return `https://api.open-meteo.com/v1/forecast?${params}`;
-}
-
-export const SOAK_DEPTH_MM = 10;
-export const RAIN_THRESHOLD_MM = 5;
-/** Rain in the next few days drives forward-looking adjustments. */
-export const NEAR_TERM_RAIN_DAYS = 3;
-/** Observed rain history from Open-Meteo. */
-export const PAST_RAIN_DAYS = 7;
-/** Recent past days that still keep the soil damp for soak / due decisions. */
-export const RECENT_PAST_RAIN_DAYS = 3;
-export const RECENT_RAIN_WET_SOIL_MM = 5;
-
-/**
- * @typedef {Object} LawnWeatherSnapshot
- * @property {number} forecastedRainSum
- * @property {number} forecastedRainSumNearTerm
- * @property {number} recentPastRainSum
- * @property {number} rainCreditMm
- * @property {number | null} currentSoilTemp
- * @property {number | null} currentSoilTempMin
- * @property {boolean} isRainForecasted
- * @property {boolean} isNatureProvidingFullSoak
- * @property {boolean} soilRecentlyWet
- * @property {number} netWaterNeeded
- * @property {string} fetchedAt
- * @property {'open-meteo'} source
- */
-
-/**
- * @param {Array<number | null> | undefined} precipitationTotals
- * @param {number} [days]
- */
-export function sumPrecipitation(precipitationTotals, days = 7) {
-  if (!Array.isArray(precipitationTotals)) return 0;
-  return precipitationTotals.slice(0, days).reduce((sum, mm) => sum + (mm ?? 0), 0);
-}
-
-/**
- * @param {Array<number | null> | undefined} precipitationTotals
- * @param {number} [pastDays]
- * @param {number} [forecastDays]
- */
-export function splitPrecipitationSeries(
-  precipitationTotals,
-  pastDays = PAST_RAIN_DAYS,
-  forecastDays = FORECAST_RAIN_DAYS
-) {
-  if (!Array.isArray(precipitationTotals) || precipitationTotals.length === 0) {
-    return { past: [], forecast: [] };
-  }
-
-  // Legacy snapshots / forecast-only responses (no past_days in the series).
-  if (precipitationTotals.length < pastDays + 1) {
-    return { past: [], forecast: precipitationTotals.slice(0, forecastDays) };
-  }
-
-  return {
-    past: precipitationTotals.slice(0, pastDays),
-    forecast: precipitationTotals.slice(pastDays, pastDays + forecastDays),
-  };
-}
-
-/**
- * @param {number} recentPastRainSum
- * @param {number} forecastedRainSumNearTerm
- */
-export function computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm) {
-  const pastCredit = Math.min(SOAK_DEPTH_MM, recentPastRainSum);
-  const rainCreditMm = Math.min(SOAK_DEPTH_MM, pastCredit + forecastedRainSumNearTerm);
-  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
-  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
-  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
-
-  return {
-    rainCreditMm,
-    netWaterNeeded,
-    isNatureProvidingFullSoak,
-    soilRecentlyWet,
-  };
-}
-
-/**
- * @param {Partial<LawnWeatherSnapshot>} weather
- */
-export function getEffectiveNearTermRain(weather) {
-  if (typeof weather.forecastedRainSumNearTerm === 'number') {
-    return weather.forecastedRainSumNearTerm;
-  }
-  if (typeof weather.forecastedRainSum === 'number') {
-    return (weather.forecastedRainSum / FORECAST_RAIN_DAYS) * NEAR_TERM_RAIN_DAYS;
-  }
-  return 0;
-}
-
-/**
- * @param {Partial<LawnWeatherSnapshot>} weather
- */
-export function getEffectiveRecentPastRain(weather) {
-  if (typeof weather.recentPastRainSum === 'number') {
-    return weather.recentPastRainSum;
-  }
-  return 0;
-}
-
-/**
- * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
- */
-export function getTodayMaxSoilTemp(data) {
-  const hourlyTemps = data.hourly?.soil_temperature_6cm;
-  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
-
-  return hourlyTemps.slice(0, 24).reduce((max, temp) => {
-    if (temp == null) return max;
-    return max === null ? temp : Math.max(max, temp);
-  }, /** @type {number | null} */ (null));
-}
-
-/**
- * @param {{ hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
- */
-export function getTodayMinSoilTemp(data) {
-  const hourlyTemps = data.hourly?.soil_temperature_6cm;
-  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
-
-  return hourlyTemps.slice(0, 24).reduce((min, temp) => {
-    if (temp == null) return min;
-    return min === null ? temp : Math.min(min, temp);
-  }, /** @type {number | null} */ (null));
-}
-
-/**
- * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
- * @returns {LawnWeatherSnapshot}
- */
-export function buildWeatherSnapshotFromOpenMeteo(data) {
-  const precipitationTotals = data?.daily?.precipitation_sum;
-  const { past, forecast } = splitPrecipitationSeries(precipitationTotals);
-  const recentPastRainSum = sumPrecipitation(
-    past.slice(-RECENT_PAST_RAIN_DAYS),
-    RECENT_PAST_RAIN_DAYS
-  );
-  const forecastedRainSumNearTerm = sumPrecipitation(forecast, NEAR_TERM_RAIN_DAYS);
-  const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
-  const currentSoilTemp = getTodayMaxSoilTemp(data);
-  const currentSoilTempMin = getTodayMinSoilTemp(data);
-  const watering = computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm);
-
-  return {
-    forecastedRainSum,
-    forecastedRainSumNearTerm,
-    recentPastRainSum,
-    rainCreditMm: watering.rainCreditMm,
-    currentSoilTemp,
-    currentSoilTempMin,
-    isRainForecasted:
-      forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM || recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM,
-    isNatureProvidingFullSoak: watering.isNatureProvidingFullSoak,
-    soilRecentlyWet: watering.soilRecentlyWet,
-    netWaterNeeded: watering.netWaterNeeded,
-    fetchedAt: new Date().toISOString(),
-    source: 'open-meteo',
-  };
-}
-
-/**
- * @param {import('./lawnLocation.js').LawnWeatherLocation | null | undefined} [location]
- * @returns {Promise<LawnWeatherSnapshot>}
- */
-export async function fetchLawnWeatherFromOpenMeteo(location) {
-  const resolved = resolveWeatherLocation(location);
-  const response = await fetch(
-    buildOpenMeteoForecastUrl(resolved.latitude, resolved.longitude)
-  );
-  if (!response.ok) {
-    throw new Error('Weather forecast unavailable');
-  }
-  const data = await response.json();
-  return buildWeatherSnapshotFromOpenMeteo(data);
-}
-
-/**
- * @param {LawnWeatherSnapshot} snapshot
- * @returns {Promise<boolean>}
- */
-export async function saveLawnWeatherSnapshot(snapshot) {
-  const configError = getSupabaseConfigError();
-  if (configError) {
-    throw new Error(configError);
-  }
-
-  const supabase = getSupabase();
-  if (!supabase) {
-    throw new Error('Supabase client could not be initialised.');
-  }
-
-  const { error } = await supabase.from('lawn_app_state').upsert(
-    {
-      id: LAWN_STATE_ID,
-      weather_snapshot: snapshot,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'id' }
-  );
-
-  if (error) {
-    if (/weather_snapshot|42703|PGRST204|PGRST205|schema cache/i.test(error.message)) {
-      return false;
-    }
-    throw new Error(formatSupabaseSyncError(error));
-  }
-
-  return true;
-}
-
-/** @returns {Promise<LawnWeatherSnapshot | null>} */
-export async function fetchLawnWeatherSnapshotFromSupabase() {
-  const configError = getSupabaseConfigError();
-  if (configError) {
-    throw new Error(configError);
-  }
-
-  const supabase = getSupabase();
-  if (!supabase) {
-    throw new Error('Supabase client could not be initialised.');
-  }
-
-  const { data, error } = await supabase
-    .from('lawn_app_state')
-    .select('weather_snapshot')
-    .eq('id', LAWN_STATE_ID)
-    .maybeSingle();
-
-  if (error) {
-    if (error.code === 'PGRST205' || /lawn_app_state|weather_snapshot/i.test(error.message)) {
-      return null;
-    }
-    throw new Error(formatSupabaseSyncError(error));
-  }
-
-  const raw = data?.weather_snapshot;
-  if (!raw || typeof raw !== 'object') return null;
-
-  const snap = /** @type {LawnWeatherSnapshot} */ (raw);
-  if (typeof snap.forecastedRainSum !== 'number') return null;
-
-  return snap;
-}
-
-/** @param {string | undefined} fetchedAt @param {number} maxAgeHours */
-export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
-  if (!fetchedAt) return false;
-  const ageMs = Date.now() - new Date(fetchedAt).getTime();
-  return ageMs >= 0 && ageMs < maxAgeHours * 60 * 60 * 1000;
-}
-</file>
-
 <file path="src/services/lawnAppState.js">
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { pickLatestIsoDate } from './lawnMaintenanceSync';
@@ -6508,16 +6601,27 @@ export function compilePackStepTasks({ todayStr, userLogs, pendingDates }) {
 
   for (let i = 0; i <= workflowIndex; i++) {
     const seasonKey = SEASON_ORDER[i];
-    if (isSeasonPackComplete(seasonKey, userLogs)) {
-      continue;
-    }
-
+    const seasonComplete = isSeasonPackComplete(seasonKey, userLogs);
     const anchor = getSeasonAnchorDate(seasonKey, userLogs, pendingDates);
     const seasonPending = cascadeSeasonDates(seasonKey, anchor, userLogs, pendingDates);
 
     for (const step of SEASONS[seasonKey].steps) {
       const logKey = makeStepKey(seasonKey, step.id);
       const completedDate = userLogs[logKey] ?? null;
+
+      if (seasonComplete) {
+        if (!completedDate) continue;
+        compiledTasks.push({
+          id: `lawn-pack-${seasonKey}-${step.id}`,
+          title: step.label,
+          dueDate: completedDate,
+          status: 'completed',
+          module: 'lawn',
+          completedDate,
+        });
+        continue;
+      }
+
       const dueDate = completedDate ?? seasonPending[step.id];
       if (!dueDate) continue;
 
@@ -7254,12 +7358,21 @@ export async function deleteLawnTaskByName(taskName) {
  */
 export async function deleteStaleLawnTasks(compiledTasks) {
   const activeNames = new Set(compiledTasks.map((task) => task.title));
-  const existingByName = await fetchLawnTaskIdsByName();
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, task_name, is_completed')
+    .eq('app_source', LAWN_APP_SOURCE);
 
-  for (const [taskName, taskId] of existingByName.entries()) {
-    if (!activeNames.has(taskName)) {
-      await deleteLawnTask(taskId);
-    }
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+
+  for (const row of data ?? []) {
+    if (activeNames.has(row.task_name)) continue;
+    // Keep completed rows for Done-tab history even if compile export changes.
+    if (row.is_completed) continue;
+    await deleteLawnTask(row.id);
   }
 }
 </file>
@@ -29832,20 +29945,6 @@ async function syncLawnTasksToSupabase(compiledTasks, maintenance = {}, todayStr
     console.warn("[Lawn Care] Stale task cleanup skipped:", error);
   }
 }
-async function fetchLawnTaskIdsByName() {
-  const supabase = requireSupabase();
-  const { data, error } = await supabase.from("tasks").select("id, task_name").eq("app_source", LAWN_APP_SOURCE);
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
-  }
-  const byName = /* @__PURE__ */ new Map();
-  for (const row of data ?? []) {
-    if (!byName.has(row.task_name)) {
-      byName.set(row.task_name, row.id);
-    }
-  }
-  return byName;
-}
 async function fetchLawnTasksForInboundSync() {
   const supabase = requireSupabase();
   let result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
@@ -29866,11 +29965,15 @@ async function deleteLawnTask(taskId) {
 }
 async function deleteStaleLawnTasks(compiledTasks) {
   const activeNames = new Set(compiledTasks.map((task) => task.title));
-  const existingByName = await fetchLawnTaskIdsByName();
-  for (const [taskName, taskId] of existingByName.entries()) {
-    if (!activeNames.has(taskName)) {
-      await deleteLawnTask(taskId);
-    }
+  const supabase = requireSupabase();
+  const { data, error } = await supabase.from("tasks").select("id, task_name, is_completed").eq("app_source", LAWN_APP_SOURCE);
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+  for (const row of data ?? []) {
+    if (activeNames.has(row.task_name)) continue;
+    if (row.is_completed) continue;
+    await deleteLawnTask(row.id);
   }
 }
 
@@ -30618,14 +30721,24 @@ function compilePackStepTasks({ todayStr, userLogs, pendingDates }) {
   const compiledTasks = [];
   for (let i = 0; i <= workflowIndex; i++) {
     const seasonKey = SEASON_ORDER[i];
-    if (isSeasonPackComplete(seasonKey, userLogs)) {
-      continue;
-    }
+    const seasonComplete = isSeasonPackComplete(seasonKey, userLogs);
     const anchor = getSeasonAnchorDate(seasonKey, userLogs, pendingDates);
     const seasonPending = cascadeSeasonDates(seasonKey, anchor, userLogs, pendingDates);
     for (const step of SEASONS[seasonKey].steps) {
       const logKey = makeStepKey(seasonKey, step.id);
       const completedDate = userLogs[logKey] ?? null;
+      if (seasonComplete) {
+        if (!completedDate) continue;
+        compiledTasks.push({
+          id: `lawn-pack-${seasonKey}-${step.id}`,
+          title: step.label,
+          dueDate: completedDate,
+          status: "completed",
+          module: "lawn",
+          completedDate
+        });
+        continue;
+      }
       const dueDate = completedDate ?? seasonPending[step.id];
       if (!dueDate) continue;
       const status = completedDate ? "completed" : daysBetween(dueDate, todayStr) >= 0 ? "urgent" : "pending";
