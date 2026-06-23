@@ -223,7 +223,8 @@ export function compileLawnTasks({
     const waterStatus = taskStatusFromDue(waterDueDate);
     const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
     const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
-    const mistingReason = `${baseReason}Light surface misting (${mistingMins > 0 ? mistingMins + ' mins' : 'divide daily duration by 3'})`;
+    const perSessionText = mistingMins > 0 ? `Run for ${mistingMins} minutes` : 'divide daily duration by 3';
+    const mistingReason = `${baseReason}Light surface misting · ${perSessionText}`;
 
     compiledTasks.push({
       id: 'lawn-water-morning',

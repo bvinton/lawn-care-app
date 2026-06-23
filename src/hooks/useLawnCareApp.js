@@ -202,9 +202,6 @@ export function useLawnCareApp() {
 
   const activeEquipment = EQUIPMENT_OPTIONS[selectedEquipment];
   const activeSprinkler = SPRINKLER_OPTIONS[selectedSprinkler];
-  const dynamicMinutes = Math.round(
-    (netWaterNeeded / SPRINKLER_OPTIONS[selectedSprinkler].ratePerHour) * 60
-  );
   const activeSeason = SEASONS[currentSeason];
   const today = startOfDay(new Date());
   const todayStr = formatInputDate(today);
@@ -224,6 +221,11 @@ export function useLawnCareApp() {
   const seedDaysRemaining = seedEstablishmentActive
     ? SEED_ESTABLISHMENT_DAYS - (daysSinceSeed ?? 0)
     : 0;
+
+  const effectiveNetWaterNeeded = seedEstablishmentActive ? 2.5 : netWaterNeeded;
+  const dynamicMinutes = Math.round(
+    (effectiveNetWaterNeeded / SPRINKLER_OPTIONS[selectedSprinkler].ratePerHour) * 60
+  );
 
   const weedolLoggedDate = userLogs[makeStepKey('SPRING', 'weedol')] ?? null;
   const weedolDaysElapsed = weedolLoggedDate ? daysBetween(weedolLoggedDate, today) : 0;
