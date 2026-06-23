@@ -22390,7 +22390,7 @@ function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenance = {})
       }
       continue;
     }
-    if (row.task_name === WATER_TASK_NAME) {
+    if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith("Water lawn (")) {
       const merged = pickLatestIsoDate(lastWateredDate, completionDate);
       if (merged !== lastWateredDate) {
         lastWateredDate = merged;
@@ -22453,7 +22453,7 @@ function isSyntheticMaintenanceComplete(task) {
   );
 }
 function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
-  const localLast = task.title === MOW_TASK_NAME ? maintenance.lastMowedDate : task.title === WATER_TASK_NAME ? maintenance.lastWateredDate : task.title === VERTICUT_TASK_NAME ? maintenance.lastVerticutDate : null;
+  const localLast = task.title === MOW_TASK_NAME ? maintenance.lastMowedDate : task.title === WATER_TASK_NAME || task.title.startsWith("Water lawn (") ? maintenance.lastWateredDate : task.title === VERTICUT_TASK_NAME ? maintenance.lastVerticutDate : null;
   let lastCompleted = localLast ?? null;
   for (const existing of existingRows ?? []) {
     lastCompleted = pickLatestIsoDate(
@@ -22656,7 +22656,7 @@ function inferMaintenanceDatesFromRows(rows, todayStr) {
     if (!inferred) continue;
     if (row.task_name === MOW_TASK_NAME) {
       lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
-    } else if (row.task_name === WATER_TASK_NAME) {
+    } else if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith("Water lawn (")) {
       lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
     } else if (row.task_name === VERTICUT_TASK_NAME) {
       lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);
@@ -23212,7 +23212,8 @@ function compileLawnTasks({
   verticutPairedWithMow = false,
   lastGypsumDate,
   gypsumPostponedUntil = null,
-  scheduleReason = null
+  scheduleReason = null,
+  dynamicMinutes = 0
 }) {
   const taskStatusFromDue = (dueDateIso) => daysBetween(dueDateIso, todayStr) >= 0 ? "urgent" : "pending";
   const compiledTasks = [];
@@ -23313,6 +23314,36 @@ function compileLawnTasks({
       module: "lawn",
       reason: isDormantSeason ? "Winter dormancy \u2013 watering suspended" : "Heavy rain forecast \u2013 nature providing full soak"
     });
+  } else if (seedEstablishmentActive) {
+    const waterDueDate = wateringNextDueIso ?? todayStr;
+    const waterStatus = taskStatusFromDue(waterDueDate);
+    const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
+    const baseReason = scheduleReason?.water ? `${scheduleReason.water} \xB7 ` : "";
+    const mistingReason = `${baseReason}Light surface misting (${mistingMins > 0 ? mistingMins + " mins" : "divide daily duration by 3"})`;
+    compiledTasks.push({
+      id: "lawn-water-morning",
+      title: "Water lawn (Morning)",
+      dueDate: waterDueDate,
+      status: waterStatus,
+      module: "lawn",
+      reason: mistingReason
+    });
+    compiledTasks.push({
+      id: "lawn-water-midday",
+      title: "Water lawn (Midday)",
+      dueDate: waterDueDate,
+      status: waterStatus,
+      module: "lawn",
+      reason: mistingReason
+    });
+    compiledTasks.push({
+      id: "lawn-water-evening",
+      title: "Water lawn (Evening)",
+      dueDate: waterDueDate,
+      status: waterStatus,
+      module: "lawn",
+      reason: mistingReason
+    });
   } else {
     const waterDueDate = wateringNextDueIso ?? todayStr;
     compiledTasks.push({
@@ -23393,7 +23424,8 @@ function compileAllLawnTasks(input) {
     verticutPairedWithMow,
     lastGypsumDate,
     gypsumPostponedUntil = null,
-    scheduleReason = null
+    scheduleReason = null,
+    dynamicMinutes = 0
   } = input;
   return [
     ...compilePackStepTasks({ todayStr, userLogs, pendingDates }),
@@ -23413,7 +23445,8 @@ function compileAllLawnTasks(input) {
       verticutPairedWithMow,
       lastGypsumDate,
       gypsumPostponedUntil,
-      scheduleReason
+      scheduleReason,
+      dynamicMinutes
     })
   ];
 }

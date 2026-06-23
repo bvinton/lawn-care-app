@@ -78,7 +78,7 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
   const localLast =
     task.title === MOW_TASK_NAME
       ? maintenance.lastMowedDate
-      : task.title === WATER_TASK_NAME
+      : task.title === WATER_TASK_NAME || task.title.startsWith('Water lawn (')
         ? maintenance.lastWateredDate
         : task.title === VERTICUT_TASK_NAME
           ? maintenance.lastVerticutDate

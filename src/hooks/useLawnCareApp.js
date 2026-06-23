@@ -471,6 +471,7 @@ export function useLawnCareApp() {
         lastGypsumDate: nextLastGypsumDate,
         gypsumPostponedUntil: nextGypsumPostponedUntil,
         scheduleReason,
+        dynamicMinutes,
       });
     },
     [

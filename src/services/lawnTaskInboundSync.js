@@ -69,7 +69,7 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
       continue;
     }
 
-    if (row.task_name === WATER_TASK_NAME) {
+    if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith('Water lawn (')) {
       const merged = pickLatestIsoDate(lastWateredDate, completionDate);
       if (merged !== lastWateredDate) {
         lastWateredDate = merged;

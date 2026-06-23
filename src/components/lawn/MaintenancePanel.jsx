@@ -423,6 +423,15 @@ export default function MaintenancePanel({ app }) {
                   )
                 </div>
               </>
+            ) : seedEstablishmentActive ? (
+              <>
+                <p className="text-xs font-bold text-amber-900 leading-snug">
+                  🌱 SEED ESTABLISHING: The soil surface must stay moist. Expect 3 separate daily tasks (Morning, Midday, Evening) for light misting.
+                </p>
+                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
+                  🚰 3x Daily Misting: Each session should be ~{dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0} minutes (1/3 of your normal {dynamicMinutes} min soak) using your {activeSprinkler.name}.
+                </div>
+              </>
             ) : wateringDue ? (
               <>
                 <p className="text-xs font-bold text-amber-900 leading-snug">

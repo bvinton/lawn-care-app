@@ -108,14 +108,14 @@ export async function fetchLawnMaintenanceRows() {
     .from('tasks')
     .select(MAINTENANCE_SELECT_FULL)
     .eq('app_source', LAWN_APP_SOURCE)
-    .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME]);
+    .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, 'Water lawn (Morning)', 'Water lawn (Midday)', 'Water lawn (Evening)', VERTICUT_TASK_NAME]);
 
   if (result.error && (result.error.code === '42703' || isMissingLastCompletedColumnError(result.error))) {
     result = await supabase
       .from('tasks')
       .select(MAINTENANCE_SELECT_FALLBACK)
       .eq('app_source', LAWN_APP_SOURCE)
-      .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME]);
+      .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, 'Water lawn (Morning)', 'Water lawn (Midday)', 'Water lawn (Evening)', VERTICUT_TASK_NAME]);
   }
 
   if (result.error) {
@@ -165,7 +165,7 @@ export function inferMaintenanceDatesFromRows(rows, todayStr) {
 
     if (row.task_name === MOW_TASK_NAME) {
       lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
-    } else if (row.task_name === WATER_TASK_NAME) {
+    } else if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith('Water lawn (')) {
       lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
     } else if (row.task_name === VERTICUT_TASK_NAME) {
       lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);
