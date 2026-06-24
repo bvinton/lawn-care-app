@@ -207,7 +207,7 @@ export function compileLawnTasks({
     });
   }
 
-  if (isDormantSeason || isNatureProvidingFullSoak) {
+  if (isDormantSeason || (!seedEstablishmentActive && isNatureProvidingFullSoak)) {
     compiledTasks.push({
       id: 'lawn-water',
       title: 'Water lawn',

@@ -328,7 +328,7 @@ export function buildMaintenanceSchedule(input) {
   // Without this, when rain clears the task immediately reappears overdue.
   const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
   const effectiveLastWateredDate =
-    (isNatureProvidingFullSoak || soilRecentlyWet) ? todayStr : lastWateredDate;
+    (!seedEstablishmentActive && (isNatureProvidingFullSoak || soilRecentlyWet)) ? todayStr : lastWateredDate;
   const wateringNextDueIso = effectiveLastWateredDate
     ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays)
     : null;

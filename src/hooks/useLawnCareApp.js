@@ -373,7 +373,7 @@ export function useLawnCareApp() {
     mowingStatus: isDormantSeason ? 'dormant' : seedEstablishmentActive ? 'locked' : 'active',
     wateringStatus: isDormantSeason
       ? 'dormant'
-      : isNatureProvidingFullSoak
+      : (!seedEstablishmentActive && isNatureProvidingFullSoak)
         ? 'paused'
         : 'active',
     verticutNextDue: verticutNextDueIso,
@@ -394,8 +394,7 @@ export function useLawnCareApp() {
     (daysSinceMow === null || daysSinceMow >= dynamicMowingDays);
   const wateringDue =
     !isDormantSeason &&
-    !isNatureProvidingFullSoak &&
-    !soilRecentlyWet &&
+    (seedEstablishmentActive || (!isNatureProvidingFullSoak && !soilRecentlyWet)) &&
     (daysSinceWater === null || daysSinceWater >= dynamicWateringDays);
   const verticutDue =
     isVerticutSeason &&

@@ -23125,7 +23125,7 @@ function buildMaintenanceSchedule(input) {
   const effectiveMowingDays = wasScalped ? Math.max(dynamicMowingDays, 10) : dynamicMowingDays;
   const mowingNextDueIso = effectiveLastMowedDate ? addDaysToDateString(effectiveLastMowedDate, effectiveMowingDays) : null;
   const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
-  const effectiveLastWateredDate = isNatureProvidingFullSoak || soilRecentlyWet ? todayStr : lastWateredDate;
+  const effectiveLastWateredDate = !seedEstablishmentActive && (isNatureProvidingFullSoak || soilRecentlyWet) ? todayStr : lastWateredDate;
   const wateringNextDueIso = effectiveLastWateredDate ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays) : null;
   const isVerticutSeason = isVerticutSeasonForDate(todayStr);
   const { renovationHoldActive, verticutLockedUntilIso } = getVerticutRenovationState(
@@ -23305,7 +23305,7 @@ function compileLawnTasks({
       reason: buildVerticutReason()
     });
   }
-  if (isDormantSeason || isNatureProvidingFullSoak) {
+  if (isDormantSeason || !seedEstablishmentActive && isNatureProvidingFullSoak) {
     compiledTasks.push({
       id: "lawn-water",
       title: "Water lawn",
@@ -23319,7 +23319,8 @@ function compileLawnTasks({
     const waterStatus = taskStatusFromDue(waterDueDate);
     const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
     const baseReason = scheduleReason?.water ? `${scheduleReason.water} \xB7 ` : "";
-    const mistingReason = `${baseReason}Light surface misting (${mistingMins > 0 ? mistingMins + " mins" : "divide daily duration by 3"})`;
+    const perSessionText = mistingMins > 0 ? `Run for ${mistingMins} minutes` : "divide daily duration by 3";
+    const mistingReason = `${baseReason}Light surface misting \xB7 ${perSessionText}`;
     compiledTasks.push({
       id: "lawn-water-morning",
       title: "Water lawn (Morning)",
