@@ -218,7 +218,9 @@ async function applyTaskWrite(supabase, body, taskTitle, fullPayload) {
  */
 async function writeTaskPayload(supabase, task, maintenance, todayStr) {
   const taskTitle = task.title;
-  const isMaintenance = MAINTENANCE_TASK_NAMES.has(taskTitle);
+  const isMaintenance =
+    MAINTENANCE_TASK_NAMES.has(taskTitle) ||
+    (typeof taskTitle === 'string' && taskTitle.startsWith('Water lawn ('));
   let existingResult = await supabase
     .from('tasks')
     .select('id, due_date, is_completed, last_completed_date')

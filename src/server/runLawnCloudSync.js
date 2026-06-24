@@ -70,7 +70,8 @@ export async function runLawnCloudSync() {
   lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
 
   const maintenanceRows = inboundRows.filter((row) =>
-    [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name)
+    [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name) ||
+    (typeof row.task_name === 'string' && row.task_name.startsWith('Water lawn ('))
   );
   const inferred = inferMaintenanceDatesFromRows(maintenanceRows, todayStr);
   lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);

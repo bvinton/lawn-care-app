@@ -22518,7 +22518,7 @@ async function applyTaskWrite(supabase, body, taskTitle, fullPayload) {
 }
 async function writeTaskPayload(supabase, task, maintenance, todayStr) {
   const taskTitle = task.title;
-  const isMaintenance = MAINTENANCE_TASK_NAMES.has(taskTitle);
+  const isMaintenance = MAINTENANCE_TASK_NAMES.has(taskTitle) || typeof taskTitle === "string" && taskTitle.startsWith("Water lawn (");
   let existingResult = await supabase.from("tasks").select("id, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
   if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
     existingResult = await supabase.from("tasks").select("id, due_date, is_completed").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
@@ -23486,7 +23486,7 @@ async function runLawnCloudSync() {
   lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
   lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
   const maintenanceRows = inboundRows.filter(
-    (row) => [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name)
+    (row) => [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name) || typeof row.task_name === "string" && row.task_name.startsWith("Water lawn (")
   );
   const inferred = inferMaintenanceDatesFromRows(maintenanceRows, todayStr);
   lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
