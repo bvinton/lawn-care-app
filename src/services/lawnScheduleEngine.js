@@ -88,7 +88,7 @@ export function isVerticutHeatDroughtPaused(
 export function getSeedState(todayStr, springSeedDate) {
   const daysSinceSeed = springSeedDate ? daysBetweenIso(todayStr, springSeedDate) : null;
   const seedEstablishmentActive =
-    springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed < SEED_ESTABLISHMENT_DAYS;
+    springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed <= SEED_ESTABLISHMENT_DAYS;
   const mowingLockedUntilIso =
     seedEstablishmentActive && springSeedDate
       ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS)
@@ -114,7 +114,7 @@ export function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) 
 
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
+    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
   }
 
   if (temp !== null && temp < 8) return 14;
@@ -161,7 +161,7 @@ export function getDynamicWateringDays(
 
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 2;
+    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 2;
   }
 
   if (recentPastRainSum >= 8) return 5;
@@ -204,7 +204,7 @@ export function getScheduleReason(input) {
 
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) {
+    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) {
       mowReasons.push('gentle recovery schedule after seeding');
       waterReasons.push('enhanced watering during turf recovery');
     }

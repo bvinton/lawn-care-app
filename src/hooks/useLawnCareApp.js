@@ -217,7 +217,7 @@ export function useLawnCareApp() {
   const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
   const daysSinceSeed = springSeedDate ? daysBetween(springSeedDate, today) : null;
   const seedEstablishmentActive =
-    springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed < SEED_ESTABLISHMENT_DAYS;
+    springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed <= SEED_ESTABLISHMENT_DAYS;
   const seedDaysRemaining = seedEstablishmentActive
     ? SEED_ESTABLISHMENT_DAYS - (daysSinceSeed ?? 0)
     : 0;

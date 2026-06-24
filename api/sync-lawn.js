@@ -22995,7 +22995,7 @@ function isVerticutHeatDroughtPaused(currentSoilTemp, forecastedRainSumNearTerm,
 }
 function getSeedState(todayStr, springSeedDate) {
   const daysSinceSeed = springSeedDate ? daysBetweenIso(todayStr, springSeedDate) : null;
-  const seedEstablishmentActive = springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed < SEED_ESTABLISHMENT_DAYS;
+  const seedEstablishmentActive = springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed <= SEED_ESTABLISHMENT_DAYS;
   const mowingLockedUntilIso = seedEstablishmentActive && springSeedDate ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS) : null;
   return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
 }
@@ -23008,7 +23008,7 @@ function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
   const temp = currentSoilTemp;
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
+    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
   }
   if (temp !== null && temp < 8) return 14;
   if (temp !== null && temp < 12) return 10;
@@ -23021,7 +23021,7 @@ function getDynamicWateringDays(forecastedRainSumNearTerm, currentSoilTemp, spri
   if (seedEstablishmentActive) return 1;
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 2;
+    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 2;
   }
   if (recentPastRainSum >= 8) return 5;
   if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) return 4;
@@ -23049,7 +23049,7 @@ function getScheduleReason(input) {
   const verticutReasons = [];
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed >= SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) {
+    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) {
       mowReasons.push("gentle recovery schedule after seeding");
       waterReasons.push("enhanced watering during turf recovery");
     }
