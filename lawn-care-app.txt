@@ -3133,26 +3133,30 @@ export function getEffectiveRecentPastRain(weather) {
 }
 
 /**
+ * Hourly data starts PAST_RAIN_DAYS ago, so today's 24 hours begin at index PAST_RAIN_DAYS * 24.
  * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
  */
 export function getTodayMaxSoilTemp(data) {
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
 
-  return hourlyTemps.slice(0, 24).reduce((max, temp) => {
+  const start = PAST_RAIN_DAYS * 24;
+  return hourlyTemps.slice(start, start + 24).reduce((max, temp) => {
     if (temp == null) return max;
     return max === null ? temp : Math.max(max, temp);
   }, /** @type {number | null} */ (null));
 }
 
 /**
+ * Hourly data starts PAST_RAIN_DAYS ago, so today's 24 hours begin at index PAST_RAIN_DAYS * 24.
  * @param {{ hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
  */
 export function getTodayMinSoilTemp(data) {
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
 
-  return hourlyTemps.slice(0, 24).reduce((min, temp) => {
+  const start = PAST_RAIN_DAYS * 24;
+  return hourlyTemps.slice(start, start + 24).reduce((min, temp) => {
     if (temp == null) return min;
     return min === null ? temp : Math.min(min, temp);
   }, /** @type {number | null} */ (null));
@@ -5962,6 +5966,202 @@ export function useLawnCareApp() {
 }
 </file>
 
+<file path="src/services/lawnMaintenanceSync.js">
+import {
+  getSupabase,
+  getSupabaseConfigError,
+  formatSupabaseSyncError,
+} from '../lib/supabase';
+import { LAWN_APP_SOURCE } from './lawnTasks';
+
+export const MOW_TASK_NAME = 'Mow lawn';
+export const WATER_TASK_NAME = 'Water lawn';
+export const VERTICUT_TASK_NAME = 'Verticutting';
+
+/** @type {boolean | null} */
+let lastCompletedColumnAvailable = null;
+
+export function resetLastCompletedColumnProbe() {
+  lastCompletedColumnAvailable = null;
+}
+
+/** @param {unknown} error */
+export function isMissingLastCompletedColumnError(error) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String(/** @type {{ message: unknown }} */ (error).message)
+        : String(error);
+  return /last_completed_date|42703|PGRST204|schema cache/i.test(message);
+}
+
+/** @param {Record<string, unknown>} payload */
+export function withoutLastCompletedDate(payload) {
+  const next = { ...payload };
+  delete next.last_completed_date;
+  return next;
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<boolean>}
+ */
+export async function probeLastCompletedColumn(supabase) {
+  if (lastCompletedColumnAvailable !== null) {
+    return lastCompletedColumnAvailable;
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .select('last_completed_date')
+    .eq('app_source', LAWN_APP_SOURCE)
+    .limit(1);
+
+  lastCompletedColumnAvailable = !error;
+  return lastCompletedColumnAvailable;
+}
+
+export function getLastCompletedColumnHint() {
+  return 'Run supabase/maintenance_link.sql in the Supabase SQL Editor to link Tasks app completions with this app.';
+}
+
+/**
+ * @param {string | null | undefined} isoDate
+ * @returns {string | null}
+ */
+function isoDateFromTimestamp(isoDate) {
+  if (!isoDate) return null;
+  return isoDate.slice(0, 10);
+}
+
+/**
+ * @param {...(string | null | undefined)} dates
+ * @returns {string | null}
+ */
+export function pickLatestIsoDate(...dates) {
+  const valid = dates.filter((d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
+  if (valid.length === 0) return null;
+  return valid.sort().at(-1) ?? null;
+}
+
+/**
+ * @typedef {Object} LawnMaintenanceRow
+ * @property {string} task_name
+ * @property {string} due_date
+ * @property {boolean} is_completed
+ * @property {string | null} [last_completed_date]
+ * @property {string | null} [updated_at]
+ * @property {string | null} [created_at]
+ */
+
+const MAINTENANCE_SELECT_FULL =
+  'task_name, due_date, is_completed, last_completed_date, created_at';
+const MAINTENANCE_SELECT_FALLBACK = 'task_name, due_date, is_completed, created_at';
+
+/**
+ * @returns {Promise<LawnMaintenanceRow[]>}
+ */
+export async function fetchLawnMaintenanceRows() {
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase client could not be initialised.');
+  }
+
+  let result = await supabase
+    .from('tasks')
+    .select(MAINTENANCE_SELECT_FULL)
+    .eq('app_source', LAWN_APP_SOURCE)
+    .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, 'Water lawn (Morning)', 'Water lawn (Midday)', 'Water lawn (Evening)', VERTICUT_TASK_NAME]);
+
+  if (result.error && (result.error.code === '42703' || isMissingLastCompletedColumnError(result.error))) {
+    result = await supabase
+      .from('tasks')
+      .select(MAINTENANCE_SELECT_FALLBACK)
+      .eq('app_source', LAWN_APP_SOURCE)
+      .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, 'Water lawn (Morning)', 'Water lawn (Midday)', 'Water lawn (Evening)', VERTICUT_TASK_NAME]);
+  }
+
+  if (result.error) {
+    throw new Error(formatSupabaseSyncError(result.error));
+  }
+
+  return result.data ?? [];
+}
+
+/**
+ * Best-effort last-done date from one Supabase row (Tasks app or Lawn app).
+ * @param {LawnMaintenanceRow} row
+ * @param {string} todayStr YYYY-MM-DD
+ * @returns {string | null}
+ */
+export function inferLastDoneFromMaintenanceRow(row, todayStr) {
+  if (row.last_completed_date) {
+    return row.last_completed_date;
+  }
+
+  const dueDate = row.due_date;
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+    return null;
+  }
+
+  // due_date on mow/water rows is the *next* due date — never treat it as last done when open.
+  if (row.is_completed && dueDate <= todayStr) {
+    return pickLatestIsoDate(dueDate, isoDateFromTimestamp(row.updated_at), isoDateFromTimestamp(row.created_at));
+  }
+
+  return null;
+}
+
+/**
+ * Read shared last-done dates from Supabase (set by Tasks app or Lawn app).
+ * @param {LawnMaintenanceRow[]} rows
+ * @param {string} todayStr YYYY-MM-DD
+ */
+export function inferMaintenanceDatesFromRows(rows, todayStr) {
+  let lastMowedDate = null;
+  let lastWateredDate = null;
+  let lastVerticutDate = null;
+
+  for (const row of rows) {
+    const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+    if (!inferred) continue;
+
+    if (row.task_name === MOW_TASK_NAME) {
+      lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
+    } else if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith('Water lawn (')) {
+      lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
+    } else if (row.task_name === VERTICUT_TASK_NAME) {
+      lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);
+    }
+  }
+
+  return { lastMowedDate, lastWateredDate, lastVerticutDate };
+}
+
+/**
+ * @param {string | null} localDate
+ * @param {string | null} remoteDate
+ */
+export function mergeMaintenanceDate(localDate, remoteDate) {
+  return pickLatestIsoDate(localDate, remoteDate);
+}
+
+/**
+ * Pull last mow/water from shared Supabase (e.g. after completing in Tasks app).
+ * @param {string} todayStr
+ */
+export async function pullMaintenanceDatesFromSupabase(todayStr) {
+  const rows = await fetchLawnMaintenanceRows();
+  return inferMaintenanceDatesFromRows(rows, todayStr);
+}
+</file>
+
 <file path="src/services/lawnScheduleEngine.js">
 import { addDaysToDateString, makeStepKey } from '../data/LawnPackData.js';
 import { pickLatestIsoDate } from './lawnMaintenanceSync.js';
@@ -6346,202 +6546,6 @@ export function buildMaintenanceSchedule(input) {
     verticutPairedWithMow,
     verticutIntervalElapsed,
   };
-}
-</file>
-
-<file path="src/services/lawnMaintenanceSync.js">
-import {
-  getSupabase,
-  getSupabaseConfigError,
-  formatSupabaseSyncError,
-} from '../lib/supabase';
-import { LAWN_APP_SOURCE } from './lawnTasks';
-
-export const MOW_TASK_NAME = 'Mow lawn';
-export const WATER_TASK_NAME = 'Water lawn';
-export const VERTICUT_TASK_NAME = 'Verticutting';
-
-/** @type {boolean | null} */
-let lastCompletedColumnAvailable = null;
-
-export function resetLastCompletedColumnProbe() {
-  lastCompletedColumnAvailable = null;
-}
-
-/** @param {unknown} error */
-export function isMissingLastCompletedColumnError(error) {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'object' && error !== null && 'message' in error
-        ? String(/** @type {{ message: unknown }} */ (error).message)
-        : String(error);
-  return /last_completed_date|42703|PGRST204|schema cache/i.test(message);
-}
-
-/** @param {Record<string, unknown>} payload */
-export function withoutLastCompletedDate(payload) {
-  const next = { ...payload };
-  delete next.last_completed_date;
-  return next;
-}
-
-/**
- * @param {import('@supabase/supabase-js').SupabaseClient} supabase
- * @returns {Promise<boolean>}
- */
-export async function probeLastCompletedColumn(supabase) {
-  if (lastCompletedColumnAvailable !== null) {
-    return lastCompletedColumnAvailable;
-  }
-
-  const { error } = await supabase
-    .from('tasks')
-    .select('last_completed_date')
-    .eq('app_source', LAWN_APP_SOURCE)
-    .limit(1);
-
-  lastCompletedColumnAvailable = !error;
-  return lastCompletedColumnAvailable;
-}
-
-export function getLastCompletedColumnHint() {
-  return 'Run supabase/maintenance_link.sql in the Supabase SQL Editor to link Tasks app completions with this app.';
-}
-
-/**
- * @param {string | null | undefined} isoDate
- * @returns {string | null}
- */
-function isoDateFromTimestamp(isoDate) {
-  if (!isoDate) return null;
-  return isoDate.slice(0, 10);
-}
-
-/**
- * @param {...(string | null | undefined)} dates
- * @returns {string | null}
- */
-export function pickLatestIsoDate(...dates) {
-  const valid = dates.filter((d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
-  if (valid.length === 0) return null;
-  return valid.sort().at(-1) ?? null;
-}
-
-/**
- * @typedef {Object} LawnMaintenanceRow
- * @property {string} task_name
- * @property {string} due_date
- * @property {boolean} is_completed
- * @property {string | null} [last_completed_date]
- * @property {string | null} [updated_at]
- * @property {string | null} [created_at]
- */
-
-const MAINTENANCE_SELECT_FULL =
-  'task_name, due_date, is_completed, last_completed_date, created_at';
-const MAINTENANCE_SELECT_FALLBACK = 'task_name, due_date, is_completed, created_at';
-
-/**
- * @returns {Promise<LawnMaintenanceRow[]>}
- */
-export async function fetchLawnMaintenanceRows() {
-  const configError = getSupabaseConfigError();
-  if (configError) {
-    throw new Error(configError);
-  }
-
-  const supabase = getSupabase();
-  if (!supabase) {
-    throw new Error('Supabase client could not be initialised.');
-  }
-
-  let result = await supabase
-    .from('tasks')
-    .select(MAINTENANCE_SELECT_FULL)
-    .eq('app_source', LAWN_APP_SOURCE)
-    .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, 'Water lawn (Morning)', 'Water lawn (Midday)', 'Water lawn (Evening)', VERTICUT_TASK_NAME]);
-
-  if (result.error && (result.error.code === '42703' || isMissingLastCompletedColumnError(result.error))) {
-    result = await supabase
-      .from('tasks')
-      .select(MAINTENANCE_SELECT_FALLBACK)
-      .eq('app_source', LAWN_APP_SOURCE)
-      .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, 'Water lawn (Morning)', 'Water lawn (Midday)', 'Water lawn (Evening)', VERTICUT_TASK_NAME]);
-  }
-
-  if (result.error) {
-    throw new Error(formatSupabaseSyncError(result.error));
-  }
-
-  return result.data ?? [];
-}
-
-/**
- * Best-effort last-done date from one Supabase row (Tasks app or Lawn app).
- * @param {LawnMaintenanceRow} row
- * @param {string} todayStr YYYY-MM-DD
- * @returns {string | null}
- */
-export function inferLastDoneFromMaintenanceRow(row, todayStr) {
-  if (row.last_completed_date) {
-    return row.last_completed_date;
-  }
-
-  const dueDate = row.due_date;
-  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-    return null;
-  }
-
-  // due_date on mow/water rows is the *next* due date — never treat it as last done when open.
-  if (row.is_completed && dueDate <= todayStr) {
-    return pickLatestIsoDate(dueDate, isoDateFromTimestamp(row.updated_at), isoDateFromTimestamp(row.created_at));
-  }
-
-  return null;
-}
-
-/**
- * Read shared last-done dates from Supabase (set by Tasks app or Lawn app).
- * @param {LawnMaintenanceRow[]} rows
- * @param {string} todayStr YYYY-MM-DD
- */
-export function inferMaintenanceDatesFromRows(rows, todayStr) {
-  let lastMowedDate = null;
-  let lastWateredDate = null;
-  let lastVerticutDate = null;
-
-  for (const row of rows) {
-    const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
-    if (!inferred) continue;
-
-    if (row.task_name === MOW_TASK_NAME) {
-      lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
-    } else if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith('Water lawn (')) {
-      lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
-    } else if (row.task_name === VERTICUT_TASK_NAME) {
-      lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);
-    }
-  }
-
-  return { lastMowedDate, lastWateredDate, lastVerticutDate };
-}
-
-/**
- * @param {string | null} localDate
- * @param {string | null} remoteDate
- */
-export function mergeMaintenanceDate(localDate, remoteDate) {
-  return pickLatestIsoDate(localDate, remoteDate);
-}
-
-/**
- * Pull last mow/water from shared Supabase (e.g. after completing in Tasks app).
- * @param {string} todayStr
- */
-export async function pullMaintenanceDatesFromSupabase(todayStr) {
-  const rows = await fetchLawnMaintenanceRows();
-  return inferMaintenanceDatesFromRows(rows, todayStr);
 }
 </file>
 
@@ -30292,7 +30296,8 @@ function getEffectiveRecentPastRain(weather) {
 function getTodayMaxSoilTemp(data) {
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
-  return hourlyTemps.slice(0, 24).reduce(
+  const start = PAST_RAIN_DAYS * 24;
+  return hourlyTemps.slice(start, start + 24).reduce(
     (max, temp) => {
       if (temp == null) return max;
       return max === null ? temp : Math.max(max, temp);
@@ -30304,7 +30309,8 @@ function getTodayMaxSoilTemp(data) {
 function getTodayMinSoilTemp(data) {
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
-  return hourlyTemps.slice(0, 24).reduce(
+  const start = PAST_RAIN_DAYS * 24;
+  return hourlyTemps.slice(start, start + 24).reduce(
     (min, temp) => {
       if (temp == null) return min;
       return min === null ? temp : Math.min(min, temp);

@@ -22866,7 +22866,8 @@ function getEffectiveRecentPastRain(weather) {
 function getTodayMaxSoilTemp(data) {
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
-  return hourlyTemps.slice(0, 24).reduce(
+  const start = PAST_RAIN_DAYS * 24;
+  return hourlyTemps.slice(start, start + 24).reduce(
     (max, temp) => {
       if (temp == null) return max;
       return max === null ? temp : Math.max(max, temp);
@@ -22878,7 +22879,8 @@ function getTodayMaxSoilTemp(data) {
 function getTodayMinSoilTemp(data) {
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
-  return hourlyTemps.slice(0, 24).reduce(
+  const start = PAST_RAIN_DAYS * 24;
+  return hourlyTemps.slice(start, start + 24).reduce(
     (min, temp) => {
       if (temp == null) return min;
       return min === null ? temp : Math.min(min, temp);
