@@ -22475,6 +22475,14 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     task_name: task.title,
     due_date: task.dueDate
   };
+  if (task.title.startsWith("Water lawn (")) {
+    const completedToday = (existingRows ?? []).some(
+      (r) => r.last_completed_date === todayStr
+    );
+    if (completedToday) {
+      row.due_date = addDaysToDateString(todayStr, 1);
+    }
+  }
   if (lastCompleted) {
     row.last_completed_date = lastCompleted;
   }
@@ -22601,6 +22609,11 @@ async function deleteStaleLawnTasks(compiledTasks) {
 var MOW_TASK_NAME = "Mow lawn";
 var WATER_TASK_NAME = "Water lawn";
 var VERTICUT_TASK_NAME = "Verticutting";
+var WATERING_SESSION_NAMES = [
+  "Water lawn (Morning)",
+  "Water lawn (Midday)",
+  "Water lawn (Evening)"
+];
 var lastCompletedColumnAvailable = null;
 function resetLastCompletedColumnProbe() {
   lastCompletedColumnAvailable = null;
@@ -22651,12 +22664,27 @@ function inferMaintenanceDatesFromRows(rows, todayStr) {
   let lastMowedDate = null;
   let lastWateredDate = null;
   let lastVerticutDate = null;
+  const sessionRows = rows.filter((r) => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length > 0) {
+    const completionsByDate = /* @__PURE__ */ new Map();
+    for (const row of sessionRows) {
+      const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+      if (!inferred) continue;
+      if (!completionsByDate.has(inferred)) completionsByDate.set(inferred, /* @__PURE__ */ new Set());
+      completionsByDate.get(inferred)?.add(row.task_name);
+    }
+    for (const [date, names] of completionsByDate) {
+      if (WATERING_SESSION_NAMES.every((n) => names.has(n))) {
+        lastWateredDate = pickLatestIsoDate(lastWateredDate, date);
+      }
+    }
+  }
   for (const row of rows) {
     const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
     if (!inferred) continue;
     if (row.task_name === MOW_TASK_NAME) {
       lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
-    } else if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith("Water lawn (")) {
+    } else if (row.task_name === WATER_TASK_NAME) {
       lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
     } else if (row.task_name === VERTICUT_TASK_NAME) {
       lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);

@@ -8,6 +8,11 @@ import { LAWN_APP_SOURCE } from './lawnTasks';
 export const MOW_TASK_NAME = 'Mow lawn';
 export const WATER_TASK_NAME = 'Water lawn';
 export const VERTICUT_TASK_NAME = 'Verticutting';
+export const WATERING_SESSION_NAMES = [
+  'Water lawn (Morning)',
+  'Water lawn (Midday)',
+  'Water lawn (Evening)',
+];
 
 /** @type {boolean | null} */
 let lastCompletedColumnAvailable = null;
@@ -159,17 +164,39 @@ export function inferMaintenanceDatesFromRows(rows, todayStr) {
   let lastWateredDate = null;
   let lastVerticutDate = null;
 
+  // When running 3-session watering (seed establishment), completing one session must
+  // not advance the shared lastWateredDate — that would push all sessions to tomorrow.
+  // Only treat a day as fully watered once all 3 sessions report the same completion date.
+  const sessionRows = rows.filter(r => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length > 0) {
+    /** @type {Map<string, Set<string>>} */
+    const completionsByDate = new Map();
+    for (const row of sessionRows) {
+      const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+      if (!inferred) continue;
+      if (!completionsByDate.has(inferred)) completionsByDate.set(inferred, new Set());
+      completionsByDate.get(inferred)?.add(row.task_name);
+    }
+    for (const [date, names] of completionsByDate) {
+      if (WATERING_SESSION_NAMES.every(n => names.has(n))) {
+        lastWateredDate = pickLatestIsoDate(lastWateredDate, date);
+      }
+    }
+  }
+
   for (const row of rows) {
     const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
     if (!inferred) continue;
 
     if (row.task_name === MOW_TASK_NAME) {
       lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
-    } else if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith('Water lawn (')) {
+    } else if (row.task_name === WATER_TASK_NAME) {
+      // Legacy single-session row — count it directly.
       lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
     } else if (row.task_name === VERTICUT_TASK_NAME) {
       lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);
     }
+    // Water lawn (Morning/Midday/Evening) are handled via the session block above.
   }
 
   return { lastMowedDate, lastWateredDate, lastVerticutDate };

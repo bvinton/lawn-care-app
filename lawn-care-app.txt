@@ -3918,212 +3918,6 @@ export default function MaintenancePanel({ app }) {
 }
 </file>
 
-<file path="src/server/runLawnCloudSync.js">
-/**
- * Server-side full lawn sync (same pipeline as Lawn app “Sync” button).
- * Used by POST /api/sync-lawn — not imported by the browser bundle.
- */
-import { createInitialPendingDates, stripStalePetLockout, makeStepKey } from '../data/LawnPackData.js';
-import { getSupabaseConfigError, initServerSupabase } from '../lib/supabase.js';
-import { fetchLawnAppStateFromSupabase, saveLawnScheduleSnapshot, saveLawnUserLogsToSupabase } from '../services/lawnAppState.js';
-import {
-  inferMaintenanceDatesFromRows,
-  mergeMaintenanceDate,
-  MOW_TASK_NAME,
-  WATER_TASK_NAME,
-  VERTICUT_TASK_NAME,
-} from '../services/lawnMaintenanceSync.js';
-import { buildMaintenanceSchedule, getScheduleReason } from '../services/lawnScheduleEngine.js';
-import { applyInboundTaskCompletions, GYPSUM_POSTPONE_KEY } from '../services/lawnTaskInboundSync.js';
-import {
-  fetchLawnTasksForInboundSync,
-  syncLawnTasksToSupabase,
-} from '../services/lawnTasks.js';
-import { resolveWeatherLocation } from '../services/lawnLocation.js';
-import {
-  computeWateringRainContext,
-  fetchLawnWeatherFromOpenMeteo,
-  getEffectiveNearTermRain,
-  getEffectiveRecentPastRain,
-  saveLawnWeatherSnapshot,
-} from '../services/lawnWeather.js';
-import { compileAllLawnTasks } from '../utils/compileLawnTasks.js';
-import { getTodayLondon } from '../services/lawnScheduleEngine.js';
-
-/**
- * @returns {Promise<{ ok: boolean, taskCount: number, message?: string }>}
- */
-export async function runLawnCloudSync() {
-  const configError = getSupabaseConfigError({ server: true });
-  if (configError) {
-    return { ok: false, taskCount: 0, message: configError };
-  }
-
-  initServerSupabase();
-
-  const todayStr = getTodayLondon();
-  const cloudState = await fetchLawnAppStateFromSupabase();
-
-  if (!cloudState) {
-    return {
-      ok: false,
-      taskCount: 0,
-      message: 'Lawn cloud state not set up. Run supabase/lawn_app_state.sql in Supabase.',
-    };
-  }
-
-  let userLogs = stripStalePetLockout({ ...cloudState.userLogs }, todayStr);
-  const scheduleSnapshot = cloudState.scheduleSnapshot ?? {};
-
-  let lastMowedDate = scheduleSnapshot.lastMowedDate ?? null;
-  let lastWateredDate = scheduleSnapshot.lastWateredDate ?? null;
-  let lastVerticutDate = scheduleSnapshot.lastVerticutDate ?? null;
-
-  const inboundRows = await fetchLawnTasksForInboundSync();
-  const inbound = applyInboundTaskCompletions(inboundRows, todayStr, userLogs, {
-    lastMowedDate,
-    lastWateredDate,
-    lastVerticutDate,
-  });
-  userLogs = stripStalePetLockout(inbound.userLogs, todayStr);
-  lastMowedDate = inbound.lastMowedDate ?? lastMowedDate;
-  lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
-  lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
-
-  const maintenanceRows = inboundRows.filter((row) =>
-    [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name) ||
-    (typeof row.task_name === 'string' && row.task_name.startsWith('Water lawn ('))
-  );
-  const inferred = inferMaintenanceDatesFromRows(maintenanceRows, todayStr);
-  lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
-  lastWateredDate = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
-  lastVerticutDate = mergeMaintenanceDate(lastVerticutDate, inferred.lastVerticutDate);
-
-  await saveLawnUserLogsToSupabase(userLogs);
-
-  const weatherLocation = resolveWeatherLocation(scheduleSnapshot.weatherLocation);
-
-  let weather;
-  try {
-    weather = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
-    await saveLawnWeatherSnapshot(weather);
-  } catch (err) {
-    console.warn('[Lawn sync API] Weather fetch failed, using cloud snapshot:', err);
-    const fromCloud = cloudState.weatherSnapshot;
-    if (fromCloud && typeof fromCloud.forecastedRainSum === 'number') {
-      weather = fromCloud;
-    } else if (typeof scheduleSnapshot.forecastedRainSum === 'number') {
-      const nearTerm = getEffectiveNearTermRain({
-        forecastedRainSum: scheduleSnapshot.forecastedRainSum,
-        forecastedRainSumNearTerm: scheduleSnapshot.forecastedRainSumNearTerm,
-      });
-      const pastRain = getEffectiveRecentPastRain({
-        recentPastRainSum: scheduleSnapshot.recentPastRainSum,
-      });
-      const watering = computeWateringRainContext(pastRain, nearTerm);
-      weather = {
-        forecastedRainSum: scheduleSnapshot.forecastedRainSum,
-        forecastedRainSumNearTerm: nearTerm,
-        recentPastRainSum: pastRain,
-        rainCreditMm: watering.rainCreditMm,
-        currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
-        currentSoilTempMin: null,
-        isRainForecasted: nearTerm >= 5 || pastRain >= 5,
-        isNatureProvidingFullSoak:
-          scheduleSnapshot.isNatureProvidingFullSoak ?? watering.isNatureProvidingFullSoak,
-        soilRecentlyWet: watering.soilRecentlyWet,
-        netWaterNeeded: watering.netWaterNeeded,
-        fetchedAt: scheduleSnapshot.savedAt ?? new Date().toISOString(),
-        source: 'open-meteo',
-      };
-    } else {
-      throw new Error('Weather forecast unavailable and no cached snapshot in cloud.');
-    }
-  }
-
-  const forecastedRainSum = weather.forecastedRainSum;
-  const forecastedRainSumNearTerm = getEffectiveNearTermRain(weather);
-  const recentPastRainSum = getEffectiveRecentPastRain(weather);
-  const currentSoilTemp = weather.currentSoilTemp;
-  const isNatureProvidingFullSoak = weather.isNatureProvidingFullSoak;
-
-  const pendingDates =
-    scheduleSnapshot.pendingDates ??
-    createInitialPendingDates(null, userLogs);
-
-  const maintenance = buildMaintenanceSchedule({
-    todayStr,
-    userLogs,
-    forecastedRainSumNearTerm,
-    recentPastRainSum,
-    currentSoilTemp,
-    isNatureProvidingFullSoak,
-    lastMowedDate,
-    lastWateredDate,
-    lastVerticutDate,
-  });
-
-  const scheduleReason = getScheduleReason({
-    forecastedRainSumNearTerm,
-    forecastedRainSumWeek: forecastedRainSum,
-    recentPastRainSum,
-    currentSoilTemp,
-    springSeedDate: userLogs[makeStepKey('SPRING', 'seed')] ?? null,
-    seedEstablishmentActive: maintenance.seedEstablishmentActive,
-    todayStr,
-    userLogs,
-  });
-
-  const compiledTasks = compileAllLawnTasks({
-    todayStr,
-    userLogs,
-    pendingDates,
-    isDormantSeason: maintenance.isDormantSeason,
-    isNatureProvidingFullSoak: maintenance.isNatureProvidingFullSoak,
-    seedEstablishmentActive: maintenance.seedEstablishmentActive,
-    mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
-    mowingNextDueIso: maintenance.mowingNextDueIso,
-    wateringNextDueIso: maintenance.wateringNextDueIso,
-    isVerticutSeason: maintenance.isVerticutSeason,
-    renovationHoldActive: maintenance.renovationHoldActive,
-    verticutLockedUntilIso: maintenance.verticutLockedUntilIso,
-    verticutHeatDroughtPaused: maintenance.verticutHeatDroughtPaused,
-    verticutNextDueIso: maintenance.verticutNextDueIso,
-    verticutPairedWithMow: maintenance.verticutPairedWithMow,
-    lastGypsumDate: userLogs.lastGypsumDate ?? null,
-    gypsumPostponedUntil: userLogs[GYPSUM_POSTPONE_KEY] ?? null,
-    scheduleReason,
-  });
-
-  await syncLawnTasksToSupabase(
-    compiledTasks,
-    { lastMowedDate, lastWateredDate, lastVerticutDate },
-    todayStr
-  );
-
-  await saveLawnScheduleSnapshot(
-    {
-      lastMowedDate,
-      lastWateredDate,
-      lastVerticutDate,
-      mowingNextDueIso: maintenance.mowingNextDueIso,
-      wateringNextDueIso: maintenance.wateringNextDueIso,
-      verticutNextDueIso: maintenance.verticutNextDueIso,
-      forecastedRainSum,
-      forecastedRainSumNearTerm,
-      recentPastRainSum,
-      weatherLocation,
-      currentSoilTemp,
-      isNatureProvidingFullSoak,
-      pendingDates,
-    },
-    userLogs
-  );
-
-  return { ok: true, taskCount: compiledTasks.length };
-}
-</file>
-
 <file path="src/services/lawnAppState.js">
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { pickLatestIsoDate } from './lawnMaintenanceSync';
@@ -4601,6 +4395,212 @@ export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
   if (!fetchedAt) return false;
   const ageMs = Date.now() - new Date(fetchedAt).getTime();
   return ageMs >= 0 && ageMs < maxAgeHours * 60 * 60 * 1000;
+}
+</file>
+
+<file path="src/server/runLawnCloudSync.js">
+/**
+ * Server-side full lawn sync (same pipeline as Lawn app “Sync” button).
+ * Used by POST /api/sync-lawn — not imported by the browser bundle.
+ */
+import { createInitialPendingDates, stripStalePetLockout, makeStepKey } from '../data/LawnPackData.js';
+import { getSupabaseConfigError, initServerSupabase } from '../lib/supabase.js';
+import { fetchLawnAppStateFromSupabase, saveLawnScheduleSnapshot, saveLawnUserLogsToSupabase } from '../services/lawnAppState.js';
+import {
+  inferMaintenanceDatesFromRows,
+  mergeMaintenanceDate,
+  MOW_TASK_NAME,
+  WATER_TASK_NAME,
+  VERTICUT_TASK_NAME,
+} from '../services/lawnMaintenanceSync.js';
+import { buildMaintenanceSchedule, getScheduleReason } from '../services/lawnScheduleEngine.js';
+import { applyInboundTaskCompletions, GYPSUM_POSTPONE_KEY } from '../services/lawnTaskInboundSync.js';
+import {
+  fetchLawnTasksForInboundSync,
+  syncLawnTasksToSupabase,
+} from '../services/lawnTasks.js';
+import { resolveWeatherLocation } from '../services/lawnLocation.js';
+import {
+  computeWateringRainContext,
+  fetchLawnWeatherFromOpenMeteo,
+  getEffectiveNearTermRain,
+  getEffectiveRecentPastRain,
+  saveLawnWeatherSnapshot,
+} from '../services/lawnWeather.js';
+import { compileAllLawnTasks } from '../utils/compileLawnTasks.js';
+import { getTodayLondon } from '../services/lawnScheduleEngine.js';
+
+/**
+ * @returns {Promise<{ ok: boolean, taskCount: number, message?: string }>}
+ */
+export async function runLawnCloudSync() {
+  const configError = getSupabaseConfigError({ server: true });
+  if (configError) {
+    return { ok: false, taskCount: 0, message: configError };
+  }
+
+  initServerSupabase();
+
+  const todayStr = getTodayLondon();
+  const cloudState = await fetchLawnAppStateFromSupabase();
+
+  if (!cloudState) {
+    return {
+      ok: false,
+      taskCount: 0,
+      message: 'Lawn cloud state not set up. Run supabase/lawn_app_state.sql in Supabase.',
+    };
+  }
+
+  let userLogs = stripStalePetLockout({ ...cloudState.userLogs }, todayStr);
+  const scheduleSnapshot = cloudState.scheduleSnapshot ?? {};
+
+  let lastMowedDate = scheduleSnapshot.lastMowedDate ?? null;
+  let lastWateredDate = scheduleSnapshot.lastWateredDate ?? null;
+  let lastVerticutDate = scheduleSnapshot.lastVerticutDate ?? null;
+
+  const inboundRows = await fetchLawnTasksForInboundSync();
+  const inbound = applyInboundTaskCompletions(inboundRows, todayStr, userLogs, {
+    lastMowedDate,
+    lastWateredDate,
+    lastVerticutDate,
+  });
+  userLogs = stripStalePetLockout(inbound.userLogs, todayStr);
+  lastMowedDate = inbound.lastMowedDate ?? lastMowedDate;
+  lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
+  lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
+
+  const maintenanceRows = inboundRows.filter((row) =>
+    [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name) ||
+    (typeof row.task_name === 'string' && row.task_name.startsWith('Water lawn ('))
+  );
+  const inferred = inferMaintenanceDatesFromRows(maintenanceRows, todayStr);
+  lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
+  lastWateredDate = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
+  lastVerticutDate = mergeMaintenanceDate(lastVerticutDate, inferred.lastVerticutDate);
+
+  await saveLawnUserLogsToSupabase(userLogs);
+
+  const weatherLocation = resolveWeatherLocation(scheduleSnapshot.weatherLocation);
+
+  let weather;
+  try {
+    weather = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
+    await saveLawnWeatherSnapshot(weather);
+  } catch (err) {
+    console.warn('[Lawn sync API] Weather fetch failed, using cloud snapshot:', err);
+    const fromCloud = cloudState.weatherSnapshot;
+    if (fromCloud && typeof fromCloud.forecastedRainSum === 'number') {
+      weather = fromCloud;
+    } else if (typeof scheduleSnapshot.forecastedRainSum === 'number') {
+      const nearTerm = getEffectiveNearTermRain({
+        forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+        forecastedRainSumNearTerm: scheduleSnapshot.forecastedRainSumNearTerm,
+      });
+      const pastRain = getEffectiveRecentPastRain({
+        recentPastRainSum: scheduleSnapshot.recentPastRainSum,
+      });
+      const watering = computeWateringRainContext(pastRain, nearTerm);
+      weather = {
+        forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+        forecastedRainSumNearTerm: nearTerm,
+        recentPastRainSum: pastRain,
+        rainCreditMm: watering.rainCreditMm,
+        currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
+        currentSoilTempMin: null,
+        isRainForecasted: nearTerm >= 5 || pastRain >= 5,
+        isNatureProvidingFullSoak:
+          scheduleSnapshot.isNatureProvidingFullSoak ?? watering.isNatureProvidingFullSoak,
+        soilRecentlyWet: watering.soilRecentlyWet,
+        netWaterNeeded: watering.netWaterNeeded,
+        fetchedAt: scheduleSnapshot.savedAt ?? new Date().toISOString(),
+        source: 'open-meteo',
+      };
+    } else {
+      throw new Error('Weather forecast unavailable and no cached snapshot in cloud.');
+    }
+  }
+
+  const forecastedRainSum = weather.forecastedRainSum;
+  const forecastedRainSumNearTerm = getEffectiveNearTermRain(weather);
+  const recentPastRainSum = getEffectiveRecentPastRain(weather);
+  const currentSoilTemp = weather.currentSoilTemp;
+  const isNatureProvidingFullSoak = weather.isNatureProvidingFullSoak;
+
+  const pendingDates =
+    scheduleSnapshot.pendingDates ??
+    createInitialPendingDates(null, userLogs);
+
+  const maintenance = buildMaintenanceSchedule({
+    todayStr,
+    userLogs,
+    forecastedRainSumNearTerm,
+    recentPastRainSum,
+    currentSoilTemp,
+    isNatureProvidingFullSoak,
+    lastMowedDate,
+    lastWateredDate,
+    lastVerticutDate,
+  });
+
+  const scheduleReason = getScheduleReason({
+    forecastedRainSumNearTerm,
+    forecastedRainSumWeek: forecastedRainSum,
+    recentPastRainSum,
+    currentSoilTemp,
+    springSeedDate: userLogs[makeStepKey('SPRING', 'seed')] ?? null,
+    seedEstablishmentActive: maintenance.seedEstablishmentActive,
+    todayStr,
+    userLogs,
+  });
+
+  const compiledTasks = compileAllLawnTasks({
+    todayStr,
+    userLogs,
+    pendingDates,
+    isDormantSeason: maintenance.isDormantSeason,
+    isNatureProvidingFullSoak: maintenance.isNatureProvidingFullSoak,
+    seedEstablishmentActive: maintenance.seedEstablishmentActive,
+    mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
+    mowingNextDueIso: maintenance.mowingNextDueIso,
+    wateringNextDueIso: maintenance.wateringNextDueIso,
+    isVerticutSeason: maintenance.isVerticutSeason,
+    renovationHoldActive: maintenance.renovationHoldActive,
+    verticutLockedUntilIso: maintenance.verticutLockedUntilIso,
+    verticutHeatDroughtPaused: maintenance.verticutHeatDroughtPaused,
+    verticutNextDueIso: maintenance.verticutNextDueIso,
+    verticutPairedWithMow: maintenance.verticutPairedWithMow,
+    lastGypsumDate: userLogs.lastGypsumDate ?? null,
+    gypsumPostponedUntil: userLogs[GYPSUM_POSTPONE_KEY] ?? null,
+    scheduleReason,
+  });
+
+  await syncLawnTasksToSupabase(
+    compiledTasks,
+    { lastMowedDate, lastWateredDate, lastVerticutDate },
+    todayStr
+  );
+
+  await saveLawnScheduleSnapshot(
+    {
+      lastMowedDate,
+      lastWateredDate,
+      lastVerticutDate,
+      mowingNextDueIso: maintenance.mowingNextDueIso,
+      wateringNextDueIso: maintenance.wateringNextDueIso,
+      verticutNextDueIso: maintenance.verticutNextDueIso,
+      forecastedRainSum,
+      forecastedRainSumNearTerm,
+      recentPastRainSum,
+      weatherLocation,
+      currentSoilTemp,
+      isNatureProvidingFullSoak,
+      pendingDates,
+    },
+    userLogs
+  );
+
+  return { ok: true, taskCount: compiledTasks.length };
 }
 </file>
 
@@ -5978,6 +5978,11 @@ import { LAWN_APP_SOURCE } from './lawnTasks';
 export const MOW_TASK_NAME = 'Mow lawn';
 export const WATER_TASK_NAME = 'Water lawn';
 export const VERTICUT_TASK_NAME = 'Verticutting';
+export const WATERING_SESSION_NAMES = [
+  'Water lawn (Morning)',
+  'Water lawn (Midday)',
+  'Water lawn (Evening)',
+];
 
 /** @type {boolean | null} */
 let lastCompletedColumnAvailable = null;
@@ -6129,17 +6134,39 @@ export function inferMaintenanceDatesFromRows(rows, todayStr) {
   let lastWateredDate = null;
   let lastVerticutDate = null;
 
+  // When running 3-session watering (seed establishment), completing one session must
+  // not advance the shared lastWateredDate — that would push all sessions to tomorrow.
+  // Only treat a day as fully watered once all 3 sessions report the same completion date.
+  const sessionRows = rows.filter(r => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length > 0) {
+    /** @type {Map<string, Set<string>>} */
+    const completionsByDate = new Map();
+    for (const row of sessionRows) {
+      const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+      if (!inferred) continue;
+      if (!completionsByDate.has(inferred)) completionsByDate.set(inferred, new Set());
+      completionsByDate.get(inferred)?.add(row.task_name);
+    }
+    for (const [date, names] of completionsByDate) {
+      if (WATERING_SESSION_NAMES.every(n => names.has(n))) {
+        lastWateredDate = pickLatestIsoDate(lastWateredDate, date);
+      }
+    }
+  }
+
   for (const row of rows) {
     const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
     if (!inferred) continue;
 
     if (row.task_name === MOW_TASK_NAME) {
       lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
-    } else if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith('Water lawn (')) {
+    } else if (row.task_name === WATER_TASK_NAME) {
+      // Legacy single-session row — count it directly.
       lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
     } else if (row.task_name === VERTICUT_TASK_NAME) {
       lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);
     }
+    // Water lawn (Morning/Midday/Evening) are handled via the session block above.
   }
 
   return { lastMowedDate, lastWateredDate, lastVerticutDate };
@@ -6550,494 +6577,6 @@ export function buildMaintenanceSchedule(input) {
 }
 </file>
 
-<file path="src/services/lawnTasks.js">
-import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
-import {
-  MOW_TASK_NAME,
-  WATER_TASK_NAME,
-  VERTICUT_TASK_NAME,
-  isMissingLastCompletedColumnError,
-  withoutLastCompletedDate,
-  probeLastCompletedColumn,
-  resetLastCompletedColumnProbe,
-  pickLatestIsoDate,
-  inferLastDoneFromMaintenanceRow,
-} from './lawnMaintenanceSync';
-import { GYPSUM_TASK_NAME } from './lawnTaskInboundSync';
-
-const MAINTENANCE_TASK_NAMES = new Set([MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME]);
-
-export const LAWN_APP_SOURCE = 'lawn';
-
-/**
- * @typedef {'pending' | 'urgent' | 'completed'} LawnTaskStatus
- */
-
-/**
- * @typedef {Object} CompiledLawnTask
- * @property {string} id
- * @property {string} title
- * @property {string} dueDate
- * @property {LawnTaskStatus} status
- * @property {'lawn'} module
- * @property {string | null} [reason]
- * @property {string | null} [completedDate]
- */
-
-/**
- * @typedef {Object} LawnTaskRow
- * @property {string} id
- * @property {string} app_source
- * @property {string} task_name
- * @property {string} due_date
- * @property {boolean} is_completed
- */
-
-function requireSupabase() {
-  const configError = getSupabaseConfigError();
-  if (configError) {
-    throw new Error(configError);
-  }
-
-  const supabase = getSupabase();
-  if (!supabase) {
-    throw new Error('Supabase client could not be initialised.');
-  }
-
-  return supabase;
-}
-
-/**
- * @param {CompiledLawnTask} task
- * @returns {boolean}
- */
-function isSyntheticMaintenanceComplete(task) {
-  return (
-    task.status === 'completed' &&
-    typeof task.reason === 'string' &&
-    /dormancy|winter|rain|not actively growing|nature providing|outside active season|drought|heat stress|paused to protect/i.test(
-      task.reason
-    )
-  );
-}
-
-/**
- * @param {CompiledLawnTask} task
- * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
- * @param {Array<{ due_date: string, is_completed: boolean, last_completed_date?: string | null }>} [existingRows]
- * @param {string} todayStr
- */
-function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
-  const localLast =
-    task.title === MOW_TASK_NAME
-      ? maintenance.lastMowedDate
-      : task.title === WATER_TASK_NAME || task.title.startsWith('Water lawn (')
-        ? maintenance.lastWateredDate
-        : task.title === VERTICUT_TASK_NAME
-          ? maintenance.lastVerticutDate
-          : null;
-
-  let lastCompleted = localLast ?? null;
-  for (const existing of existingRows ?? []) {
-    lastCompleted = pickLatestIsoDate(
-      lastCompleted,
-      existing.last_completed_date ?? null,
-      inferLastDoneFromMaintenanceRow(
-        {
-          task_name: task.title,
-          due_date: existing.due_date,
-          is_completed: existing.is_completed,
-          last_completed_date: existing.last_completed_date ?? null,
-        },
-        todayStr
-      )
-    );
-  }
-
-  /** @type {Record<string, unknown>} */
-  const row = {
-    app_source: LAWN_APP_SOURCE,
-    task_name: task.title,
-    due_date: task.dueDate,
-  };
-
-  if (lastCompleted) {
-    row.last_completed_date = lastCompleted;
-  }
-
-  row.is_completed = isSyntheticMaintenanceComplete(task);
-
-  return row;
-}
-
-/**
- * @param {CompiledLawnTask} task
- * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
- */
-/**
- * @param {CompiledLawnTask} task
- * @param {Array<{ is_completed?: boolean, last_completed_date?: string | null }>} [existingRows]
- * @param {boolean} canUseLastCompleted
- */
-function buildPackSyncRow(task, existingRows, canUseLastCompleted) {
-  const existing = existingRows?.[0];
-  /** @type {Record<string, unknown>} */
-  const row = {
-    app_source: LAWN_APP_SOURCE,
-    task_name: task.title,
-    due_date: task.dueDate,
-  };
-
-  if (task.status === 'completed') {
-    row.is_completed = true;
-    if (canUseLastCompleted) {
-      row.last_completed_date =
-        task.completedDate ?? existing?.last_completed_date ?? task.dueDate;
-    }
-    return row;
-  }
-
-  if (existing?.is_completed) {
-    row.is_completed = true;
-    if (canUseLastCompleted && existing.last_completed_date) {
-      row.last_completed_date = existing.last_completed_date;
-    }
-    return row;
-  }
-
-  row.is_completed = false;
-  return row;
-}
-
-function compiledTaskToRow(task, maintenance = {}) {
-  /** @type {Record<string, unknown>} */
-  const row = {
-    app_source: LAWN_APP_SOURCE,
-    task_name: task.title,
-    due_date: task.dueDate,
-    is_completed: task.status === 'completed',
-  };
-
-  if (task.status === 'completed' && task.completedDate) {
-    row.last_completed_date = task.completedDate;
-  }
-
-  if (task.title === MOW_TASK_NAME && maintenance.lastMowedDate) {
-    row.last_completed_date = maintenance.lastMowedDate;
-  }
-  if (task.title === WATER_TASK_NAME && maintenance.lastWateredDate) {
-    row.last_completed_date = maintenance.lastWateredDate;
-  }
-  if (task.title === VERTICUT_TASK_NAME && maintenance.lastVerticutDate) {
-    row.last_completed_date = maintenance.lastVerticutDate;
-  }
-  if (task.title === GYPSUM_TASK_NAME && task.completedDate) {
-    row.last_completed_date = task.completedDate;
-  }
-
-  return row;
-}
-
-/**
- * Create or update every compiled lawn task in Supabase.
- * @param {CompiledLawnTask[]} compiledTasks
- * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} [maintenance]
- */
-/**
- * @param {import('@supabase/supabase-js').SupabaseClient} supabase
- * @param {Record<string, unknown>} body
- * @param {string} taskTitle
- * @param {Record<string, unknown>} fullPayload
- */
-async function applyTaskWrite(supabase, body, taskTitle, fullPayload) {
-  let { error } = await supabase.from('tasks').insert(body);
-
-  if (error && isMissingLastCompletedColumnError(error)) {
-    resetLastCompletedColumnProbe();
-    body = withoutLastCompletedDate(fullPayload);
-    ({ error } = await supabase.from('tasks').insert(body));
-  }
-
-  if (error) {
-    throw new Error(`Insert failed for "${taskTitle}": ${formatSupabaseSyncError(error)}`);
-  }
-}
-
-/**
- * @param {import('@supabase/supabase-js').SupabaseClient} supabase
- * @param {CompiledLawnTask} task
- * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
- * @param {string} todayStr
- */
-async function writeTaskPayload(supabase, task, maintenance, todayStr) {
-  const taskTitle = task.title;
-  const isMaintenance =
-    MAINTENANCE_TASK_NAMES.has(taskTitle) ||
-    (typeof taskTitle === 'string' && taskTitle.startsWith('Water lawn ('));
-  let existingResult = await supabase
-    .from('tasks')
-    .select('id, due_date, is_completed, last_completed_date')
-    .eq('app_source', LAWN_APP_SOURCE)
-    .eq('task_name', taskTitle)
-    .order('id', { ascending: true });
-
-  if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
-    existingResult = await supabase
-      .from('tasks')
-      .select('id, due_date, is_completed')
-      .eq('app_source', LAWN_APP_SOURCE)
-      .eq('task_name', taskTitle)
-      .order('id', { ascending: true });
-  }
-
-  if (existingResult.error) {
-    throw new Error(
-      `Lookup failed for "${taskTitle}": ${formatSupabaseSyncError(existingResult.error)}`
-    );
-  }
-
-  const existing = existingResult.data;
-  const canUseLastCompleted = await probeLastCompletedColumn(supabase);
-
-  let payload = isMaintenance
-    ? buildMaintenanceSyncRow(task, maintenance, existing ?? [], todayStr)
-    : buildPackSyncRow(task, existing ?? [], canUseLastCompleted);
-
-  let body = canUseLastCompleted ? payload : withoutLastCompletedDate(payload);
-
-  if (existing && existing.length > 0) {
-    const [primary, ...duplicates] = existing;
-
-    let { error } = await supabase.from('tasks').update(body).eq('id', primary.id);
-
-    if (error && isMissingLastCompletedColumnError(error)) {
-      resetLastCompletedColumnProbe();
-      body = withoutLastCompletedDate(payload);
-      ({ error } = await supabase.from('tasks').update(body).eq('id', primary.id));
-    }
-
-    if (error) {
-      throw new Error(`Update failed for "${taskTitle}": ${formatSupabaseSyncError(error)}`);
-    }
-
-    for (const duplicate of duplicates) {
-      const { error: deleteError } = await supabase.from('tasks').delete().eq('id', duplicate.id);
-      if (deleteError) {
-        console.warn(`[Lawn Care] Could not remove duplicate "${taskTitle}" row:`, deleteError);
-      }
-    }
-    return;
-  }
-
-  await applyTaskWrite(supabase, body, taskTitle, payload);
-}
-
-/** @returns {Promise<boolean>} */
-export async function isLastCompletedColumnAvailable() {
-  return probeLastCompletedColumn(requireSupabase());
-}
-
-export async function syncLawnTasksToSupabase(compiledTasks, maintenance = {}, todayStr) {
-  const supabase = requireSupabase();
-  const today =
-    todayStr ?? new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
-
-  for (const task of compiledTasks) {
-    await writeTaskPayload(supabase, task, maintenance, today);
-  }
-
-  try {
-    await deleteStaleLawnTasks(compiledTasks);
-  } catch (error) {
-    console.warn('[Lawn Care] Stale task cleanup skipped:', error);
-  }
-}
-
-/** @returns {Promise<Map<string, string>>} */
-async function fetchLawnTaskIdsByName() {
-  const supabase = requireSupabase();
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('id, task_name')
-    .eq('app_source', LAWN_APP_SOURCE);
-
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
-  }
-
-  /** @type {Map<string, string>} */
-  const byName = new Map();
-  for (const row of data ?? []) {
-    if (!byName.has(row.task_name)) {
-      byName.set(row.task_name, row.id);
-    }
-  }
-  return byName;
-}
-
-/** @returns {Promise<LawnTaskRow[]>} */
-export async function fetchLawnTasksFromSupabase() {
-  return fetchLawnTasksForInboundSync();
-}
-
-/** @returns {Promise<LawnTaskRow[]>} */
-export async function fetchLawnTasksForInboundSync() {
-  const supabase = requireSupabase();
-
-  let result = await supabase
-    .from('tasks')
-    .select('id, app_source, task_name, due_date, is_completed, last_completed_date')
-    .eq('app_source', LAWN_APP_SOURCE)
-    .order('due_date', { ascending: true });
-
-  if (result.error && isMissingLastCompletedColumnError(result.error)) {
-    result = await supabase
-      .from('tasks')
-      .select('id, app_source, task_name, due_date, is_completed')
-      .eq('app_source', LAWN_APP_SOURCE)
-      .order('due_date', { ascending: true });
-  }
-
-  if (result.error) {
-    throw new Error(formatSupabaseSyncError(result.error));
-  }
-
-  return result.data ?? [];
-}
-
-/**
- * Clear completion in Supabase when a step is cleared in the Lawn app.
- * @param {string} taskName
- */
-export async function clearLawnTaskCompletion(taskName) {
-  const supabase = requireSupabase();
-  const canUseLastCompleted = await probeLastCompletedColumn(supabase);
-
-  /** @type {Record<string, unknown>} */
-  let body = { is_completed: false };
-  if (canUseLastCompleted) {
-    body.last_completed_date = null;
-  }
-
-  let { error } = await supabase
-    .from('tasks')
-    .update(body)
-    .eq('app_source', LAWN_APP_SOURCE)
-    .eq('task_name', taskName);
-
-  if (error && isMissingLastCompletedColumnError(error)) {
-    body = { is_completed: false };
-    ({ error } = await supabase
-      .from('tasks')
-      .update(body)
-      .eq('app_source', LAWN_APP_SOURCE)
-      .eq('task_name', taskName));
-  }
-
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
-  }
-}
-
-/**
- * Toggle a lawn task's completed state in Supabase.
- * @param {string} taskId
- * @param {boolean} isCompleted
- */
-export async function toggleLawnTask(taskId, isCompleted) {
-  const supabase = requireSupabase();
-  const { error } = await supabase
-    .from('tasks')
-    .update({
-      is_completed: isCompleted,
-    })
-    .eq('id', taskId)
-    .eq('app_source', LAWN_APP_SOURCE);
-
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
-  }
-}
-
-/**
- * Toggle a lawn task by its display name.
- * @param {string} taskName
- * @param {boolean} isCompleted
- */
-export async function toggleLawnTaskByName(taskName, isCompleted) {
-  const supabase = requireSupabase();
-  const { error } = await supabase
-    .from('tasks')
-    .update({
-      is_completed: isCompleted,
-    })
-    .eq('app_source', LAWN_APP_SOURCE)
-    .eq('task_name', taskName);
-
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
-  }
-}
-
-/**
- * Remove a lawn task row from Supabase.
- * @param {string} taskId
- */
-export async function deleteLawnTask(taskId) {
-  const supabase = requireSupabase();
-  const { error } = await supabase
-    .from('tasks')
-    .delete()
-    .eq('id', taskId)
-    .eq('app_source', LAWN_APP_SOURCE);
-
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
-  }
-}
-
-/**
- * Remove a lawn task by its display name.
- * @param {string} taskName
- */
-export async function deleteLawnTaskByName(taskName) {
-  const supabase = requireSupabase();
-  const { error } = await supabase
-    .from('tasks')
-    .delete()
-    .eq('app_source', LAWN_APP_SOURCE)
-    .eq('task_name', taskName);
-
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
-  }
-}
-
-/**
- * Remove lawn tasks that are no longer part of the compiled export.
- * @param {CompiledLawnTask[]} compiledTasks
- */
-export async function deleteStaleLawnTasks(compiledTasks) {
-  const activeNames = new Set(compiledTasks.map((task) => task.title));
-  const supabase = requireSupabase();
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('id, task_name, is_completed')
-    .eq('app_source', LAWN_APP_SOURCE);
-
-  if (error) {
-    throw new Error(formatSupabaseSyncError(error));
-  }
-
-  for (const row of data ?? []) {
-    if (activeNames.has(row.task_name)) continue;
-    // Keep completed rows for Done-tab history even if compile export changes.
-    if (row.is_completed) continue;
-    await deleteLawnTask(row.id);
-  }
-}
-</file>
-
 <file path="src/utils/compileLawnTasks.js">
 import {
   addDaysToDateString,
@@ -7427,6 +6966,507 @@ export function compileAllLawnTasks(input) {
       dynamicMinutes,
     }),
   ];
+}
+</file>
+
+<file path="src/services/lawnTasks.js">
+import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
+import {
+  MOW_TASK_NAME,
+  WATER_TASK_NAME,
+  VERTICUT_TASK_NAME,
+  isMissingLastCompletedColumnError,
+  withoutLastCompletedDate,
+  probeLastCompletedColumn,
+  resetLastCompletedColumnProbe,
+  pickLatestIsoDate,
+  inferLastDoneFromMaintenanceRow,
+} from './lawnMaintenanceSync';
+import { GYPSUM_TASK_NAME } from './lawnTaskInboundSync';
+import { addDaysToDateString } from '../data/LawnPackData';
+
+const MAINTENANCE_TASK_NAMES = new Set([MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME]);
+
+export const LAWN_APP_SOURCE = 'lawn';
+
+/**
+ * @typedef {'pending' | 'urgent' | 'completed'} LawnTaskStatus
+ */
+
+/**
+ * @typedef {Object} CompiledLawnTask
+ * @property {string} id
+ * @property {string} title
+ * @property {string} dueDate
+ * @property {LawnTaskStatus} status
+ * @property {'lawn'} module
+ * @property {string | null} [reason]
+ * @property {string | null} [completedDate]
+ */
+
+/**
+ * @typedef {Object} LawnTaskRow
+ * @property {string} id
+ * @property {string} app_source
+ * @property {string} task_name
+ * @property {string} due_date
+ * @property {boolean} is_completed
+ */
+
+function requireSupabase() {
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase client could not be initialised.');
+  }
+
+  return supabase;
+}
+
+/**
+ * @param {CompiledLawnTask} task
+ * @returns {boolean}
+ */
+function isSyntheticMaintenanceComplete(task) {
+  return (
+    task.status === 'completed' &&
+    typeof task.reason === 'string' &&
+    /dormancy|winter|rain|not actively growing|nature providing|outside active season|drought|heat stress|paused to protect/i.test(
+      task.reason
+    )
+  );
+}
+
+/**
+ * @param {CompiledLawnTask} task
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
+ * @param {Array<{ due_date: string, is_completed: boolean, last_completed_date?: string | null }>} [existingRows]
+ * @param {string} todayStr
+ */
+function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
+  const localLast =
+    task.title === MOW_TASK_NAME
+      ? maintenance.lastMowedDate
+      : task.title === WATER_TASK_NAME || task.title.startsWith('Water lawn (')
+        ? maintenance.lastWateredDate
+        : task.title === VERTICUT_TASK_NAME
+          ? maintenance.lastVerticutDate
+          : null;
+
+  let lastCompleted = localLast ?? null;
+  for (const existing of existingRows ?? []) {
+    lastCompleted = pickLatestIsoDate(
+      lastCompleted,
+      existing.last_completed_date ?? null,
+      inferLastDoneFromMaintenanceRow(
+        {
+          task_name: task.title,
+          due_date: existing.due_date,
+          is_completed: existing.is_completed,
+          last_completed_date: existing.last_completed_date ?? null,
+        },
+        todayStr
+      )
+    );
+  }
+
+  /** @type {Record<string, unknown>} */
+  const row = {
+    app_source: LAWN_APP_SOURCE,
+    task_name: task.title,
+    due_date: task.dueDate,
+  };
+
+  // For individual watering sessions: if this session was already completed today,
+  // advance its due_date to tomorrow so it disappears from today's view while any
+  // sibling sessions that haven't been done yet remain visible.
+  if (task.title.startsWith('Water lawn (')) {
+    const completedToday = (existingRows ?? []).some(
+      r => r.last_completed_date === todayStr
+    );
+    if (completedToday) {
+      row.due_date = addDaysToDateString(todayStr, 1);
+    }
+  }
+
+  if (lastCompleted) {
+    row.last_completed_date = lastCompleted;
+  }
+
+  row.is_completed = isSyntheticMaintenanceComplete(task);
+
+  return row;
+}
+
+/**
+ * @param {CompiledLawnTask} task
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
+ */
+/**
+ * @param {CompiledLawnTask} task
+ * @param {Array<{ is_completed?: boolean, last_completed_date?: string | null }>} [existingRows]
+ * @param {boolean} canUseLastCompleted
+ */
+function buildPackSyncRow(task, existingRows, canUseLastCompleted) {
+  const existing = existingRows?.[0];
+  /** @type {Record<string, unknown>} */
+  const row = {
+    app_source: LAWN_APP_SOURCE,
+    task_name: task.title,
+    due_date: task.dueDate,
+  };
+
+  if (task.status === 'completed') {
+    row.is_completed = true;
+    if (canUseLastCompleted) {
+      row.last_completed_date =
+        task.completedDate ?? existing?.last_completed_date ?? task.dueDate;
+    }
+    return row;
+  }
+
+  if (existing?.is_completed) {
+    row.is_completed = true;
+    if (canUseLastCompleted && existing.last_completed_date) {
+      row.last_completed_date = existing.last_completed_date;
+    }
+    return row;
+  }
+
+  row.is_completed = false;
+  return row;
+}
+
+function compiledTaskToRow(task, maintenance = {}) {
+  /** @type {Record<string, unknown>} */
+  const row = {
+    app_source: LAWN_APP_SOURCE,
+    task_name: task.title,
+    due_date: task.dueDate,
+    is_completed: task.status === 'completed',
+  };
+
+  if (task.status === 'completed' && task.completedDate) {
+    row.last_completed_date = task.completedDate;
+  }
+
+  if (task.title === MOW_TASK_NAME && maintenance.lastMowedDate) {
+    row.last_completed_date = maintenance.lastMowedDate;
+  }
+  if (task.title === WATER_TASK_NAME && maintenance.lastWateredDate) {
+    row.last_completed_date = maintenance.lastWateredDate;
+  }
+  if (task.title === VERTICUT_TASK_NAME && maintenance.lastVerticutDate) {
+    row.last_completed_date = maintenance.lastVerticutDate;
+  }
+  if (task.title === GYPSUM_TASK_NAME && task.completedDate) {
+    row.last_completed_date = task.completedDate;
+  }
+
+  return row;
+}
+
+/**
+ * Create or update every compiled lawn task in Supabase.
+ * @param {CompiledLawnTask[]} compiledTasks
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null }} [maintenance]
+ */
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {Record<string, unknown>} body
+ * @param {string} taskTitle
+ * @param {Record<string, unknown>} fullPayload
+ */
+async function applyTaskWrite(supabase, body, taskTitle, fullPayload) {
+  let { error } = await supabase.from('tasks').insert(body);
+
+  if (error && isMissingLastCompletedColumnError(error)) {
+    resetLastCompletedColumnProbe();
+    body = withoutLastCompletedDate(fullPayload);
+    ({ error } = await supabase.from('tasks').insert(body));
+  }
+
+  if (error) {
+    throw new Error(`Insert failed for "${taskTitle}": ${formatSupabaseSyncError(error)}`);
+  }
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {CompiledLawnTask} task
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
+ * @param {string} todayStr
+ */
+async function writeTaskPayload(supabase, task, maintenance, todayStr) {
+  const taskTitle = task.title;
+  const isMaintenance =
+    MAINTENANCE_TASK_NAMES.has(taskTitle) ||
+    (typeof taskTitle === 'string' && taskTitle.startsWith('Water lawn ('));
+  let existingResult = await supabase
+    .from('tasks')
+    .select('id, due_date, is_completed, last_completed_date')
+    .eq('app_source', LAWN_APP_SOURCE)
+    .eq('task_name', taskTitle)
+    .order('id', { ascending: true });
+
+  if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
+    existingResult = await supabase
+      .from('tasks')
+      .select('id, due_date, is_completed')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .eq('task_name', taskTitle)
+      .order('id', { ascending: true });
+  }
+
+  if (existingResult.error) {
+    throw new Error(
+      `Lookup failed for "${taskTitle}": ${formatSupabaseSyncError(existingResult.error)}`
+    );
+  }
+
+  const existing = existingResult.data;
+  const canUseLastCompleted = await probeLastCompletedColumn(supabase);
+
+  let payload = isMaintenance
+    ? buildMaintenanceSyncRow(task, maintenance, existing ?? [], todayStr)
+    : buildPackSyncRow(task, existing ?? [], canUseLastCompleted);
+
+  let body = canUseLastCompleted ? payload : withoutLastCompletedDate(payload);
+
+  if (existing && existing.length > 0) {
+    const [primary, ...duplicates] = existing;
+
+    let { error } = await supabase.from('tasks').update(body).eq('id', primary.id);
+
+    if (error && isMissingLastCompletedColumnError(error)) {
+      resetLastCompletedColumnProbe();
+      body = withoutLastCompletedDate(payload);
+      ({ error } = await supabase.from('tasks').update(body).eq('id', primary.id));
+    }
+
+    if (error) {
+      throw new Error(`Update failed for "${taskTitle}": ${formatSupabaseSyncError(error)}`);
+    }
+
+    for (const duplicate of duplicates) {
+      const { error: deleteError } = await supabase.from('tasks').delete().eq('id', duplicate.id);
+      if (deleteError) {
+        console.warn(`[Lawn Care] Could not remove duplicate "${taskTitle}" row:`, deleteError);
+      }
+    }
+    return;
+  }
+
+  await applyTaskWrite(supabase, body, taskTitle, payload);
+}
+
+/** @returns {Promise<boolean>} */
+export async function isLastCompletedColumnAvailable() {
+  return probeLastCompletedColumn(requireSupabase());
+}
+
+export async function syncLawnTasksToSupabase(compiledTasks, maintenance = {}, todayStr) {
+  const supabase = requireSupabase();
+  const today =
+    todayStr ?? new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+
+  for (const task of compiledTasks) {
+    await writeTaskPayload(supabase, task, maintenance, today);
+  }
+
+  try {
+    await deleteStaleLawnTasks(compiledTasks);
+  } catch (error) {
+    console.warn('[Lawn Care] Stale task cleanup skipped:', error);
+  }
+}
+
+/** @returns {Promise<Map<string, string>>} */
+async function fetchLawnTaskIdsByName() {
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, task_name')
+    .eq('app_source', LAWN_APP_SOURCE);
+
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+
+  /** @type {Map<string, string>} */
+  const byName = new Map();
+  for (const row of data ?? []) {
+    if (!byName.has(row.task_name)) {
+      byName.set(row.task_name, row.id);
+    }
+  }
+  return byName;
+}
+
+/** @returns {Promise<LawnTaskRow[]>} */
+export async function fetchLawnTasksFromSupabase() {
+  return fetchLawnTasksForInboundSync();
+}
+
+/** @returns {Promise<LawnTaskRow[]>} */
+export async function fetchLawnTasksForInboundSync() {
+  const supabase = requireSupabase();
+
+  let result = await supabase
+    .from('tasks')
+    .select('id, app_source, task_name, due_date, is_completed, last_completed_date')
+    .eq('app_source', LAWN_APP_SOURCE)
+    .order('due_date', { ascending: true });
+
+  if (result.error && isMissingLastCompletedColumnError(result.error)) {
+    result = await supabase
+      .from('tasks')
+      .select('id, app_source, task_name, due_date, is_completed')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .order('due_date', { ascending: true });
+  }
+
+  if (result.error) {
+    throw new Error(formatSupabaseSyncError(result.error));
+  }
+
+  return result.data ?? [];
+}
+
+/**
+ * Clear completion in Supabase when a step is cleared in the Lawn app.
+ * @param {string} taskName
+ */
+export async function clearLawnTaskCompletion(taskName) {
+  const supabase = requireSupabase();
+  const canUseLastCompleted = await probeLastCompletedColumn(supabase);
+
+  /** @type {Record<string, unknown>} */
+  let body = { is_completed: false };
+  if (canUseLastCompleted) {
+    body.last_completed_date = null;
+  }
+
+  let { error } = await supabase
+    .from('tasks')
+    .update(body)
+    .eq('app_source', LAWN_APP_SOURCE)
+    .eq('task_name', taskName);
+
+  if (error && isMissingLastCompletedColumnError(error)) {
+    body = { is_completed: false };
+    ({ error } = await supabase
+      .from('tasks')
+      .update(body)
+      .eq('app_source', LAWN_APP_SOURCE)
+      .eq('task_name', taskName));
+  }
+
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+}
+
+/**
+ * Toggle a lawn task's completed state in Supabase.
+ * @param {string} taskId
+ * @param {boolean} isCompleted
+ */
+export async function toggleLawnTask(taskId, isCompleted) {
+  const supabase = requireSupabase();
+  const { error } = await supabase
+    .from('tasks')
+    .update({
+      is_completed: isCompleted,
+    })
+    .eq('id', taskId)
+    .eq('app_source', LAWN_APP_SOURCE);
+
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+}
+
+/**
+ * Toggle a lawn task by its display name.
+ * @param {string} taskName
+ * @param {boolean} isCompleted
+ */
+export async function toggleLawnTaskByName(taskName, isCompleted) {
+  const supabase = requireSupabase();
+  const { error } = await supabase
+    .from('tasks')
+    .update({
+      is_completed: isCompleted,
+    })
+    .eq('app_source', LAWN_APP_SOURCE)
+    .eq('task_name', taskName);
+
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+}
+
+/**
+ * Remove a lawn task row from Supabase.
+ * @param {string} taskId
+ */
+export async function deleteLawnTask(taskId) {
+  const supabase = requireSupabase();
+  const { error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('id', taskId)
+    .eq('app_source', LAWN_APP_SOURCE);
+
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+}
+
+/**
+ * Remove a lawn task by its display name.
+ * @param {string} taskName
+ */
+export async function deleteLawnTaskByName(taskName) {
+  const supabase = requireSupabase();
+  const { error } = await supabase
+    .from('tasks')
+    .delete()
+    .eq('app_source', LAWN_APP_SOURCE)
+    .eq('task_name', taskName);
+
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+}
+
+/**
+ * Remove lawn tasks that are no longer part of the compiled export.
+ * @param {CompiledLawnTask[]} compiledTasks
+ */
+export async function deleteStaleLawnTasks(compiledTasks) {
+  const activeNames = new Set(compiledTasks.map((task) => task.title));
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, task_name, is_completed')
+    .eq('app_source', LAWN_APP_SOURCE);
+
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+
+  for (const row of data ?? []) {
+    if (activeNames.has(row.task_name)) continue;
+    // Keep completed rows for Done-tab history even if compile export changes.
+    if (row.is_completed) continue;
+    await deleteLawnTask(row.id);
+  }
 }
 </file>
 
@@ -29908,6 +29948,14 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     task_name: task.title,
     due_date: task.dueDate
   };
+  if (task.title.startsWith("Water lawn (")) {
+    const completedToday = (existingRows ?? []).some(
+      (r) => r.last_completed_date === todayStr
+    );
+    if (completedToday) {
+      row.due_date = addDaysToDateString(todayStr, 1);
+    }
+  }
   if (lastCompleted) {
     row.last_completed_date = lastCompleted;
   }
@@ -30034,6 +30082,11 @@ async function deleteStaleLawnTasks(compiledTasks) {
 var MOW_TASK_NAME = "Mow lawn";
 var WATER_TASK_NAME = "Water lawn";
 var VERTICUT_TASK_NAME = "Verticutting";
+var WATERING_SESSION_NAMES = [
+  "Water lawn (Morning)",
+  "Water lawn (Midday)",
+  "Water lawn (Evening)"
+];
 var lastCompletedColumnAvailable = null;
 function resetLastCompletedColumnProbe() {
   lastCompletedColumnAvailable = null;
@@ -30084,12 +30137,27 @@ function inferMaintenanceDatesFromRows(rows, todayStr) {
   let lastMowedDate = null;
   let lastWateredDate = null;
   let lastVerticutDate = null;
+  const sessionRows = rows.filter((r) => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length > 0) {
+    const completionsByDate = /* @__PURE__ */ new Map();
+    for (const row of sessionRows) {
+      const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+      if (!inferred) continue;
+      if (!completionsByDate.has(inferred)) completionsByDate.set(inferred, /* @__PURE__ */ new Set());
+      completionsByDate.get(inferred)?.add(row.task_name);
+    }
+    for (const [date, names] of completionsByDate) {
+      if (WATERING_SESSION_NAMES.every((n) => names.has(n))) {
+        lastWateredDate = pickLatestIsoDate(lastWateredDate, date);
+      }
+    }
+  }
   for (const row of rows) {
     const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
     if (!inferred) continue;
     if (row.task_name === MOW_TASK_NAME) {
       lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
-    } else if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith("Water lawn (")) {
+    } else if (row.task_name === WATER_TASK_NAME) {
       lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
     } else if (row.task_name === VERTICUT_TASK_NAME) {
       lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);

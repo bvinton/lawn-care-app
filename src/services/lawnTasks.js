@@ -11,6 +11,7 @@ import {
   inferLastDoneFromMaintenanceRow,
 } from './lawnMaintenanceSync';
 import { GYPSUM_TASK_NAME } from './lawnTaskInboundSync';
+import { addDaysToDateString } from '../data/LawnPackData';
 
 const MAINTENANCE_TASK_NAMES = new Set([MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME]);
 
@@ -107,6 +108,18 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     task_name: task.title,
     due_date: task.dueDate,
   };
+
+  // For individual watering sessions: if this session was already completed today,
+  // advance its due_date to tomorrow so it disappears from today's view while any
+  // sibling sessions that haven't been done yet remain visible.
+  if (task.title.startsWith('Water lawn (')) {
+    const completedToday = (existingRows ?? []).some(
+      r => r.last_completed_date === todayStr
+    );
+    if (completedToday) {
+      row.due_date = addDaysToDateString(todayStr, 1);
+    }
+  }
 
   if (lastCompleted) {
     row.last_completed_date = lastCompleted;
