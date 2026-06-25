@@ -1,27 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { LAWN_GUIDE_SECTIONS, guideActionLabel } from '../../data/lawnGuidesData';
+import { LAWN_GUIDE_SECTIONS } from '../../data/lawnGuidesData';
 import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
 import { pushAppHistoryState } from '../../utils/backNavigation';
-import { openGuide } from '../../utils/openGuide';
+import GuideViewerModal from './GuideViewerModal';
 import SprinklerLightbox from './SprinklerLightbox';
 
 /** @param {{ setActiveScreen: (screen: string) => void }} props */
 export default function LawnGuides({ setActiveScreen }) {
+  const [openGuide, setOpenGuide] = useState(
+    /** @type {{ file: string, kind: 'pdf' | 'docx', title: string } | null} */ (null)
+  );
   const [enlargedImage, setEnlargedImage] = useState(
     /** @type {{ image: string, name: string } | null} */ (null)
   );
 
   useEffect(() => {
-    if (enlargedImage) {
-      pushAppHistoryState({ overlay: 'guide-image' });
-    }
+    if (openGuide) pushAppHistoryState({ overlay: 'guide-viewer' });
+  }, [openGuide]);
+
+  useEffect(() => {
+    if (enlargedImage) pushAppHistoryState({ overlay: 'guide-image' });
   }, [enlargedImage]);
 
   useRegisterBackHandler(() => {
-    if (enlargedImage) {
-      setEnlargedImage(null);
-      return true;
-    }
+    if (enlargedImage) { setEnlargedImage(null); return true; }
     return false;
   }, Boolean(enlargedImage));
 
@@ -62,23 +64,24 @@ export default function LawnGuides({ setActiveScreen }) {
                       <p className="text-xs text-gray-500 mt-0.5">{guide.description}</p>
                     )}
                   </div>
+
                   {guide.kind === 'image' ? (
                     <button
                       type="button"
-                      onClick={() =>
-                        setEnlargedImage({ image: guide.file, name: guide.title })
-                      }
+                      onClick={() => setEnlargedImage({ image: guide.file, name: guide.title })}
                       className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
                     >
-                      {guideActionLabel(guide)}
+                      View image
                     </button>
                   ) : (
                     <button
                       type="button"
-                      onClick={() => openGuide(guide)}
+                      onClick={() =>
+                        setOpenGuide({ file: guide.file, kind: guide.kind, title: guide.title })
+                      }
                       className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
                     >
-                      {guideActionLabel(guide)}
+                      Read guide
                     </button>
                   )}
                 </li>
@@ -89,10 +92,16 @@ export default function LawnGuides({ setActiveScreen }) {
       </div>
 
       <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
-        Guides are hosted with the app (not on your PC). PDFs open in the viewer; Word guides
-        download to your phone — open them from Files or Word.
+        Guides open in a viewer inside the app. Use your phone&apos;s back button or ✕ to close.
       </p>
 
+      {/* Inline guide viewer (PDF / DOCX) */}
+      <GuideViewerModal
+        guide={openGuide}
+        onClose={() => setOpenGuide(null)}
+      />
+
+      {/* Image lightbox */}
       {enlargedImage && (
         <SprinklerLightbox
           enlargedSprinkler={enlargedImage}

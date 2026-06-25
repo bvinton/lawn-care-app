@@ -75,6 +75,7 @@ scripts/bundle-sync-api.mjs
 scripts/check-lawn-tasks.mjs
 scripts/generate-pwa-icons.mjs
 src/App.jsx
+src/components/lawn/GuideViewerModal.jsx
 src/components/lawn/LawnCareApp.jsx
 src/components/lawn/LawnGuides.jsx
 src/components/lawn/LawnSettings.jsx
@@ -120,106 +121,81 @@ vite.config.js
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/hooks/useMobileBackNavigation.js">
-import { useEffect, useRef } from 'react';
-import {
-  pushAppHistoryState,
-  registerBackHandler,
-  runBackHandlers,
-} from '../utils/backNavigation';
+<file path="src/components/lawn/GuideViewerModal.jsx">
+import React, { useState } from 'react';
+import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
 
 /**
- * Android / PWA hardware back: sub-screens → main, main → confirm exit.
- * @param {{
- *   isAtRoot: () => boolean,
- *   onReturnToMain: () => void,
- *   exitMessage?: string,
- * }} options
+ * Build an inline-viewer URL for a guide hosted on this origin.
+ * - PDF  → Google Docs Viewer (renders inline)
+ * - DOCX → Microsoft Office Online Viewer (renders inline)
+ * @param {string} fileUrl Absolute URL of the hosted file
+ * @param {'pdf' | 'docx'} kind
  */
-export function useMobileBackNavigation({
-  isAtRoot,
-  onReturnToMain,
-  exitMessage = 'Leave the Lawn Pack Companion?',
-}) {
-  const isAtRootRef = useRef(isAtRoot);
-  const onReturnToMainRef = useRef(onReturnToMain);
-
-  useEffect(() => {
-    isAtRootRef.current = isAtRoot;
-    onReturnToMainRef.current = onReturnToMain;
-  }, [isAtRoot, onReturnToMain]);
-
-  useEffect(() => {
-    pushAppHistoryState({ trap: 'root' });
-
-    const onPopState = () => {
-      if (runBackHandlers()) {
-        pushAppHistoryState({ trap: 'handled' });
-        return;
-      }
-
-      if (!isAtRootRef.current()) {
-        onReturnToMainRef.current();
-        pushAppHistoryState({ trap: 'main' });
-        return;
-      }
-
-      if (window.confirm(exitMessage)) {
-        window.history.back();
-        return;
-      }
-
-      pushAppHistoryState({ trap: 'root' });
-    };
-
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, [exitMessage]);
-}
-
-/**
- * @param {() => boolean} handler Return true when this layer consumed the back press.
- * @param {boolean} enabled
- */
-export function useRegisterBackHandler(handler, enabled = true) {
-  const handlerRef = useRef(handler);
-  handlerRef.current = handler;
-
-  useEffect(() => {
-    if (!enabled) return undefined;
-
-    return registerBackHandler(() => handlerRef.current());
-  }, [enabled]);
-}
-</file>
-
-<file path="src/utils/backNavigation.js">
-/** @type {Array<() => boolean>} */
-const handlers = [];
-
-/**
- * Register a back handler (most recent wins). Return true if the event was handled.
- * @param {() => boolean} handler
- */
-export function registerBackHandler(handler) {
-  handlers.push(handler);
-  return () => {
-    const index = handlers.indexOf(handler);
-    if (index >= 0) handlers.splice(index, 1);
-  };
-}
-
-/** @returns {boolean} */
-export function runBackHandlers() {
-  for (let i = handlers.length - 1; i >= 0; i -= 1) {
-    if (handlers[i]()) return true;
+function buildViewerUrl(fileUrl, kind) {
+  const encoded = encodeURIComponent(fileUrl);
+  if (kind === 'pdf') {
+    return `https://docs.google.com/viewer?url=${encoded}&embedded=true`;
   }
-  return false;
+  return `https://view.officeapps.live.com/op/view.aspx?src=${encoded}`;
 }
 
-/** Push a history entry so the next hardware back fires popstate instead of closing the PWA. */
-export function pushAppHistoryState(state = {}) {
-  window.history.pushState({ lawnApp: true, ...state }, '', window.location.pathname);
+/**
+ * @param {{
+ *   guide: { file: string, kind: 'pdf' | 'docx', title: string } | null,
+ *   onClose: () => void,
+ * }} props
+ */
+export default function GuideViewerModal({ guide, onClose }) {
+  const [loading, setLoading] = useState(true);
+
+  useRegisterBackHandler(() => {
+    if (guide) {
+      onClose();
+      return true;
+    }
+    return false;
+  }, Boolean(guide));
+
+  if (!guide) return null;
+
+  const fileUrl = new URL(guide.file, window.location.origin).href;
+  const viewerUrl = buildViewerUrl(fileUrl, guide.kind);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white" role="dialog" aria-modal="true" aria-label={guide.title}>
+      {/* Header bar */}
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 bg-white shrink-0">
+        <p className="text-sm font-bold text-gray-900 truncate flex-1">{guide.title}</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-base shrink-0"
+          aria-label="Close guide"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Loading indicator */}
+      {loading && (
+        <div className="absolute inset-0 top-14 flex flex-col items-center justify-center gap-3 bg-gray-50 z-10 pointer-events-none">
+          <div className="w-8 h-8 border-4 border-green-200 border-t-green-700 rounded-full animate-spin" />
+          <p className="text-xs text-gray-500 font-medium">Loading guide…</p>
+        </div>
+      )}
+
+      {/* Viewer iframe */}
+      <iframe
+        src={viewerUrl}
+        title={guide.title}
+        className="flex-1 w-full border-0"
+        onLoad={() => setLoading(false)}
+        allow="fullscreen"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+      />
+    </div>
+  );
 }
 </file>
 
@@ -926,6 +902,79 @@ export const DECKING_EDGE_WATERING_SUBTASK = (
 );
 </file>
 
+<file path="src/hooks/useMobileBackNavigation.js">
+import { useEffect, useRef } from 'react';
+import {
+  pushAppHistoryState,
+  registerBackHandler,
+  runBackHandlers,
+} from '../utils/backNavigation';
+
+/**
+ * Android / PWA hardware back: sub-screens → main, main → confirm exit.
+ * @param {{
+ *   isAtRoot: () => boolean,
+ *   onReturnToMain: () => void,
+ *   exitMessage?: string,
+ * }} options
+ */
+export function useMobileBackNavigation({
+  isAtRoot,
+  onReturnToMain,
+  exitMessage = 'Leave the Lawn Pack Companion?',
+}) {
+  const isAtRootRef = useRef(isAtRoot);
+  const onReturnToMainRef = useRef(onReturnToMain);
+
+  useEffect(() => {
+    isAtRootRef.current = isAtRoot;
+    onReturnToMainRef.current = onReturnToMain;
+  }, [isAtRoot, onReturnToMain]);
+
+  useEffect(() => {
+    pushAppHistoryState({ trap: 'root' });
+
+    const onPopState = () => {
+      if (runBackHandlers()) {
+        pushAppHistoryState({ trap: 'handled' });
+        return;
+      }
+
+      if (!isAtRootRef.current()) {
+        onReturnToMainRef.current();
+        pushAppHistoryState({ trap: 'main' });
+        return;
+      }
+
+      if (window.confirm(exitMessage)) {
+        window.history.back();
+        return;
+      }
+
+      pushAppHistoryState({ trap: 'root' });
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [exitMessage]);
+}
+
+/**
+ * @param {() => boolean} handler Return true when this layer consumed the back press.
+ * @param {boolean} enabled
+ */
+export function useRegisterBackHandler(handler, enabled = true) {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+
+    return registerBackHandler(() => handlerRef.current());
+  }, [enabled]);
+}
+</file>
+
 <file path="src/services/lawnLocation.js">
 import { WALLSEND_COORDS } from '../data/LawnPackData.js';
 
@@ -1120,6 +1169,36 @@ export function getBrowserGeolocation() {
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 300000 }
     );
   });
+}
+</file>
+
+<file path="src/utils/backNavigation.js">
+/** @type {Array<() => boolean>} */
+const handlers = [];
+
+/**
+ * Register a back handler (most recent wins). Return true if the event was handled.
+ * @param {() => boolean} handler
+ */
+export function registerBackHandler(handler) {
+  handlers.push(handler);
+  return () => {
+    const index = handlers.indexOf(handler);
+    if (index >= 0) handlers.splice(index, 1);
+  };
+}
+
+/** @returns {boolean} */
+export function runBackHandlers() {
+  for (let i = handlers.length - 1; i >= 0; i -= 1) {
+    if (handlers[i]()) return true;
+  }
+  return false;
+}
+
+/** Push a history entry so the next hardware back fires popstate instead of closing the PWA. */
+export function pushAppHistoryState(state = {}) {
+  window.history.pushState({ lawnApp: true, ...state }, '', window.location.pathname);
 }
 </file>
 
@@ -1652,113 +1731,6 @@ Open **⚙️ Show Setup** in the app to configure:
 Private project — all rights reserved.
 </file>
 
-<file path="src/components/lawn/LawnGuides.jsx">
-import React, { useEffect, useState } from 'react';
-import { LAWN_GUIDE_SECTIONS, guideActionLabel } from '../../data/lawnGuidesData';
-import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
-import { pushAppHistoryState } from '../../utils/backNavigation';
-import { openGuide } from '../../utils/openGuide';
-import SprinklerLightbox from './SprinklerLightbox';
-
-/** @param {{ setActiveScreen: (screen: string) => void }} props */
-export default function LawnGuides({ setActiveScreen }) {
-  const [enlargedImage, setEnlargedImage] = useState(
-    /** @type {{ image: string, name: string } | null} */ (null)
-  );
-
-  useEffect(() => {
-    if (enlargedImage) {
-      pushAppHistoryState({ overlay: 'guide-image' });
-    }
-  }, [enlargedImage]);
-
-  useRegisterBackHandler(() => {
-    if (enlargedImage) {
-      setEnlargedImage(null);
-      return true;
-    }
-    return false;
-  }, Boolean(enlargedImage));
-
-  return (
-    <>
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start mb-6 border-b pb-4">
-        <div className="min-w-0">
-          <h2 className="text-xl font-black text-green-800">📚 Lawn Pack Guides</h2>
-          <p className="text-sm text-green-700 mt-1">
-            Official literature for seasonal packs, masterclasses, and product guides.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setActiveScreen('main')}
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-3 rounded-lg transition-all shrink-0 self-start"
-        >
-          ← Back to Workflow
-        </button>
-      </div>
-
-      <div className="space-y-6">
-        {LAWN_GUIDE_SECTIONS.map((section) => (
-          <section key={section.title}>
-            <h3 className="text-sm font-black text-gray-800 mb-1">{section.title}</h3>
-            {section.description && (
-              <p className="text-xs text-gray-500 mb-3 leading-relaxed">{section.description}</p>
-            )}
-            <ul className="space-y-2">
-              {section.guides.map((guide) => (
-                <li
-                  key={guide.file}
-                  className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-gray-900">{guide.title}</p>
-                    {guide.description && (
-                      <p className="text-xs text-gray-500 mt-0.5">{guide.description}</p>
-                    )}
-                  </div>
-                  {guide.kind === 'image' ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setEnlargedImage({ image: guide.file, name: guide.title })
-                      }
-                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
-                    >
-                      {guideActionLabel(guide)}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => openGuide(guide)}
-                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
-                    >
-                      {guideActionLabel(guide)}
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
-
-      <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
-        Guides are hosted with the app (not on your PC). PDFs open in the viewer; Word guides
-        download to your phone — open them from Files or Word.
-      </p>
-
-      {enlargedImage && (
-        <SprinklerLightbox
-          enlargedSprinkler={enlargedImage}
-          onClose={() => setEnlargedImage(null)}
-        />
-      )}
-    </>
-  );
-}
-</file>
-
 <file path="src/index.css">
 @tailwind base;
 @tailwind components;
@@ -1855,89 +1827,118 @@ export default function App() {
 }
 </file>
 
-<file path="src/components/lawn/LawnCareApp.jsx">
-import React, { useCallback, useEffect } from 'react';
-import { useLawnCareApp } from '../../hooks/useLawnCareApp';
-import {
-  useMobileBackNavigation,
-  useRegisterBackHandler,
-} from '../../hooks/useMobileBackNavigation';
+<file path="src/components/lawn/LawnGuides.jsx">
+import React, { useEffect, useState } from 'react';
+import { LAWN_GUIDE_SECTIONS } from '../../data/lawnGuidesData';
+import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
 import { pushAppHistoryState } from '../../utils/backNavigation';
-import LawnSettings from './LawnSettings';
-import LawnWorkflow from './LawnWorkflow';
-import LawnGuides from './LawnGuides';
+import GuideViewerModal from './GuideViewerModal';
 import SprinklerLightbox from './SprinklerLightbox';
 
-export default function LawnCareApp() {
-  const app = useLawnCareApp();
-
-  const isAtRoot = useCallback(
-    () =>
-      app.activeScreen === 'main' &&
-      !app.enlargedSprinkler &&
-      !app.showLevellingGuide,
-    [app.activeScreen, app.enlargedSprinkler, app.showLevellingGuide]
+/** @param {{ setActiveScreen: (screen: string) => void }} props */
+export default function LawnGuides({ setActiveScreen }) {
+  const [openGuide, setOpenGuide] = useState(
+    /** @type {{ file: string, kind: 'pdf' | 'docx', title: string } | null} */ (null)
+  );
+  const [enlargedImage, setEnlargedImage] = useState(
+    /** @type {{ image: string, name: string } | null} */ (null)
   );
 
-  const onReturnToMain = useCallback(() => {
-    app.setActiveScreen('main');
-    app.setShowLevellingGuide(false);
-    app.setEnlargedSprinkler(null);
-  }, [app]);
-
-  useMobileBackNavigation({ isAtRoot, onReturnToMain });
+  useEffect(() => {
+    if (openGuide) pushAppHistoryState({ overlay: 'guide-viewer' });
+  }, [openGuide]);
 
   useEffect(() => {
-    if (app.activeScreen !== 'main') {
-      pushAppHistoryState({ screen: app.activeScreen });
-    }
-  }, [app.activeScreen]);
-
-  useEffect(() => {
-    if (app.enlargedSprinkler) {
-      pushAppHistoryState({ overlay: 'sprinkler' });
-    }
-  }, [app.enlargedSprinkler]);
-
-  useEffect(() => {
-    if (app.showLevellingGuide) {
-      pushAppHistoryState({ overlay: 'levelling' });
-    }
-  }, [app.showLevellingGuide]);
+    if (enlargedImage) pushAppHistoryState({ overlay: 'guide-image' });
+  }, [enlargedImage]);
 
   useRegisterBackHandler(() => {
-    if (app.enlargedSprinkler) {
-      app.setEnlargedSprinkler(null);
-      return true;
-    }
+    if (enlargedImage) { setEnlargedImage(null); return true; }
     return false;
-  }, Boolean(app.enlargedSprinkler));
-
-  useRegisterBackHandler(() => {
-    if (app.showLevellingGuide) {
-      app.setShowLevellingGuide(false);
-      return true;
-    }
-    return false;
-  }, Boolean(app.showLevellingGuide));
+  }, Boolean(enlargedImage));
 
   return (
-    <div className="w-full max-w-xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-4 sm:p-6 border border-green-100">
-      {app.activeScreen === 'settings' ? (
-        <LawnSettings app={app} />
-      ) : app.activeScreen === 'guides' ? (
-        <LawnGuides setActiveScreen={app.setActiveScreen} />
-      ) : (
-        <LawnWorkflow app={app} />
-      )}
+    <>
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start mb-6 border-b pb-4">
+        <div className="min-w-0">
+          <h2 className="text-xl font-black text-green-800">📚 Lawn Pack Guides</h2>
+          <p className="text-sm text-green-700 mt-1">
+            Official literature for seasonal packs, masterclasses, and product guides.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveScreen('main')}
+          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-3 rounded-lg transition-all shrink-0 self-start"
+        >
+          ← Back to Workflow
+        </button>
+      </div>
 
-      {app.enlargedSprinkler && (
+      <div className="space-y-6">
+        {LAWN_GUIDE_SECTIONS.map((section) => (
+          <section key={section.title}>
+            <h3 className="text-sm font-black text-gray-800 mb-1">{section.title}</h3>
+            {section.description && (
+              <p className="text-xs text-gray-500 mb-3 leading-relaxed">{section.description}</p>
+            )}
+            <ul className="space-y-2">
+              {section.guides.map((guide) => (
+                <li
+                  key={guide.file}
+                  className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-900">{guide.title}</p>
+                    {guide.description && (
+                      <p className="text-xs text-gray-500 mt-0.5">{guide.description}</p>
+                    )}
+                  </div>
+
+                  {guide.kind === 'image' ? (
+                    <button
+                      type="button"
+                      onClick={() => setEnlargedImage({ image: guide.file, name: guide.title })}
+                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
+                    >
+                      View image
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenGuide({ file: guide.file, kind: guide.kind, title: guide.title })
+                      }
+                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
+                    >
+                      Read guide
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
+        Guides open in a viewer inside the app. Use your phone&apos;s back button or ✕ to close.
+      </p>
+
+      {/* Inline guide viewer (PDF / DOCX) */}
+      <GuideViewerModal
+        guide={openGuide}
+        onClose={() => setOpenGuide(null)}
+      />
+
+      {/* Image lightbox */}
+      {enlargedImage && (
         <SprinklerLightbox
-          enlargedSprinkler={app.enlargedSprinkler}
-          onClose={() => app.setEnlargedSprinkler(null)}
+          enlargedSprinkler={enlargedImage}
+          onClose={() => setEnlargedImage(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 </file>
@@ -2528,6 +2529,93 @@ export function formatSupabaseSyncError(error) {
   }
 
   return message;
+}
+</file>
+
+<file path="src/components/lawn/LawnCareApp.jsx">
+import React, { useCallback, useEffect } from 'react';
+import { useLawnCareApp } from '../../hooks/useLawnCareApp';
+import {
+  useMobileBackNavigation,
+  useRegisterBackHandler,
+} from '../../hooks/useMobileBackNavigation';
+import { pushAppHistoryState } from '../../utils/backNavigation';
+import LawnSettings from './LawnSettings';
+import LawnWorkflow from './LawnWorkflow';
+import LawnGuides from './LawnGuides';
+import SprinklerLightbox from './SprinklerLightbox';
+
+export default function LawnCareApp() {
+  const app = useLawnCareApp();
+
+  const isAtRoot = useCallback(
+    () =>
+      app.activeScreen === 'main' &&
+      !app.enlargedSprinkler &&
+      !app.showLevellingGuide,
+    [app.activeScreen, app.enlargedSprinkler, app.showLevellingGuide]
+  );
+
+  const onReturnToMain = useCallback(() => {
+    app.setActiveScreen('main');
+    app.setShowLevellingGuide(false);
+    app.setEnlargedSprinkler(null);
+  }, [app]);
+
+  useMobileBackNavigation({ isAtRoot, onReturnToMain });
+
+  useEffect(() => {
+    if (app.activeScreen !== 'main') {
+      pushAppHistoryState({ screen: app.activeScreen });
+    }
+  }, [app.activeScreen]);
+
+  useEffect(() => {
+    if (app.enlargedSprinkler) {
+      pushAppHistoryState({ overlay: 'sprinkler' });
+    }
+  }, [app.enlargedSprinkler]);
+
+  useEffect(() => {
+    if (app.showLevellingGuide) {
+      pushAppHistoryState({ overlay: 'levelling' });
+    }
+  }, [app.showLevellingGuide]);
+
+  useRegisterBackHandler(() => {
+    if (app.enlargedSprinkler) {
+      app.setEnlargedSprinkler(null);
+      return true;
+    }
+    return false;
+  }, Boolean(app.enlargedSprinkler));
+
+  useRegisterBackHandler(() => {
+    if (app.showLevellingGuide) {
+      app.setShowLevellingGuide(false);
+      return true;
+    }
+    return false;
+  }, Boolean(app.showLevellingGuide));
+
+  return (
+    <div className="w-full max-w-xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-4 sm:p-6 border border-green-100">
+      {app.activeScreen === 'settings' ? (
+        <LawnSettings app={app} />
+      ) : app.activeScreen === 'guides' ? (
+        <LawnGuides setActiveScreen={app.setActiveScreen} />
+      ) : (
+        <LawnWorkflow app={app} />
+      )}
+
+      {app.enlargedSprinkler && (
+        <SprinklerLightbox
+          enlargedSprinkler={app.enlargedSprinkler}
+          onClose={() => app.setEnlargedSprinkler(null)}
+        />
+      )}
+    </div>
+  );
 }
 </file>
 
