@@ -48,17 +48,17 @@ export const LAWN_GUIDE_SECTIONS = [
         kind: 'pdf',
       },
       {
-        title: 'Part 3',
+        title: 'Part 3: Soil, Feed & Seed',
         file: '/Lawn Masterclass Part 3.pdf',
         kind: 'pdf',
       },
       {
-        title: 'Part 4',
+        title: 'Part 4: Aftercare',
         file: '/Lawn Masterclass Part 4.pdf',
         kind: 'pdf',
       },
       {
-        title: 'Part 5',
+        title: 'Part 5: Ongoing Care',
         file: '/Lawn Masterclass Part 5.pdf',
         kind: 'pdf',
       },
