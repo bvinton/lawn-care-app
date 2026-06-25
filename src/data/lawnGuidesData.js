@@ -39,13 +39,9 @@ export const LAWN_GUIDE_SECTIONS = [
   },
   {
     title: 'Masterclass series',
-    description: '5-part lawn care masterclass.',
+    description:
+      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
     guides: [
-      {
-        title: 'Volume 2: Scarification & Aeration (summary)',
-        file: '/Masterclass Vol 2.jpg',
-        kind: 'image',
-      },
       {
         title: 'Part 2: Scarification & Aeration',
         file: '/Lawn Masterclass Part 2.pdf',
