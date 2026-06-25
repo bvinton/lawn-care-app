@@ -119,15 +119,17 @@ export default function LawnWorkflow({ app }) {
           )}
         </div>
       )}
-      <div className="flex justify-between items-start gap-2 mb-6 border-b pb-4">
+      <div className="mb-6 border-b pb-4 space-y-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-black text-green-800">📋 Lawn Pack Workflow</h2>
+          <h2 className="text-lg sm:text-xl font-black text-green-800 leading-tight">
+            📋 Lawn Pack Workflow
+          </h2>
           <p className="text-sm text-green-700 mt-1">
             <span className="font-black">{sqm} SQM</span>
             <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => void runFullCloudSync()}
@@ -139,7 +141,7 @@ export default function LawnWorkflow({ app }) {
                   ? 'Sync problem — tap to retry'
                   : 'Sync schedule to cloud'
             }
-            className={`flex flex-col items-center justify-center min-w-[2.75rem] py-1 px-2 rounded-lg border text-[10px] font-bold leading-tight transition-all disabled:opacity-60 ${
+            className={`flex items-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-bold transition-all disabled:opacity-60 ${
               cloudSyncStatus === 'synced'
                 ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
                 : cloudSyncStatus === 'error'
@@ -172,14 +174,14 @@ export default function LawnWorkflow({ app }) {
           <button
             type="button"
             onClick={() => setActiveScreen('guides')}
-            className="text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-1.5 px-3 rounded-lg transition-all border border-green-200"
+            className="text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-2 px-3 rounded-lg transition-all border border-green-200"
           >
             📚 Guides
           </button>
           <button
             type="button"
             onClick={() => setActiveScreen('settings')}
-            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-3 rounded-lg transition-all"
           >
             ⚙️ Setup
           </button>

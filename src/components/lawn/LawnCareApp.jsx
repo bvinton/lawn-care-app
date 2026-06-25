@@ -9,7 +9,7 @@ export default function LawnCareApp() {
   const app = useLawnCareApp();
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-3xl m-4 p-6 border border-green-100">
+    <div className="w-full max-w-xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-4 sm:p-6 border border-green-100">
       {app.activeScreen === 'settings' ? (
         <LawnSettings app={app} />
       ) : app.activeScreen === 'guides' ? (

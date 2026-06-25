@@ -44,6 +44,8 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
+        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
+        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
@@ -51,6 +53,14 @@ export default defineConfig({
             options: {
               cacheName: 'open-meteo-forecast',
               expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
+            },
+          },
+          {
+            urlPattern: /\.(pdf|docx)$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'lawn-pack-guides',
+              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },
         ],

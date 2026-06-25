@@ -3,8 +3,8 @@ import LawnCareApp from './components/lawn/LawnCareApp';
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-gray-100 py-6 flex flex-col justify-center sm:py-12">
-      <div className="relative py-3 sm:max-w-xl sm:mx-auto w-full px-4 sm:px-0">
+    <div className="min-h-screen bg-gray-100 py-4 sm:py-8">
+      <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
         <header className="text-center mb-6">
           <h1 className="text-2xl font-black text-green-950 tracking-tight">
             🌿 THE LAWN PACK COMPANION

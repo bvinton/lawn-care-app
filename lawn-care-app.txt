@@ -103,6 +103,7 @@ src/utils/lawnDates.js
 src/utils/lawnDeepLink.js
 src/utils/lawnStepAmounts.js
 src/utils/lawnStorage.js
+src/utils/openGuide.js
 supabase/lawn_app_state.sql
 supabase/lawn_schedule_snapshot.sql
 supabase/lawn_weather_snapshot.sql
@@ -116,6 +117,44 @@ vite.config.js
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/utils/openGuide.js">
+/**
+ * @typedef {'pdf' | 'docx' | 'image'} GuideKind
+ */
+
+/**
+ * Absolute URL for a guide in /public (works on Vercel, not local-only paths).
+ * @param {string} file Path like /The Spring Pack.docx
+ */
+export function getGuideUrl(file) {
+  return new URL(file, window.location.origin).href;
+}
+
+/**
+ * Open a guide on mobile/PWA — target="_blank" often fails in standalone mode.
+ * @param {{ file: string, kind: GuideKind, title?: string }} guide
+ */
+export function openGuide(guide) {
+  const url = getGuideUrl(guide.file);
+
+  if (guide.kind === 'pdf') {
+    window.location.assign(url);
+    return;
+  }
+
+  if (guide.kind === 'docx') {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = guide.file.split('/').pop() ?? 'guide.docx';
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return;
+  }
+}
+</file>
 
 <file path=".cursor/rules/git-workflow.mdc">
 ---
@@ -320,6 +359,7 @@ for (const { name, size } of sizes) {
 <file path="src/components/lawn/LawnGuides.jsx">
 import React, { useState } from 'react';
 import { LAWN_GUIDE_SECTIONS, guideActionLabel } from '../../data/lawnGuidesData';
+import { openGuide } from '../../utils/openGuide';
 import SprinklerLightbox from './SprinklerLightbox';
 
 /** @param {{ setActiveScreen: (screen: string) => void }} props */
@@ -330,8 +370,8 @@ export default function LawnGuides({ setActiveScreen }) {
 
   return (
     <>
-      <div className="flex justify-between items-center mb-6 border-b pb-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start mb-6 border-b pb-4">
+        <div className="min-w-0">
           <h2 className="text-xl font-black text-green-800">📚 Lawn Pack Guides</h2>
           <p className="text-sm text-green-700 mt-1">
             Official literature for seasonal packs, masterclasses, and product guides.
@@ -340,7 +380,7 @@ export default function LawnGuides({ setActiveScreen }) {
         <button
           type="button"
           onClick={() => setActiveScreen('main')}
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-3 rounded-lg transition-all shrink-0 self-start"
         >
           ← Back to Workflow
         </button>
@@ -351,15 +391,15 @@ export default function LawnGuides({ setActiveScreen }) {
           <section key={section.title}>
             <h3 className="text-sm font-black text-gray-800 mb-1">{section.title}</h3>
             {section.description && (
-              <p className="text-xs text-gray-500 mb-3">{section.description}</p>
+              <p className="text-xs text-gray-500 mb-3 leading-relaxed">{section.description}</p>
             )}
             <ul className="space-y-2">
               {section.guides.map((guide) => (
                 <li
                   key={guide.file}
-                  className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                  className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-bold text-gray-900">{guide.title}</p>
                     {guide.description && (
                       <p className="text-xs text-gray-500 mt-0.5">{guide.description}</p>
@@ -371,19 +411,18 @@ export default function LawnGuides({ setActiveScreen }) {
                       onClick={() =>
                         setEnlargedImage({ image: guide.file, name: guide.title })
                       }
-                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0"
+                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
                     >
                       {guideActionLabel(guide)}
                     </button>
                   ) : (
-                    <a
-                      href={encodeURI(guide.file)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 text-center"
+                    <button
+                      type="button"
+                      onClick={() => openGuide(guide)}
+                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
                     >
                       {guideActionLabel(guide)}
-                    </a>
+                    </button>
                   )}
                 </li>
               ))}
@@ -393,7 +432,8 @@ export default function LawnGuides({ setActiveScreen }) {
       </div>
 
       <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
-        Word guides open in your browser or download to open in Word. PDFs open in a new tab.
+        Guides are hosted with the app (not on your PC). PDFs open in the viewer; Word guides
+        download to your phone — open them from Files or Word.
       </p>
 
       {enlargedImage && (
@@ -1604,8 +1644,8 @@ import LawnCareApp from './components/lawn/LawnCareApp';
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-gray-100 py-6 flex flex-col justify-center sm:py-12">
-      <div className="relative py-3 sm:max-w-xl sm:mx-auto w-full px-4 sm:px-0">
+    <div className="min-h-screen bg-gray-100 py-4 sm:py-8">
+      <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
         <header className="text-center mb-6">
           <h1 className="text-2xl font-black text-green-950 tracking-tight">
             🌿 THE LAWN PACK COMPANION
@@ -1640,7 +1680,7 @@ export default function LawnCareApp() {
   const app = useLawnCareApp();
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-3xl m-4 p-6 border border-green-100">
+    <div className="w-full max-w-xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-4 sm:p-6 border border-green-100">
       {app.activeScreen === 'settings' ? (
         <LawnSettings app={app} />
       ) : app.activeScreen === 'guides' ? (
@@ -1782,15 +1822,17 @@ export default function LawnWorkflow({ app }) {
           )}
         </div>
       )}
-      <div className="flex justify-between items-start gap-2 mb-6 border-b pb-4">
+      <div className="mb-6 border-b pb-4 space-y-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-black text-green-800">📋 Lawn Pack Workflow</h2>
+          <h2 className="text-lg sm:text-xl font-black text-green-800 leading-tight">
+            📋 Lawn Pack Workflow
+          </h2>
           <p className="text-sm text-green-700 mt-1">
             <span className="font-black">{sqm} SQM</span>
             <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => void runFullCloudSync()}
@@ -1802,7 +1844,7 @@ export default function LawnWorkflow({ app }) {
                   ? 'Sync problem — tap to retry'
                   : 'Sync schedule to cloud'
             }
-            className={`flex flex-col items-center justify-center min-w-[2.75rem] py-1 px-2 rounded-lg border text-[10px] font-bold leading-tight transition-all disabled:opacity-60 ${
+            className={`flex items-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-bold transition-all disabled:opacity-60 ${
               cloudSyncStatus === 'synced'
                 ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
                 : cloudSyncStatus === 'error'
@@ -1835,14 +1877,14 @@ export default function LawnWorkflow({ app }) {
           <button
             type="button"
             onClick={() => setActiveScreen('guides')}
-            className="text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-1.5 px-3 rounded-lg transition-all border border-green-200"
+            className="text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-2 px-3 rounded-lg transition-all border border-green-200"
           >
             📚 Guides
           </button>
           <button
             type="button"
             onClick={() => setActiveScreen('settings')}
-            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-3 rounded-lg transition-all"
           >
             ⚙️ Setup
           </button>
@@ -2203,113 +2245,6 @@ export default function SeasonTimeline({ app }) {
 }
 </file>
 
-<file path="src/data/lawnGuidesData.js">
-/**
- * Lawn Pack literature served from /public.
- * @typedef {'pdf' | 'docx' | 'image'} GuideKind
- * @typedef {{ title: string, file: string, kind: GuideKind, description?: string }} LawnGuide
- * @typedef {{ title: string, description?: string, guides: LawnGuide[] }} GuideSection
- */
-
-/** @type {GuideSection[]} */
-export const LAWN_GUIDE_SECTIONS = [
-  {
-    title: 'Seasonal pack guides',
-    description: 'Application guides for each seasonal delivery.',
-    guides: [
-      {
-        title: 'Spring Pack',
-        file: '/The Spring Pack.docx',
-        kind: 'docx',
-        description: 'March – May · Greener Growth + Biostimulant',
-      },
-      {
-        title: 'Summer Pack',
-        file: '/The Summer Pack.docx',
-        kind: 'docx',
-        description: 'June – August · Summer Thriver + Biostimulant',
-      },
-      {
-        title: 'Autumn Pack',
-        file: '/The Autumn Pack.docx',
-        kind: 'docx',
-        description: 'September – November · Autumn Preparation + Biostimulant',
-      },
-      {
-        title: 'Winter Pack',
-        file: '/The Winter Pack.docx',
-        kind: 'docx',
-        description: 'December – February · Winter Protection + Iron + Biostimulant',
-      },
-    ],
-  },
-  {
-    title: 'Masterclass series',
-    description:
-      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
-    guides: [
-      {
-        title: 'Part 2: Scarification & Aeration',
-        file: '/Lawn Masterclass Part 2.pdf',
-        kind: 'pdf',
-      },
-      {
-        title: 'Part 3',
-        file: '/Lawn Masterclass Part 3.pdf',
-        kind: 'pdf',
-      },
-      {
-        title: 'Part 4',
-        file: '/Lawn Masterclass Part 4.pdf',
-        kind: 'pdf',
-      },
-      {
-        title: 'Part 5',
-        file: '/Lawn Masterclass Part 5.pdf',
-        kind: 'pdf',
-      },
-    ],
-  },
-  {
-    title: 'Individual guides',
-    description: 'Product-specific and year-round maintenance references.',
-    guides: [
-      {
-        title: 'Iron Sulphate Guide',
-        file: '/Iron Sulphate Guide.docx',
-        kind: 'docx',
-        description: 'Dosing, dilution, and repeat intervals',
-      },
-      {
-        title: 'Starting your lawn from scratch',
-        file: '/Starting your lawn from scratch guide.docx',
-        kind: 'docx',
-      },
-      {
-        title: 'Maintain your lawn',
-        file: '/Lawn Pack, Maintain your lawn Guide.pdf',
-        kind: 'pdf',
-        description: 'Year-round care and subscription overview',
-      },
-    ],
-  },
-];
-
-/** @param {LawnGuide} guide */
-export function guideActionLabel(guide) {
-  switch (guide.kind) {
-    case 'pdf':
-      return 'Open PDF';
-    case 'docx':
-      return 'Open guide';
-    case 'image':
-      return 'View image';
-    default:
-      return 'Open';
-  }
-}
-</file>
-
 <file path="src/lib/supabase.js">
 import { createClient } from '@supabase/supabase-js';
 
@@ -2467,6 +2402,8 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
+        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
+        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
@@ -2476,11 +2413,126 @@ export default defineConfig({
               expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
             },
           },
+          {
+            urlPattern: /\.(pdf|docx)$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'lawn-pack-guides',
+              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
         ],
       },
     }),
   ],
 });
+</file>
+
+<file path="src/data/lawnGuidesData.js">
+/**
+ * Lawn Pack literature served from /public.
+ * @typedef {'pdf' | 'docx' | 'image'} GuideKind
+ * @typedef {{ title: string, file: string, kind: GuideKind, description?: string }} LawnGuide
+ * @typedef {{ title: string, description?: string, guides: LawnGuide[] }} GuideSection
+ */
+
+/** @type {GuideSection[]} */
+export const LAWN_GUIDE_SECTIONS = [
+  {
+    title: 'Seasonal pack guides',
+    description: 'Application guides for each seasonal delivery.',
+    guides: [
+      {
+        title: 'Spring Pack',
+        file: '/The Spring Pack.docx',
+        kind: 'docx',
+        description: 'March – May · Greener Growth + Biostimulant',
+      },
+      {
+        title: 'Summer Pack',
+        file: '/The Summer Pack.docx',
+        kind: 'docx',
+        description: 'June – August · Summer Thriver + Biostimulant',
+      },
+      {
+        title: 'Autumn Pack',
+        file: '/The Autumn Pack.docx',
+        kind: 'docx',
+        description: 'September – November · Autumn Preparation + Biostimulant',
+      },
+      {
+        title: 'Winter Pack',
+        file: '/The Winter Pack.docx',
+        kind: 'docx',
+        description: 'December – February · Winter Protection + Iron + Biostimulant',
+      },
+    ],
+  },
+  {
+    title: 'Masterclass series',
+    description:
+      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
+    guides: [
+      {
+        title: 'Part 2: Scarification & Aeration',
+        file: '/Lawn Masterclass Part 2.pdf',
+        kind: 'pdf',
+      },
+      {
+        title: 'Part 3',
+        file: '/Lawn Masterclass Part 3.pdf',
+        kind: 'pdf',
+      },
+      {
+        title: 'Part 4',
+        file: '/Lawn Masterclass Part 4.pdf',
+        kind: 'pdf',
+      },
+      {
+        title: 'Part 5',
+        file: '/Lawn Masterclass Part 5.pdf',
+        kind: 'pdf',
+      },
+    ],
+  },
+  {
+    title: 'Individual guides',
+    description: 'Product-specific and year-round maintenance references.',
+    guides: [
+      {
+        title: 'Iron Sulphate Guide',
+        file: '/Iron Sulphate Guide.docx',
+        kind: 'docx',
+        description: 'Dosing, dilution, and repeat intervals',
+      },
+      {
+        title: 'Starting your lawn from scratch',
+        file: '/Starting your lawn from scratch guide.docx',
+        kind: 'docx',
+      },
+      {
+        title: 'Maintain your lawn',
+        file: '/Lawn Pack, Maintain your lawn Guide.pdf',
+        kind: 'pdf',
+        description: 'Year-round care and subscription overview',
+      },
+    ],
+  },
+];
+
+/** @param {LawnGuide} guide */
+export function guideActionLabel(guide) {
+  switch (guide.kind) {
+    case 'pdf':
+      return 'Open PDF';
+    case 'docx':
+      return 'Open guide';
+    case 'image':
+      return 'View image';
+    default:
+      return 'Open';
+  }
+}
 </file>
 
 <file path="src/utils/lawnDeepLink.js">
