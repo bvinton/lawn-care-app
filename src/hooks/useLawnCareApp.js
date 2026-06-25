@@ -18,6 +18,7 @@ import {
   stepTriggersPetLockout,
   hasChemicalApplicationToday,
   stripStalePetLockout,
+  migrateUserLogs,
 } from '../data/LawnPackData';
 import {
   syncLawnTasksToSupabase,
@@ -97,15 +98,19 @@ export function useLawnCareApp() {
   const [width, setWidth] = useState(INITIAL_LAWN_CONFIG.defaultWidth);
   const [sqm, setSqm] = useState(INITIAL_LAWN_CONFIG.defaultSqm);
   const [userLogs, setUserLogs] = useState(() =>
-    stripStalePetLockout(
-      /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {})),
-      formatInputDate(new Date())
+    migrateUserLogs(
+      stripStalePetLockout(
+        /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {})),
+        formatInputDate(new Date())
+      )
     )
   );
   const [currentSeason, setCurrentSeason] = useState(() => {
-    const logs = stripStalePetLockout(
-      /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {})),
-      formatInputDate(new Date())
+    const logs = migrateUserLogs(
+      stripStalePetLockout(
+        /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {})),
+        formatInputDate(new Date())
+      )
     );
     return getWorkflowSeasonForDate(formatInputDate(new Date()), logs);
   });
@@ -328,7 +333,9 @@ export function useLawnCareApp() {
   const seedLockEndDate = formatNextDueDate(springSeedDate, SEED_ESTABLISHMENT_DAYS);
 
   const activeSeasonStep =
-    activeSeason.steps.find((step) => !userLogs[makeStepKey(currentSeason, step.id)]) ?? null;
+    activeSeason.steps.find(
+      (step) => !step.optional && !userLogs[makeStepKey(currentSeason, step.id)]
+    ) ?? null;
   const isOnScarificationPrepStep =
     currentSeason === 'AUTUMN' && activeSeasonStep?.id === 'prep';
 
@@ -615,7 +622,9 @@ export function useLawnCareApp() {
       }
     }
 
-    let nextUserLogs = stripStalePetLockout(readStoredJson('lawnPackUserLogs', {}), todayStr);
+    let nextUserLogs = migrateUserLogs(
+      stripStalePetLockout(readStoredJson('lawnPackUserLogs', {}), todayStr)
+    );
     let nextMow = localStorage.getItem('lawnPackLastMowedDate');
     let nextWater = localStorage.getItem('lawnPackLastWateredDate');
     let nextVerticut = localStorage.getItem('lawnPackLastVerticutDate');
@@ -625,7 +634,9 @@ export function useLawnCareApp() {
     try {
       const remote = await fetchLawnUserLogsFromSupabase();
       if (remote !== null) {
-        nextUserLogs = stripStalePetLockout(mergeLawnUserLogs(remote, nextUserLogs), todayStr);
+        nextUserLogs = migrateUserLogs(
+          stripStalePetLockout(mergeLawnUserLogs(remote, nextUserLogs), todayStr)
+        );
       } else {
         setSupabaseSyncError((prev) => prev ?? getLawnAppStateSetupHint());
       }
@@ -653,7 +664,7 @@ export function useLawnCareApp() {
         lastWateredDate: nextWater,
         lastVerticutDate: nextVerticut,
       });
-      nextUserLogs = stripStalePetLockout(inbound.userLogs, todayStr);
+      nextUserLogs = migrateUserLogs(stripStalePetLockout(inbound.userLogs, todayStr));
       nextMow = inbound.lastMowedDate ?? nextMow;
       nextWater = inbound.lastWateredDate ?? nextWater;
       nextVerticut = inbound.lastVerticutDate ?? nextVerticut;

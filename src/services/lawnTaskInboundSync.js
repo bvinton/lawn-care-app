@@ -23,6 +23,11 @@ function getTaskNameToStepKeyMap() {
         taskNameToStepKey.set(step.label, makeStepKey(seasonKey, step.id));
       }
     }
+    // Legacy task title before iron was split into two winter doses.
+    taskNameToStepKey.set(
+      'Step 2: Apply Deeper Green Iron Sulphate',
+      makeStepKey('WINTER', 'iron1')
+    );
   }
   return taskNameToStepKey;
 }

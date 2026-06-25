@@ -7,7 +7,7 @@ export const LAWN_FOCUS_ALIASES = {
   maintenance: 'maintenance-panel',
 };
 
-const PACK_STEP_FOCUS_PATTERN = /^step-(SPRING|SUMMER|AUTUMN|WINTER)-([a-z]+)$/i;
+const PACK_STEP_FOCUS_PATTERN = /^step-(SPRING|SUMMER|AUTUMN|WINTER)-([a-z0-9]+)$/i;
 
 const HIGHLIGHT_CLASS = 'lawn-focus-highlight';
 

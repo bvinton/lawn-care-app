@@ -55,22 +55,38 @@ public/favicon-32x32.png
 public/hose.jfif
 public/icon.svg
 public/impact.jfif
+public/Iron Sulphate Guide.docx
+public/Lawn Masterclass Part 2 Is Here 🏆.pdf
+public/Lawn Masterclass Part Four 🏆.pdf
+public/Lawn Masterclass Part Three 🏆.pdf
+public/Lawn Pack, Maintain your lawn Guide.pdf
+public/Level Up Your Lawn Game! 🌿.pdf
+public/Masterclass Vol 2.jpg
+public/Masterclass Vol 3.jpg
 public/oscillating.jfif
 public/pwa-192x192.png
 public/pwa-512x512.png
+public/Starting your lawn from scratch guide.docx
 public/static.jfif
+public/The Autumn Pack.docx
+public/The Spring Pack.docx
+public/The Summer Pack.docx
+public/The Winter Pack.docx
+public/unnamed.png
 README.md
 scripts/bundle-sync-api.mjs
 scripts/check-lawn-tasks.mjs
 scripts/generate-pwa-icons.mjs
 src/App.jsx
 src/components/lawn/LawnCareApp.jsx
+src/components/lawn/LawnGuides.jsx
 src/components/lawn/LawnSettings.jsx
 src/components/lawn/LawnWorkflow.jsx
 src/components/lawn/MaintenancePanel.jsx
 src/components/lawn/SeasonTimeline.jsx
 src/components/lawn/SprinklerLightbox.jsx
 src/components/lawn/UkDateInput.jsx
+src/data/lawnGuidesData.js
 src/data/LawnPackData.js
 src/data/lawnUiConfig.jsx
 src/hooks/useLawnCareApp.js
@@ -103,6 +119,192 @@ vite.config.js
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/components/lawn/LawnGuides.jsx">
+import React, { useState } from 'react';
+import { LAWN_GUIDE_SECTIONS, guideActionLabel } from '../../data/lawnGuidesData';
+import SprinklerLightbox from './SprinklerLightbox';
+
+/** @param {{ setActiveScreen: (screen: string) => void }} props */
+export default function LawnGuides({ setActiveScreen }) {
+  const [enlargedImage, setEnlargedImage] = useState(
+    /** @type {{ image: string, name: string } | null} */ (null)
+  );
+
+  return (
+    <>
+      <div className="flex justify-between items-center mb-6 border-b pb-4">
+        <div>
+          <h2 className="text-xl font-black text-green-800">📚 Lawn Pack Guides</h2>
+          <p className="text-sm text-green-700 mt-1">
+            Official literature for seasonal packs, masterclasses, and product guides.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveScreen('main')}
+          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+        >
+          ← Back to Workflow
+        </button>
+      </div>
+
+      <div className="space-y-6">
+        {LAWN_GUIDE_SECTIONS.map((section) => (
+          <section key={section.title}>
+            <h3 className="text-sm font-black text-gray-800 mb-1">{section.title}</h3>
+            {section.description && (
+              <p className="text-xs text-gray-500 mb-3">{section.description}</p>
+            )}
+            <ul className="space-y-2">
+              {section.guides.map((guide) => (
+                <li
+                  key={guide.file}
+                  className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                >
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">{guide.title}</p>
+                    {guide.description && (
+                      <p className="text-xs text-gray-500 mt-0.5">{guide.description}</p>
+                    )}
+                  </div>
+                  {guide.kind === 'image' ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEnlargedImage({ image: guide.file, name: guide.title })
+                      }
+                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0"
+                    >
+                      {guideActionLabel(guide)}
+                    </button>
+                  ) : (
+                    <a
+                      href={encodeURI(guide.file)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 text-center"
+                    >
+                      {guideActionLabel(guide)}
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
+        Word guides open in your browser or download to open in Word. PDFs open in a new tab.
+      </p>
+
+      {enlargedImage && (
+        <SprinklerLightbox
+          enlargedSprinkler={enlargedImage}
+          onClose={() => setEnlargedImage(null)}
+        />
+      )}
+    </>
+  );
+}
+</file>
+
+<file path="src/data/lawnGuidesData.js">
+/**
+ * Lawn Pack literature served from /public.
+ * @typedef {'pdf' | 'docx' | 'image'} GuideKind
+ * @typedef {{ title: string, file: string, kind: GuideKind, description?: string }} LawnGuide
+ * @typedef {{ title: string, description?: string, guides: LawnGuide[] }} GuideSection
+ */
+
+/** @type {GuideSection[]} */
+export const LAWN_GUIDE_SECTIONS = [
+  {
+    title: 'Seasonal pack guides',
+    description: 'Application guides for each seasonal delivery.',
+    guides: [
+      {
+        title: 'Spring Pack',
+        file: '/The Spring Pack.docx',
+        kind: 'docx',
+        description: 'March – May · Greener Growth + Biostimulant',
+      },
+      {
+        title: 'Summer Pack',
+        file: '/The Summer Pack.docx',
+        kind: 'docx',
+        description: 'June – August · Summer Thriver + Biostimulant',
+      },
+      {
+        title: 'Autumn Pack',
+        file: '/The Autumn Pack.docx',
+        kind: 'docx',
+        description: 'September – November · Autumn Preparation + Biostimulant',
+      },
+      {
+        title: 'Winter Pack',
+        file: '/The Winter Pack.docx',
+        kind: 'docx',
+        description: 'December – February · Winter Protection + Iron + Biostimulant',
+      },
+    ],
+  },
+  {
+    title: 'Masterclass series',
+    description: 'Part of a 5-part lawn care masterclass.',
+    guides: [
+      {
+        title: 'Volume 2: Scarification & Aeration',
+        file: '/Masterclass Vol 2.jpg',
+        kind: 'image',
+      },
+      {
+        title: 'Volume 3',
+        file: '/Masterclass Vol 3.jpg',
+        kind: 'image',
+      },
+    ],
+  },
+  {
+    title: 'Individual guides',
+    description: 'Product-specific and year-round maintenance references.',
+    guides: [
+      {
+        title: 'Iron Sulphate Guide',
+        file: '/Iron Sulphate Guide.docx',
+        kind: 'docx',
+        description: 'Dosing, dilution, and repeat intervals',
+      },
+      {
+        title: 'Starting your lawn from scratch',
+        file: '/Starting your lawn from scratch guide.docx',
+        kind: 'docx',
+      },
+      {
+        title: 'Maintain your lawn',
+        file: '/Lawn Pack, Maintain your lawn Guide.pdf',
+        kind: 'pdf',
+        description: 'Year-round care and subscription overview',
+      },
+    ],
+  },
+];
+
+/** @param {LawnGuide} guide */
+export function guideActionLabel(guide) {
+  switch (guide.kind) {
+    case 'pdf':
+      return 'Open PDF';
+    case 'docx':
+      return 'Open guide';
+    case 'image':
+      return 'View image';
+    default:
+      return 'Open';
+  }
+}
+</file>
 
 <file path=".cursor/rules/git-workflow.mdc">
 ---
@@ -309,6 +511,7 @@ import React from 'react';
 import { useLawnCareApp } from '../../hooks/useLawnCareApp';
 import LawnSettings from './LawnSettings';
 import LawnWorkflow from './LawnWorkflow';
+import LawnGuides from './LawnGuides';
 import SprinklerLightbox from './SprinklerLightbox';
 
 export default function LawnCareApp() {
@@ -318,6 +521,8 @@ export default function LawnCareApp() {
     <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-3xl m-4 p-6 border border-green-100">
       {app.activeScreen === 'settings' ? (
         <LawnSettings app={app} />
+      ) : app.activeScreen === 'guides' ? (
+        <LawnGuides setActiveScreen={app.setActiveScreen} />
       ) : (
         <LawnWorkflow app={app} />
       )}
@@ -837,6 +1042,13 @@ export default function LawnWorkflow({ app }) {
                       ? 'Retry'
                       : 'Sync'}
             </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('guides')}
+            className="text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-1.5 px-3 rounded-lg transition-all border border-green-200"
+          >
+            📚 Guides
           </button>
           <button
             type="button"
@@ -1839,6 +2051,14 @@ export default function SeasonTimeline({ app }) {
           const dateInputValue = isCompleted
             ? completedDate
             : pendingDates[currentSeason]?.[step.id];
+          const requiredBefore = activeSeason.steps
+            .slice(0, index)
+            .filter((s) => !s.optional).length;
+          const stepMarker = step.optional
+            ? '○'
+            : isCompleted
+              ? '✅'
+              : requiredBefore + 1;
 
           return (
             <div key={stepKey} id={`step-${stepKey.replace(':', '-')}`} className="flex gap-3">
@@ -1847,12 +2067,14 @@ export default function SeasonTimeline({ app }) {
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
                     isCompleted
                       ? 'bg-green-600 text-white'
-                      : isWeedolAdvisoryStep
-                        ? 'bg-amber-100 text-amber-800 border-2 border-amber-400'
-                        : 'bg-gray-100 text-gray-500 border-2 border-gray-200'
+                      : step.optional
+                        ? 'bg-slate-100 text-slate-500 border-2 border-dashed border-slate-300'
+                        : isWeedolAdvisoryStep
+                          ? 'bg-amber-100 text-amber-800 border-2 border-amber-400'
+                          : 'bg-gray-100 text-gray-500 border-2 border-gray-200'
                   }`}
                 >
-                  {isCompleted ? '✅' : index + 1}
+                  {stepMarker}
                 </div>
                 {!isLast && (
                   <div
@@ -1865,9 +2087,11 @@ export default function SeasonTimeline({ app }) {
                 className={`flex-1 mb-4 p-4 rounded-xl border transition-all ${
                   isWeedolAdvisoryStep
                     ? 'bg-amber-50 border-amber-200'
-                    : isCompleted
-                      ? 'bg-emerald-50 border-emerald-200'
-                      : 'bg-gray-50 border-gray-200'
+                    : step.optional && !isCompleted
+                      ? 'bg-slate-50 border-dashed border-slate-300'
+                      : isCompleted
+                        ? 'bg-emerald-50 border-emerald-200'
+                        : 'bg-gray-50 border-gray-200'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
@@ -1876,6 +2100,11 @@ export default function SeasonTimeline({ app }) {
                   >
                     {step.label}
                   </h4>
+                  {step.optional && !isCompleted && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">
+                      Optional
+                    </span>
+                  )}
                   {isCompleted && (
                     <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">
                       ✅ {formatDisplayDate(completedDate)}
@@ -2193,7 +2422,7 @@ export const LAWN_FOCUS_ALIASES = {
   maintenance: 'maintenance-panel',
 };
 
-const PACK_STEP_FOCUS_PATTERN = /^step-(SPRING|SUMMER|AUTUMN|WINTER)-([a-z]+)$/i;
+const PACK_STEP_FOCUS_PATTERN = /^step-(SPRING|SUMMER|AUTUMN|WINTER)-([a-z0-9]+)$/i;
 
 const HIGHLIGHT_CLASS = 'lawn-focus-highlight';
 
@@ -2450,9 +2679,9 @@ export function stripStalePetLockout(userLogs, todayStr) {
  * @param {Record<string, string>} userLogs
  */
 export function isSeasonPackComplete(seasonKey, userLogs) {
-  return SEASONS[seasonKey].steps.every(
-    (step) => userLogs[makeStepKey(seasonKey, step.id)] != null
-  );
+  return SEASONS[seasonKey].steps
+    .filter((step) => !step.optional)
+    .every((step) => userLogs[makeStepKey(seasonKey, step.id)] != null);
 }
 
 /**
@@ -2462,7 +2691,7 @@ export function isSeasonPackComplete(seasonKey, userLogs) {
  */
 export function getIncompleteSeasonSteps(seasonKey, userLogs) {
   return SEASONS[seasonKey].steps.filter(
-    (step) => !userLogs[makeStepKey(seasonKey, step.id)]
+    (step) => !step.optional && !userLogs[makeStepKey(seasonKey, step.id)]
   );
 }
 
@@ -2577,6 +2806,18 @@ export const SEASONS = {
         setting: "1.5%",
         daysAfterFirstStep: 0,
         note: "🎯 TARGET: Broadleaf weeds. Apply when weeds are small, actively growing, and leaf surface area is maximized. Avoid mowing for 3 days before and 3 days after application. 🚫 DRY TIME: Foliar absorption takes time. Do NOT apply any liquids, iron sprays, or water the lawn for a strict 48 hours post-application. Wait 6 weeks before seeding.",
+        dogSafety: "Lock your dog inside during spraying. Keep paws off the grass until every leaf blade is 100% dry."
+      },
+      {
+        id: "moss",
+        label: "Optional: Apply Iron Sulphate for moss control",
+        type: "chemical",
+        ratePerSqm: 5,
+        unit: "g",
+        toolType: "sprayer",
+        daysAfterFirstStep: 14,
+        optional: true,
+        note: "💀 MOSS ONLY: High dose (5g per SQM) blackens moss — rake out after 14 days once moss has turned black. Use shed stock (Winter Pack iron). Not shipped in the Spring Pack. Skip if no moss.",
         dogSafety: "Lock your dog inside during spraying. Keep paws off the grass until every leaf blade is 100% dry."
       },
       {
@@ -2743,14 +2984,14 @@ export const SEASONS = {
         dogSafety: "Water the mix in thoroughly or apply right before rain to clear the leaf surface. Block dog access until granules are fully dissolved into the soil."
       },
       {
-        id: "iron",
-        label: "Step 2: Apply Deeper Green Iron Sulphate",
+        id: "iron1",
+        label: "Step 2: Apply Deeper Green Iron Sulphate (1st dose)",
         type: "chemical",
-        ratePerSqm: 5,
+        ratePerSqm: 2.5,
         unit: "g",
         toolType: "sprayer",
         daysAfterFirstStep: 7,
-        note: "💀 MOSS CONTROL: Targets heavy winter moss infestations. Moss blackens, dehydrates, and dies within 24-48 hours of contact. 💡 COSMETIC GREENING: With no active moss mat, halve the dose to 2.5g per square metre to avoid tip scorch. ⚠️ AVOID RUSTING: Keep spray off hard stone, porcelain, patios, and pathways to prevent permanent orange rust staining!",
+        note: "💀 1ST DOSE (Winter Pack double dose): Moss — 5g per SQM, rake 7–14 days later. No moss — 2.5g per SQM for green-up and hardening. Can tank-mix with biostimulant. ⚠️ Keep spray off patios and hard surfaces.",
         dogSafety: "Lock dogs away during spraying. Keep paws off treated grass until completely dry to prevent skin irritation or paw staining."
       },
       {
@@ -2762,8 +3003,19 @@ export const SEASONS = {
         toolType: "sprayer",
         setting: "2.0%",
         daysAfterFirstStep: 10,
-        note: "🛡️ ROOT INSULATION: Protects soil microbial activity throughout winter dormancy. Apply during a mild window when the ground is not frozen, waterlogged, or covered in deep frost.",
+        note: "🛡️ ROOT INSULATION: Protects soil microbial activity throughout winter dormancy. Can be tank-mixed with the 1st iron dose for quicker application. Apply during a mild window when the ground is not frozen, waterlogged, or covered in deep frost.",
         dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
+      },
+      {
+        id: "iron2",
+        label: "Step 4: Apply Deeper Green Iron Sulphate (2nd dose)",
+        type: "chemical",
+        ratePerSqm: 2.5,
+        unit: "g",
+        toolType: "sprayer",
+        daysAfterFirstStep: 35,
+        note: "💀 2ND DOSE: Apply 4 weeks after the 1st dose (medium dose 2.5g per SQM, or 5g per SQM if moss). Completes the Winter Pack double dose.",
+        dogSafety: "Lock dogs away during spraying. Keep paws off treated grass until completely dry to prevent skin irritation or paw staining."
       }
     ]
   }
@@ -2771,6 +3023,19 @@ export const SEASONS = {
 
 export function makeStepKey(seasonKey, stepId) {
   return `${seasonKey}:${stepId}`;
+}
+
+/**
+ * Migrate legacy log keys when pack step ids change.
+ * @param {Record<string, string>} userLogs
+ */
+export function migrateUserLogs(userLogs) {
+  const next = { ...userLogs };
+  if (next['WINTER:iron'] && !next['WINTER:iron1']) {
+    next['WINTER:iron1'] = next['WINTER:iron'];
+    delete next['WINTER:iron'];
+  }
+  return next;
 }
 
 /** @param {string} dateString @param {number} days */
@@ -2911,6 +3176,11 @@ function getTaskNameToStepKeyMap() {
         taskNameToStepKey.set(step.label, makeStepKey(seasonKey, step.id));
       }
     }
+    // Legacy task title before iron was split into two winter doses.
+    taskNameToStepKey.set(
+      'Step 2: Apply Deeper Green Iron Sulphate',
+      makeStepKey('WINTER', 'iron1')
+    );
   }
   return taskNameToStepKey;
 }
@@ -4403,7 +4673,7 @@ export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
  * Server-side full lawn sync (same pipeline as Lawn app “Sync” button).
  * Used by POST /api/sync-lawn — not imported by the browser bundle.
  */
-import { createInitialPendingDates, stripStalePetLockout, makeStepKey } from '../data/LawnPackData.js';
+import { createInitialPendingDates, stripStalePetLockout, makeStepKey, migrateUserLogs } from '../data/LawnPackData.js';
 import { getSupabaseConfigError, initServerSupabase } from '../lib/supabase.js';
 import { fetchLawnAppStateFromSupabase, saveLawnScheduleSnapshot, saveLawnUserLogsToSupabase } from '../services/lawnAppState.js';
 import {
@@ -4452,7 +4722,7 @@ export async function runLawnCloudSync() {
     };
   }
 
-  let userLogs = stripStalePetLockout({ ...cloudState.userLogs }, todayStr);
+  let userLogs = migrateUserLogs(stripStalePetLockout({ ...cloudState.userLogs }, todayStr));
   const scheduleSnapshot = cloudState.scheduleSnapshot ?? {};
 
   let lastMowedDate = scheduleSnapshot.lastMowedDate ?? null;
@@ -4465,7 +4735,7 @@ export async function runLawnCloudSync() {
     lastWateredDate,
     lastVerticutDate,
   });
-  userLogs = stripStalePetLockout(inbound.userLogs, todayStr);
+  userLogs = migrateUserLogs(stripStalePetLockout(inbound.userLogs, todayStr));
   lastMowedDate = inbound.lastMowedDate ?? lastMowedDate;
   lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
   lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
@@ -4625,6 +4895,7 @@ import {
   stepTriggersPetLockout,
   hasChemicalApplicationToday,
   stripStalePetLockout,
+  migrateUserLogs,
 } from '../data/LawnPackData';
 import {
   syncLawnTasksToSupabase,
@@ -4704,15 +4975,19 @@ export function useLawnCareApp() {
   const [width, setWidth] = useState(INITIAL_LAWN_CONFIG.defaultWidth);
   const [sqm, setSqm] = useState(INITIAL_LAWN_CONFIG.defaultSqm);
   const [userLogs, setUserLogs] = useState(() =>
-    stripStalePetLockout(
-      /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {})),
-      formatInputDate(new Date())
+    migrateUserLogs(
+      stripStalePetLockout(
+        /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {})),
+        formatInputDate(new Date())
+      )
     )
   );
   const [currentSeason, setCurrentSeason] = useState(() => {
-    const logs = stripStalePetLockout(
-      /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {})),
-      formatInputDate(new Date())
+    const logs = migrateUserLogs(
+      stripStalePetLockout(
+        /** @type {Record<string, string>} */ (readStoredJson('lawnPackUserLogs', {})),
+        formatInputDate(new Date())
+      )
     );
     return getWorkflowSeasonForDate(formatInputDate(new Date()), logs);
   });
@@ -4935,7 +5210,9 @@ export function useLawnCareApp() {
   const seedLockEndDate = formatNextDueDate(springSeedDate, SEED_ESTABLISHMENT_DAYS);
 
   const activeSeasonStep =
-    activeSeason.steps.find((step) => !userLogs[makeStepKey(currentSeason, step.id)]) ?? null;
+    activeSeason.steps.find(
+      (step) => !step.optional && !userLogs[makeStepKey(currentSeason, step.id)]
+    ) ?? null;
   const isOnScarificationPrepStep =
     currentSeason === 'AUTUMN' && activeSeasonStep?.id === 'prep';
 
@@ -5222,7 +5499,9 @@ export function useLawnCareApp() {
       }
     }
 
-    let nextUserLogs = stripStalePetLockout(readStoredJson('lawnPackUserLogs', {}), todayStr);
+    let nextUserLogs = migrateUserLogs(
+      stripStalePetLockout(readStoredJson('lawnPackUserLogs', {}), todayStr)
+    );
     let nextMow = localStorage.getItem('lawnPackLastMowedDate');
     let nextWater = localStorage.getItem('lawnPackLastWateredDate');
     let nextVerticut = localStorage.getItem('lawnPackLastVerticutDate');
@@ -5232,7 +5511,9 @@ export function useLawnCareApp() {
     try {
       const remote = await fetchLawnUserLogsFromSupabase();
       if (remote !== null) {
-        nextUserLogs = stripStalePetLockout(mergeLawnUserLogs(remote, nextUserLogs), todayStr);
+        nextUserLogs = migrateUserLogs(
+          stripStalePetLockout(mergeLawnUserLogs(remote, nextUserLogs), todayStr)
+        );
       } else {
         setSupabaseSyncError((prev) => prev ?? getLawnAppStateSetupHint());
       }
@@ -5260,7 +5541,7 @@ export function useLawnCareApp() {
         lastWateredDate: nextWater,
         lastVerticutDate: nextVerticut,
       });
-      nextUserLogs = stripStalePetLockout(inbound.userLogs, todayStr);
+      nextUserLogs = migrateUserLogs(stripStalePetLockout(inbound.userLogs, todayStr));
       nextMow = inbound.lastMowedDate ?? nextMow;
       nextWater = inbound.lastWateredDate ?? nextWater;
       nextVerticut = inbound.lastVerticutDate ?? nextVerticut;
@@ -5967,229 +6248,6 @@ export function useLawnCareApp() {
 }
 </file>
 
-<file path="src/services/lawnMaintenanceSync.js">
-import {
-  getSupabase,
-  getSupabaseConfigError,
-  formatSupabaseSyncError,
-} from '../lib/supabase';
-import { LAWN_APP_SOURCE } from './lawnTasks';
-
-export const MOW_TASK_NAME = 'Mow lawn';
-export const WATER_TASK_NAME = 'Water lawn';
-export const VERTICUT_TASK_NAME = 'Verticutting';
-export const WATERING_SESSION_NAMES = [
-  'Water lawn (Morning)',
-  'Water lawn (Midday)',
-  'Water lawn (Evening)',
-];
-
-/** @type {boolean | null} */
-let lastCompletedColumnAvailable = null;
-
-export function resetLastCompletedColumnProbe() {
-  lastCompletedColumnAvailable = null;
-}
-
-/** @param {unknown} error */
-export function isMissingLastCompletedColumnError(error) {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'object' && error !== null && 'message' in error
-        ? String(/** @type {{ message: unknown }} */ (error).message)
-        : String(error);
-  return /last_completed_date|42703|PGRST204|schema cache/i.test(message);
-}
-
-/** @param {Record<string, unknown>} payload */
-export function withoutLastCompletedDate(payload) {
-  const next = { ...payload };
-  delete next.last_completed_date;
-  return next;
-}
-
-/**
- * @param {import('@supabase/supabase-js').SupabaseClient} supabase
- * @returns {Promise<boolean>}
- */
-export async function probeLastCompletedColumn(supabase) {
-  if (lastCompletedColumnAvailable !== null) {
-    return lastCompletedColumnAvailable;
-  }
-
-  const { error } = await supabase
-    .from('tasks')
-    .select('last_completed_date')
-    .eq('app_source', LAWN_APP_SOURCE)
-    .limit(1);
-
-  lastCompletedColumnAvailable = !error;
-  return lastCompletedColumnAvailable;
-}
-
-export function getLastCompletedColumnHint() {
-  return 'Run supabase/maintenance_link.sql in the Supabase SQL Editor to link Tasks app completions with this app.';
-}
-
-/**
- * @param {string | null | undefined} isoDate
- * @returns {string | null}
- */
-function isoDateFromTimestamp(isoDate) {
-  if (!isoDate) return null;
-  return isoDate.slice(0, 10);
-}
-
-/**
- * @param {...(string | null | undefined)} dates
- * @returns {string | null}
- */
-export function pickLatestIsoDate(...dates) {
-  const valid = dates.filter((d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
-  if (valid.length === 0) return null;
-  return valid.sort().at(-1) ?? null;
-}
-
-/**
- * @typedef {Object} LawnMaintenanceRow
- * @property {string} task_name
- * @property {string} due_date
- * @property {boolean} is_completed
- * @property {string | null} [last_completed_date]
- * @property {string | null} [updated_at]
- * @property {string | null} [created_at]
- */
-
-const MAINTENANCE_SELECT_FULL =
-  'task_name, due_date, is_completed, last_completed_date, created_at';
-const MAINTENANCE_SELECT_FALLBACK = 'task_name, due_date, is_completed, created_at';
-
-/**
- * @returns {Promise<LawnMaintenanceRow[]>}
- */
-export async function fetchLawnMaintenanceRows() {
-  const configError = getSupabaseConfigError();
-  if (configError) {
-    throw new Error(configError);
-  }
-
-  const supabase = getSupabase();
-  if (!supabase) {
-    throw new Error('Supabase client could not be initialised.');
-  }
-
-  let result = await supabase
-    .from('tasks')
-    .select(MAINTENANCE_SELECT_FULL)
-    .eq('app_source', LAWN_APP_SOURCE)
-    .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, 'Water lawn (Morning)', 'Water lawn (Midday)', 'Water lawn (Evening)', VERTICUT_TASK_NAME]);
-
-  if (result.error && (result.error.code === '42703' || isMissingLastCompletedColumnError(result.error))) {
-    result = await supabase
-      .from('tasks')
-      .select(MAINTENANCE_SELECT_FALLBACK)
-      .eq('app_source', LAWN_APP_SOURCE)
-      .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, 'Water lawn (Morning)', 'Water lawn (Midday)', 'Water lawn (Evening)', VERTICUT_TASK_NAME]);
-  }
-
-  if (result.error) {
-    throw new Error(formatSupabaseSyncError(result.error));
-  }
-
-  return result.data ?? [];
-}
-
-/**
- * Best-effort last-done date from one Supabase row (Tasks app or Lawn app).
- * @param {LawnMaintenanceRow} row
- * @param {string} todayStr YYYY-MM-DD
- * @returns {string | null}
- */
-export function inferLastDoneFromMaintenanceRow(row, todayStr) {
-  if (row.last_completed_date) {
-    return row.last_completed_date;
-  }
-
-  const dueDate = row.due_date;
-  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-    return null;
-  }
-
-  // due_date on mow/water rows is the *next* due date — never treat it as last done when open.
-  if (row.is_completed && dueDate <= todayStr) {
-    return pickLatestIsoDate(dueDate, isoDateFromTimestamp(row.updated_at), isoDateFromTimestamp(row.created_at));
-  }
-
-  return null;
-}
-
-/**
- * Read shared last-done dates from Supabase (set by Tasks app or Lawn app).
- * @param {LawnMaintenanceRow[]} rows
- * @param {string} todayStr YYYY-MM-DD
- */
-export function inferMaintenanceDatesFromRows(rows, todayStr) {
-  let lastMowedDate = null;
-  let lastWateredDate = null;
-  let lastVerticutDate = null;
-
-  // When running 3-session watering (seed establishment), completing one session must
-  // not advance the shared lastWateredDate — that would push all sessions to tomorrow.
-  // Only treat a day as fully watered once all 3 sessions report the same completion date.
-  const sessionRows = rows.filter(r => WATERING_SESSION_NAMES.includes(r.task_name));
-  if (sessionRows.length > 0) {
-    /** @type {Map<string, Set<string>>} */
-    const completionsByDate = new Map();
-    for (const row of sessionRows) {
-      const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
-      if (!inferred) continue;
-      if (!completionsByDate.has(inferred)) completionsByDate.set(inferred, new Set());
-      completionsByDate.get(inferred)?.add(row.task_name);
-    }
-    for (const [date, names] of completionsByDate) {
-      if (WATERING_SESSION_NAMES.every(n => names.has(n))) {
-        lastWateredDate = pickLatestIsoDate(lastWateredDate, date);
-      }
-    }
-  }
-
-  for (const row of rows) {
-    const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
-    if (!inferred) continue;
-
-    if (row.task_name === MOW_TASK_NAME) {
-      lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
-    } else if (row.task_name === WATER_TASK_NAME) {
-      // Legacy single-session row — count it directly.
-      lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
-    } else if (row.task_name === VERTICUT_TASK_NAME) {
-      lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);
-    }
-    // Water lawn (Morning/Midday/Evening) are handled via the session block above.
-  }
-
-  return { lastMowedDate, lastWateredDate, lastVerticutDate };
-}
-
-/**
- * @param {string | null} localDate
- * @param {string | null} remoteDate
- */
-export function mergeMaintenanceDate(localDate, remoteDate) {
-  return pickLatestIsoDate(localDate, remoteDate);
-}
-
-/**
- * Pull last mow/water from shared Supabase (e.g. after completing in Tasks app).
- * @param {string} todayStr
- */
-export async function pullMaintenanceDatesFromSupabase(todayStr) {
-  const rows = await fetchLawnMaintenanceRows();
-  return inferMaintenanceDatesFromRows(rows, todayStr);
-}
-</file>
-
 <file path="src/services/lawnScheduleEngine.js">
 import { addDaysToDateString, makeStepKey } from '../data/LawnPackData.js';
 import { pickLatestIsoDate } from './lawnMaintenanceSync.js';
@@ -6574,6 +6632,229 @@ export function buildMaintenanceSchedule(input) {
     verticutPairedWithMow,
     verticutIntervalElapsed,
   };
+}
+</file>
+
+<file path="src/services/lawnMaintenanceSync.js">
+import {
+  getSupabase,
+  getSupabaseConfigError,
+  formatSupabaseSyncError,
+} from '../lib/supabase';
+import { LAWN_APP_SOURCE } from './lawnTasks';
+
+export const MOW_TASK_NAME = 'Mow lawn';
+export const WATER_TASK_NAME = 'Water lawn';
+export const VERTICUT_TASK_NAME = 'Verticutting';
+export const WATERING_SESSION_NAMES = [
+  'Water lawn (Morning)',
+  'Water lawn (Midday)',
+  'Water lawn (Evening)',
+];
+
+/** @type {boolean | null} */
+let lastCompletedColumnAvailable = null;
+
+export function resetLastCompletedColumnProbe() {
+  lastCompletedColumnAvailable = null;
+}
+
+/** @param {unknown} error */
+export function isMissingLastCompletedColumnError(error) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String(/** @type {{ message: unknown }} */ (error).message)
+        : String(error);
+  return /last_completed_date|42703|PGRST204|schema cache/i.test(message);
+}
+
+/** @param {Record<string, unknown>} payload */
+export function withoutLastCompletedDate(payload) {
+  const next = { ...payload };
+  delete next.last_completed_date;
+  return next;
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<boolean>}
+ */
+export async function probeLastCompletedColumn(supabase) {
+  if (lastCompletedColumnAvailable !== null) {
+    return lastCompletedColumnAvailable;
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .select('last_completed_date')
+    .eq('app_source', LAWN_APP_SOURCE)
+    .limit(1);
+
+  lastCompletedColumnAvailable = !error;
+  return lastCompletedColumnAvailable;
+}
+
+export function getLastCompletedColumnHint() {
+  return 'Run supabase/maintenance_link.sql in the Supabase SQL Editor to link Tasks app completions with this app.';
+}
+
+/**
+ * @param {string | null | undefined} isoDate
+ * @returns {string | null}
+ */
+function isoDateFromTimestamp(isoDate) {
+  if (!isoDate) return null;
+  return isoDate.slice(0, 10);
+}
+
+/**
+ * @param {...(string | null | undefined)} dates
+ * @returns {string | null}
+ */
+export function pickLatestIsoDate(...dates) {
+  const valid = dates.filter((d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
+  if (valid.length === 0) return null;
+  return valid.sort().at(-1) ?? null;
+}
+
+/**
+ * @typedef {Object} LawnMaintenanceRow
+ * @property {string} task_name
+ * @property {string} due_date
+ * @property {boolean} is_completed
+ * @property {string | null} [last_completed_date]
+ * @property {string | null} [updated_at]
+ * @property {string | null} [created_at]
+ */
+
+const MAINTENANCE_SELECT_FULL =
+  'task_name, due_date, is_completed, last_completed_date, created_at';
+const MAINTENANCE_SELECT_FALLBACK = 'task_name, due_date, is_completed, created_at';
+
+/**
+ * @returns {Promise<LawnMaintenanceRow[]>}
+ */
+export async function fetchLawnMaintenanceRows() {
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase client could not be initialised.');
+  }
+
+  let result = await supabase
+    .from('tasks')
+    .select(MAINTENANCE_SELECT_FULL)
+    .eq('app_source', LAWN_APP_SOURCE)
+    .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, 'Water lawn (Morning)', 'Water lawn (Midday)', 'Water lawn (Evening)', VERTICUT_TASK_NAME]);
+
+  if (result.error && (result.error.code === '42703' || isMissingLastCompletedColumnError(result.error))) {
+    result = await supabase
+      .from('tasks')
+      .select(MAINTENANCE_SELECT_FALLBACK)
+      .eq('app_source', LAWN_APP_SOURCE)
+      .in('task_name', [MOW_TASK_NAME, WATER_TASK_NAME, 'Water lawn (Morning)', 'Water lawn (Midday)', 'Water lawn (Evening)', VERTICUT_TASK_NAME]);
+  }
+
+  if (result.error) {
+    throw new Error(formatSupabaseSyncError(result.error));
+  }
+
+  return result.data ?? [];
+}
+
+/**
+ * Best-effort last-done date from one Supabase row (Tasks app or Lawn app).
+ * @param {LawnMaintenanceRow} row
+ * @param {string} todayStr YYYY-MM-DD
+ * @returns {string | null}
+ */
+export function inferLastDoneFromMaintenanceRow(row, todayStr) {
+  if (row.last_completed_date) {
+    return row.last_completed_date;
+  }
+
+  const dueDate = row.due_date;
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+    return null;
+  }
+
+  // due_date on mow/water rows is the *next* due date — never treat it as last done when open.
+  if (row.is_completed && dueDate <= todayStr) {
+    return pickLatestIsoDate(dueDate, isoDateFromTimestamp(row.updated_at), isoDateFromTimestamp(row.created_at));
+  }
+
+  return null;
+}
+
+/**
+ * Read shared last-done dates from Supabase (set by Tasks app or Lawn app).
+ * @param {LawnMaintenanceRow[]} rows
+ * @param {string} todayStr YYYY-MM-DD
+ */
+export function inferMaintenanceDatesFromRows(rows, todayStr) {
+  let lastMowedDate = null;
+  let lastWateredDate = null;
+  let lastVerticutDate = null;
+
+  // When running 3-session watering (seed establishment), completing one session must
+  // not advance the shared lastWateredDate — that would push all sessions to tomorrow.
+  // Only treat a day as fully watered once all 3 sessions report the same completion date.
+  const sessionRows = rows.filter(r => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length > 0) {
+    /** @type {Map<string, Set<string>>} */
+    const completionsByDate = new Map();
+    for (const row of sessionRows) {
+      const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+      if (!inferred) continue;
+      if (!completionsByDate.has(inferred)) completionsByDate.set(inferred, new Set());
+      completionsByDate.get(inferred)?.add(row.task_name);
+    }
+    for (const [date, names] of completionsByDate) {
+      if (WATERING_SESSION_NAMES.every(n => names.has(n))) {
+        lastWateredDate = pickLatestIsoDate(lastWateredDate, date);
+      }
+    }
+  }
+
+  for (const row of rows) {
+    const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+    if (!inferred) continue;
+
+    if (row.task_name === MOW_TASK_NAME) {
+      lastMowedDate = pickLatestIsoDate(lastMowedDate, inferred);
+    } else if (row.task_name === WATER_TASK_NAME) {
+      // Legacy single-session row — count it directly.
+      lastWateredDate = pickLatestIsoDate(lastWateredDate, inferred);
+    } else if (row.task_name === VERTICUT_TASK_NAME) {
+      lastVerticutDate = pickLatestIsoDate(lastVerticutDate, inferred);
+    }
+    // Water lawn (Morning/Midday/Evening) are handled via the session block above.
+  }
+
+  return { lastMowedDate, lastWateredDate, lastVerticutDate };
+}
+
+/**
+ * @param {string | null} localDate
+ * @param {string | null} remoteDate
+ */
+export function mergeMaintenanceDate(localDate, remoteDate) {
+  return pickLatestIsoDate(localDate, remoteDate);
+}
+
+/**
+ * Pull last mow/water from shared Supabase (e.g. after completing in Tasks app).
+ * @param {string} todayStr
+ */
+export async function pullMaintenanceDatesFromSupabase(todayStr) {
+  const rows = await fetchLawnMaintenanceRows();
+  return inferMaintenanceDatesFromRows(rows, todayStr);
 }
 </file>
 
@@ -20566,9 +20847,7 @@ function stripStalePetLockout(userLogs, todayStr) {
   return next;
 }
 function isSeasonPackComplete(seasonKey, userLogs) {
-  return SEASONS[seasonKey].steps.every(
-    (step) => userLogs[makeStepKey(seasonKey, step.id)] != null
-  );
+  return SEASONS[seasonKey].steps.filter((step) => !step.optional).every((step) => userLogs[makeStepKey(seasonKey, step.id)] != null);
 }
 function getWorkflowSeasonForDate(isoDate, userLogs) {
   const calendarSeason = getCalendarSeasonForDate(isoDate);
@@ -20610,6 +20889,18 @@ var SEASONS = {
         setting: "1.5%",
         daysAfterFirstStep: 0,
         note: "\u{1F3AF} TARGET: Broadleaf weeds. Apply when weeds are small, actively growing, and leaf surface area is maximized. Avoid mowing for 3 days before and 3 days after application. \u{1F6AB} DRY TIME: Foliar absorption takes time. Do NOT apply any liquids, iron sprays, or water the lawn for a strict 48 hours post-application. Wait 6 weeks before seeding.",
+        dogSafety: "Lock your dog inside during spraying. Keep paws off the grass until every leaf blade is 100% dry."
+      },
+      {
+        id: "moss",
+        label: "Optional: Apply Iron Sulphate for moss control",
+        type: "chemical",
+        ratePerSqm: 5,
+        unit: "g",
+        toolType: "sprayer",
+        daysAfterFirstStep: 14,
+        optional: true,
+        note: "\u{1F480} MOSS ONLY: High dose (5g per SQM) blackens moss \u2014 rake out after 14 days once moss has turned black. Use shed stock (Winter Pack iron). Not shipped in the Spring Pack. Skip if no moss.",
         dogSafety: "Lock your dog inside during spraying. Keep paws off the grass until every leaf blade is 100% dry."
       },
       {
@@ -20776,14 +21067,14 @@ var SEASONS = {
         dogSafety: "Water the mix in thoroughly or apply right before rain to clear the leaf surface. Block dog access until granules are fully dissolved into the soil."
       },
       {
-        id: "iron",
-        label: "Step 2: Apply Deeper Green Iron Sulphate",
+        id: "iron1",
+        label: "Step 2: Apply Deeper Green Iron Sulphate (1st dose)",
         type: "chemical",
-        ratePerSqm: 5,
+        ratePerSqm: 2.5,
         unit: "g",
         toolType: "sprayer",
         daysAfterFirstStep: 7,
-        note: "\u{1F480} MOSS CONTROL: Targets heavy winter moss infestations. Moss blackens, dehydrates, and dies within 24-48 hours of contact. \u{1F4A1} COSMETIC GREENING: With no active moss mat, halve the dose to 2.5g per square metre to avoid tip scorch. \u26A0\uFE0F AVOID RUSTING: Keep spray off hard stone, porcelain, patios, and pathways to prevent permanent orange rust staining!",
+        note: "\u{1F480} 1ST DOSE (Winter Pack double dose): Moss \u2014 5g per SQM, rake 7\u201314 days later. No moss \u2014 2.5g per SQM for green-up and hardening. Can tank-mix with biostimulant. \u26A0\uFE0F Keep spray off patios and hard surfaces.",
         dogSafety: "Lock dogs away during spraying. Keep paws off treated grass until completely dry to prevent skin irritation or paw staining."
       },
       {
@@ -20795,14 +21086,33 @@ var SEASONS = {
         toolType: "sprayer",
         setting: "2.0%",
         daysAfterFirstStep: 10,
-        note: "\u{1F6E1}\uFE0F ROOT INSULATION: Protects soil microbial activity throughout winter dormancy. Apply during a mild window when the ground is not frozen, waterlogged, or covered in deep frost.",
+        note: "\u{1F6E1}\uFE0F ROOT INSULATION: Protects soil microbial activity throughout winter dormancy. Can be tank-mixed with the 1st iron dose for quicker application. Apply during a mild window when the ground is not frozen, waterlogged, or covered in deep frost.",
         dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
+      },
+      {
+        id: "iron2",
+        label: "Step 4: Apply Deeper Green Iron Sulphate (2nd dose)",
+        type: "chemical",
+        ratePerSqm: 2.5,
+        unit: "g",
+        toolType: "sprayer",
+        daysAfterFirstStep: 35,
+        note: "\u{1F480} 2ND DOSE: Apply 4 weeks after the 1st dose (medium dose 2.5g per SQM, or 5g per SQM if moss). Completes the Winter Pack double dose.",
+        dogSafety: "Lock dogs away during spraying. Keep paws off treated grass until completely dry to prevent skin irritation or paw staining."
       }
     ]
   }
 };
 function makeStepKey(seasonKey, stepId) {
   return `${seasonKey}:${stepId}`;
+}
+function migrateUserLogs(userLogs) {
+  const next = { ...userLogs };
+  if (next["WINTER:iron"] && !next["WINTER:iron1"]) {
+    next["WINTER:iron1"] = next["WINTER:iron"];
+    delete next["WINTER:iron"];
+  }
+  return next;
 }
 function addDaysToDateString(dateString, days) {
   const [year, month, day] = dateString.split("-").map(Number);
@@ -29840,6 +30150,10 @@ function getTaskNameToStepKeyMap() {
         taskNameToStepKey.set(step.label, makeStepKey(seasonKey, step.id));
       }
     }
+    taskNameToStepKey.set(
+      "Step 2: Apply Deeper Green Iron Sulphate",
+      makeStepKey("WINTER", "iron1")
+    );
   }
   return taskNameToStepKey;
 }
@@ -30971,7 +31285,7 @@ async function runLawnCloudSync() {
       message: "Lawn cloud state not set up. Run supabase/lawn_app_state.sql in Supabase."
     };
   }
-  let userLogs = stripStalePetLockout({ ...cloudState.userLogs }, todayStr);
+  let userLogs = migrateUserLogs(stripStalePetLockout({ ...cloudState.userLogs }, todayStr));
   const scheduleSnapshot = cloudState.scheduleSnapshot ?? {};
   let lastMowedDate = scheduleSnapshot.lastMowedDate ?? null;
   let lastWateredDate = scheduleSnapshot.lastWateredDate ?? null;
@@ -30982,7 +31296,7 @@ async function runLawnCloudSync() {
     lastWateredDate,
     lastVerticutDate
   });
-  userLogs = stripStalePetLockout(inbound.userLogs, todayStr);
+  userLogs = migrateUserLogs(stripStalePetLockout(inbound.userLogs, todayStr));
   lastMowedDate = inbound.lastMowedDate ?? lastMowedDate;
   lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
   lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;

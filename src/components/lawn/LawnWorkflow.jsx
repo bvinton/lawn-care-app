@@ -171,6 +171,13 @@ export default function LawnWorkflow({ app }) {
           </button>
           <button
             type="button"
+            onClick={() => setActiveScreen('guides')}
+            className="text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-1.5 px-3 rounded-lg transition-all border border-green-200"
+          >
+            📚 Guides
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveScreen('settings')}
             className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
           >

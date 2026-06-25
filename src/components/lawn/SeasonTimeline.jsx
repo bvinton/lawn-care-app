@@ -93,6 +93,14 @@ export default function SeasonTimeline({ app }) {
           const dateInputValue = isCompleted
             ? completedDate
             : pendingDates[currentSeason]?.[step.id];
+          const requiredBefore = activeSeason.steps
+            .slice(0, index)
+            .filter((s) => !s.optional).length;
+          const stepMarker = step.optional
+            ? '○'
+            : isCompleted
+              ? '✅'
+              : requiredBefore + 1;
 
           return (
             <div key={stepKey} id={`step-${stepKey.replace(':', '-')}`} className="flex gap-3">
@@ -101,12 +109,14 @@ export default function SeasonTimeline({ app }) {
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
                     isCompleted
                       ? 'bg-green-600 text-white'
-                      : isWeedolAdvisoryStep
-                        ? 'bg-amber-100 text-amber-800 border-2 border-amber-400'
-                        : 'bg-gray-100 text-gray-500 border-2 border-gray-200'
+                      : step.optional
+                        ? 'bg-slate-100 text-slate-500 border-2 border-dashed border-slate-300'
+                        : isWeedolAdvisoryStep
+                          ? 'bg-amber-100 text-amber-800 border-2 border-amber-400'
+                          : 'bg-gray-100 text-gray-500 border-2 border-gray-200'
                   }`}
                 >
-                  {isCompleted ? '✅' : index + 1}
+                  {stepMarker}
                 </div>
                 {!isLast && (
                   <div
@@ -119,9 +129,11 @@ export default function SeasonTimeline({ app }) {
                 className={`flex-1 mb-4 p-4 rounded-xl border transition-all ${
                   isWeedolAdvisoryStep
                     ? 'bg-amber-50 border-amber-200'
-                    : isCompleted
-                      ? 'bg-emerald-50 border-emerald-200'
-                      : 'bg-gray-50 border-gray-200'
+                    : step.optional && !isCompleted
+                      ? 'bg-slate-50 border-dashed border-slate-300'
+                      : isCompleted
+                        ? 'bg-emerald-50 border-emerald-200'
+                        : 'bg-gray-50 border-gray-200'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
@@ -130,6 +142,11 @@ export default function SeasonTimeline({ app }) {
                   >
                     {step.label}
                   </h4>
+                  {step.optional && !isCompleted && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">
+                      Optional
+                    </span>
+                  )}
                   {isCompleted && (
                     <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">
                       ✅ {formatDisplayDate(completedDate)}

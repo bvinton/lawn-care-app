@@ -77,9 +77,9 @@ export function stripStalePetLockout(userLogs, todayStr) {
  * @param {Record<string, string>} userLogs
  */
 export function isSeasonPackComplete(seasonKey, userLogs) {
-  return SEASONS[seasonKey].steps.every(
-    (step) => userLogs[makeStepKey(seasonKey, step.id)] != null
-  );
+  return SEASONS[seasonKey].steps
+    .filter((step) => !step.optional)
+    .every((step) => userLogs[makeStepKey(seasonKey, step.id)] != null);
 }
 
 /**
@@ -89,7 +89,7 @@ export function isSeasonPackComplete(seasonKey, userLogs) {
  */
 export function getIncompleteSeasonSteps(seasonKey, userLogs) {
   return SEASONS[seasonKey].steps.filter(
-    (step) => !userLogs[makeStepKey(seasonKey, step.id)]
+    (step) => !step.optional && !userLogs[makeStepKey(seasonKey, step.id)]
   );
 }
 
@@ -204,6 +204,18 @@ export const SEASONS = {
         setting: "1.5%",
         daysAfterFirstStep: 0,
         note: "🎯 TARGET: Broadleaf weeds. Apply when weeds are small, actively growing, and leaf surface area is maximized. Avoid mowing for 3 days before and 3 days after application. 🚫 DRY TIME: Foliar absorption takes time. Do NOT apply any liquids, iron sprays, or water the lawn for a strict 48 hours post-application. Wait 6 weeks before seeding.",
+        dogSafety: "Lock your dog inside during spraying. Keep paws off the grass until every leaf blade is 100% dry."
+      },
+      {
+        id: "moss",
+        label: "Optional: Apply Iron Sulphate for moss control",
+        type: "chemical",
+        ratePerSqm: 5,
+        unit: "g",
+        toolType: "sprayer",
+        daysAfterFirstStep: 14,
+        optional: true,
+        note: "💀 MOSS ONLY: High dose (5g per SQM) blackens moss — rake out after 14 days once moss has turned black. Use shed stock (Winter Pack iron). Not shipped in the Spring Pack. Skip if no moss.",
         dogSafety: "Lock your dog inside during spraying. Keep paws off the grass until every leaf blade is 100% dry."
       },
       {
@@ -370,14 +382,14 @@ export const SEASONS = {
         dogSafety: "Water the mix in thoroughly or apply right before rain to clear the leaf surface. Block dog access until granules are fully dissolved into the soil."
       },
       {
-        id: "iron",
-        label: "Step 2: Apply Deeper Green Iron Sulphate",
+        id: "iron1",
+        label: "Step 2: Apply Deeper Green Iron Sulphate (1st dose)",
         type: "chemical",
-        ratePerSqm: 5,
+        ratePerSqm: 2.5,
         unit: "g",
         toolType: "sprayer",
         daysAfterFirstStep: 7,
-        note: "💀 MOSS CONTROL: Targets heavy winter moss infestations. Moss blackens, dehydrates, and dies within 24-48 hours of contact. 💡 COSMETIC GREENING: With no active moss mat, halve the dose to 2.5g per square metre to avoid tip scorch. ⚠️ AVOID RUSTING: Keep spray off hard stone, porcelain, patios, and pathways to prevent permanent orange rust staining!",
+        note: "💀 1ST DOSE (Winter Pack double dose): Moss — 5g per SQM, rake 7–14 days later. No moss — 2.5g per SQM for green-up and hardening. Can tank-mix with biostimulant. ⚠️ Keep spray off patios and hard surfaces.",
         dogSafety: "Lock dogs away during spraying. Keep paws off treated grass until completely dry to prevent skin irritation or paw staining."
       },
       {
@@ -389,8 +401,19 @@ export const SEASONS = {
         toolType: "sprayer",
         setting: "2.0%",
         daysAfterFirstStep: 10,
-        note: "🛡️ ROOT INSULATION: Protects soil microbial activity throughout winter dormancy. Apply during a mild window when the ground is not frozen, waterlogged, or covered in deep frost.",
+        note: "🛡️ ROOT INSULATION: Protects soil microbial activity throughout winter dormancy. Can be tank-mixed with the 1st iron dose for quicker application. Apply during a mild window when the ground is not frozen, waterlogged, or covered in deep frost.",
         dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
+      },
+      {
+        id: "iron2",
+        label: "Step 4: Apply Deeper Green Iron Sulphate (2nd dose)",
+        type: "chemical",
+        ratePerSqm: 2.5,
+        unit: "g",
+        toolType: "sprayer",
+        daysAfterFirstStep: 35,
+        note: "💀 2ND DOSE: Apply 4 weeks after the 1st dose (medium dose 2.5g per SQM, or 5g per SQM if moss). Completes the Winter Pack double dose.",
+        dogSafety: "Lock dogs away during spraying. Keep paws off treated grass until completely dry to prevent skin irritation or paw staining."
       }
     ]
   }
@@ -398,6 +421,19 @@ export const SEASONS = {
 
 export function makeStepKey(seasonKey, stepId) {
   return `${seasonKey}:${stepId}`;
+}
+
+/**
+ * Migrate legacy log keys when pack step ids change.
+ * @param {Record<string, string>} userLogs
+ */
+export function migrateUserLogs(userLogs) {
+  const next = { ...userLogs };
+  if (next['WINTER:iron'] && !next['WINTER:iron1']) {
+    next['WINTER:iron1'] = next['WINTER:iron'];
+    delete next['WINTER:iron'];
+  }
+  return next;
 }
 
 /** @param {string} dateString @param {number} days */

@@ -2,7 +2,7 @@
  * Server-side full lawn sync (same pipeline as Lawn app “Sync” button).
  * Used by POST /api/sync-lawn — not imported by the browser bundle.
  */
-import { createInitialPendingDates, stripStalePetLockout, makeStepKey } from '../data/LawnPackData.js';
+import { createInitialPendingDates, stripStalePetLockout, makeStepKey, migrateUserLogs } from '../data/LawnPackData.js';
 import { getSupabaseConfigError, initServerSupabase } from '../lib/supabase.js';
 import { fetchLawnAppStateFromSupabase, saveLawnScheduleSnapshot, saveLawnUserLogsToSupabase } from '../services/lawnAppState.js';
 import {
@@ -51,7 +51,7 @@ export async function runLawnCloudSync() {
     };
   }
 
-  let userLogs = stripStalePetLockout({ ...cloudState.userLogs }, todayStr);
+  let userLogs = migrateUserLogs(stripStalePetLockout({ ...cloudState.userLogs }, todayStr));
   const scheduleSnapshot = cloudState.scheduleSnapshot ?? {};
 
   let lastMowedDate = scheduleSnapshot.lastMowedDate ?? null;
@@ -64,7 +64,7 @@ export async function runLawnCloudSync() {
     lastWateredDate,
     lastVerticutDate,
   });
-  userLogs = stripStalePetLockout(inbound.userLogs, todayStr);
+  userLogs = migrateUserLogs(stripStalePetLockout(inbound.userLogs, todayStr));
   lastMowedDate = inbound.lastMowedDate ?? lastMowedDate;
   lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
   lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
