@@ -87,6 +87,7 @@ src/data/lawnGuidesData.js
 src/data/LawnPackData.js
 src/data/lawnUiConfig.jsx
 src/hooks/useLawnCareApp.js
+src/hooks/useMobileBackNavigation.js
 src/index.css
 src/lib/supabase.js
 src/main.jsx
@@ -98,6 +99,7 @@ src/services/lawnScheduleEngine.js
 src/services/lawnTaskInboundSync.js
 src/services/lawnTasks.js
 src/services/lawnWeather.js
+src/utils/backNavigation.js
 src/utils/compileLawnTasks.js
 src/utils/lawnDates.js
 src/utils/lawnDeepLink.js
@@ -118,41 +120,106 @@ vite.config.js
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/utils/openGuide.js">
-/**
- * @typedef {'pdf' | 'docx' | 'image'} GuideKind
- */
+<file path="src/hooks/useMobileBackNavigation.js">
+import { useEffect, useRef } from 'react';
+import {
+  pushAppHistoryState,
+  registerBackHandler,
+  runBackHandlers,
+} from '../utils/backNavigation';
 
 /**
- * Absolute URL for a guide in /public (works on Vercel, not local-only paths).
- * @param {string} file Path like /The Spring Pack.docx
+ * Android / PWA hardware back: sub-screens → main, main → confirm exit.
+ * @param {{
+ *   isAtRoot: () => boolean,
+ *   onReturnToMain: () => void,
+ *   exitMessage?: string,
+ * }} options
  */
-export function getGuideUrl(file) {
-  return new URL(file, window.location.origin).href;
+export function useMobileBackNavigation({
+  isAtRoot,
+  onReturnToMain,
+  exitMessage = 'Leave the Lawn Pack Companion?',
+}) {
+  const isAtRootRef = useRef(isAtRoot);
+  const onReturnToMainRef = useRef(onReturnToMain);
+
+  useEffect(() => {
+    isAtRootRef.current = isAtRoot;
+    onReturnToMainRef.current = onReturnToMain;
+  }, [isAtRoot, onReturnToMain]);
+
+  useEffect(() => {
+    pushAppHistoryState({ trap: 'root' });
+
+    const onPopState = () => {
+      if (runBackHandlers()) {
+        pushAppHistoryState({ trap: 'handled' });
+        return;
+      }
+
+      if (!isAtRootRef.current()) {
+        onReturnToMainRef.current();
+        pushAppHistoryState({ trap: 'main' });
+        return;
+      }
+
+      if (window.confirm(exitMessage)) {
+        window.history.back();
+        return;
+      }
+
+      pushAppHistoryState({ trap: 'root' });
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [exitMessage]);
 }
 
 /**
- * Open a guide on mobile/PWA — target="_blank" often fails in standalone mode.
- * @param {{ file: string, kind: GuideKind, title?: string }} guide
+ * @param {() => boolean} handler Return true when this layer consumed the back press.
+ * @param {boolean} enabled
  */
-export function openGuide(guide) {
-  const url = getGuideUrl(guide.file);
+export function useRegisterBackHandler(handler, enabled = true) {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
 
-  if (guide.kind === 'pdf') {
-    window.location.assign(url);
-    return;
-  }
+  useEffect(() => {
+    if (!enabled) return undefined;
 
-  if (guide.kind === 'docx') {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = guide.file.split('/').pop() ?? 'guide.docx';
-    link.rel = 'noopener';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    return;
+    return registerBackHandler(() => handlerRef.current());
+  }, [enabled]);
+}
+</file>
+
+<file path="src/utils/backNavigation.js">
+/** @type {Array<() => boolean>} */
+const handlers = [];
+
+/**
+ * Register a back handler (most recent wins). Return true if the event was handled.
+ * @param {() => boolean} handler
+ */
+export function registerBackHandler(handler) {
+  handlers.push(handler);
+  return () => {
+    const index = handlers.indexOf(handler);
+    if (index >= 0) handlers.splice(index, 1);
+  };
+}
+
+/** @returns {boolean} */
+export function runBackHandlers() {
+  for (let i = handlers.length - 1; i >= 0; i -= 1) {
+    if (handlers[i]()) return true;
   }
+  return false;
+}
+
+/** Push a history entry so the next hardware back fires popstate instead of closing the PWA. */
+export function pushAppHistoryState(state = {}) {
+  window.history.pushState({ lawnApp: true, ...state }, '', window.location.pathname);
 }
 </file>
 
@@ -353,97 +420,6 @@ const sizes = [
 for (const { name, size } of sizes) {
   await sharp(svg).resize(size, size).png().toFile(join(root, 'public', name));
   console.log(`Wrote public/${name}`);
-}
-</file>
-
-<file path="src/components/lawn/LawnGuides.jsx">
-import React, { useState } from 'react';
-import { LAWN_GUIDE_SECTIONS, guideActionLabel } from '../../data/lawnGuidesData';
-import { openGuide } from '../../utils/openGuide';
-import SprinklerLightbox from './SprinklerLightbox';
-
-/** @param {{ setActiveScreen: (screen: string) => void }} props */
-export default function LawnGuides({ setActiveScreen }) {
-  const [enlargedImage, setEnlargedImage] = useState(
-    /** @type {{ image: string, name: string } | null} */ (null)
-  );
-
-  return (
-    <>
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start mb-6 border-b pb-4">
-        <div className="min-w-0">
-          <h2 className="text-xl font-black text-green-800">📚 Lawn Pack Guides</h2>
-          <p className="text-sm text-green-700 mt-1">
-            Official literature for seasonal packs, masterclasses, and product guides.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setActiveScreen('main')}
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-3 rounded-lg transition-all shrink-0 self-start"
-        >
-          ← Back to Workflow
-        </button>
-      </div>
-
-      <div className="space-y-6">
-        {LAWN_GUIDE_SECTIONS.map((section) => (
-          <section key={section.title}>
-            <h3 className="text-sm font-black text-gray-800 mb-1">{section.title}</h3>
-            {section.description && (
-              <p className="text-xs text-gray-500 mb-3 leading-relaxed">{section.description}</p>
-            )}
-            <ul className="space-y-2">
-              {section.guides.map((guide) => (
-                <li
-                  key={guide.file}
-                  className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-gray-900">{guide.title}</p>
-                    {guide.description && (
-                      <p className="text-xs text-gray-500 mt-0.5">{guide.description}</p>
-                    )}
-                  </div>
-                  {guide.kind === 'image' ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setEnlargedImage({ image: guide.file, name: guide.title })
-                      }
-                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
-                    >
-                      {guideActionLabel(guide)}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => openGuide(guide)}
-                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
-                    >
-                      {guideActionLabel(guide)}
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
-
-      <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
-        Guides are hosted with the app (not on your PC). PDFs open in the viewer; Word guides
-        download to your phone — open them from Files or Word.
-      </p>
-
-      {enlargedImage && (
-        <SprinklerLightbox
-          enlargedSprinkler={enlargedImage}
-          onClose={() => setEnlargedImage(null)}
-        />
-      )}
-    </>
-  );
 }
 </file>
 
@@ -1303,6 +1279,44 @@ export function readStoredJson(key, fallback) {
 }
 </file>
 
+<file path="src/utils/openGuide.js">
+/**
+ * @typedef {'pdf' | 'docx' | 'image'} GuideKind
+ */
+
+/**
+ * Absolute URL for a guide in /public (works on Vercel, not local-only paths).
+ * @param {string} file Path like /The Spring Pack.docx
+ */
+export function getGuideUrl(file) {
+  return new URL(file, window.location.origin).href;
+}
+
+/**
+ * Open a guide on mobile/PWA — target="_blank" often fails in standalone mode.
+ * @param {{ file: string, kind: GuideKind, title?: string }} guide
+ */
+export function openGuide(guide) {
+  const url = getGuideUrl(guide.file);
+
+  if (guide.kind === 'pdf') {
+    window.location.assign(url);
+    return;
+  }
+
+  if (guide.kind === 'docx') {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = guide.file.split('/').pop() ?? 'guide.docx';
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return;
+  }
+}
+</file>
+
 <file path="supabase/lawn_app_state.sql">
 -- Run once in Supabase SQL Editor (Lawn app + same project as Tasks app).
 -- Single-row store for lawn pack progress (Weedol, steps, mow/water dates, etc.).
@@ -1638,6 +1652,179 @@ Open **⚙️ Show Setup** in the app to configure:
 Private project — all rights reserved.
 </file>
 
+<file path="src/components/lawn/LawnGuides.jsx">
+import React, { useEffect, useState } from 'react';
+import { LAWN_GUIDE_SECTIONS, guideActionLabel } from '../../data/lawnGuidesData';
+import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
+import { pushAppHistoryState } from '../../utils/backNavigation';
+import { openGuide } from '../../utils/openGuide';
+import SprinklerLightbox from './SprinklerLightbox';
+
+/** @param {{ setActiveScreen: (screen: string) => void }} props */
+export default function LawnGuides({ setActiveScreen }) {
+  const [enlargedImage, setEnlargedImage] = useState(
+    /** @type {{ image: string, name: string } | null} */ (null)
+  );
+
+  useEffect(() => {
+    if (enlargedImage) {
+      pushAppHistoryState({ overlay: 'guide-image' });
+    }
+  }, [enlargedImage]);
+
+  useRegisterBackHandler(() => {
+    if (enlargedImage) {
+      setEnlargedImage(null);
+      return true;
+    }
+    return false;
+  }, Boolean(enlargedImage));
+
+  return (
+    <>
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start mb-6 border-b pb-4">
+        <div className="min-w-0">
+          <h2 className="text-xl font-black text-green-800">📚 Lawn Pack Guides</h2>
+          <p className="text-sm text-green-700 mt-1">
+            Official literature for seasonal packs, masterclasses, and product guides.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveScreen('main')}
+          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-3 rounded-lg transition-all shrink-0 self-start"
+        >
+          ← Back to Workflow
+        </button>
+      </div>
+
+      <div className="space-y-6">
+        {LAWN_GUIDE_SECTIONS.map((section) => (
+          <section key={section.title}>
+            <h3 className="text-sm font-black text-gray-800 mb-1">{section.title}</h3>
+            {section.description && (
+              <p className="text-xs text-gray-500 mb-3 leading-relaxed">{section.description}</p>
+            )}
+            <ul className="space-y-2">
+              {section.guides.map((guide) => (
+                <li
+                  key={guide.file}
+                  className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-900">{guide.title}</p>
+                    {guide.description && (
+                      <p className="text-xs text-gray-500 mt-0.5">{guide.description}</p>
+                    )}
+                  </div>
+                  {guide.kind === 'image' ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEnlargedImage({ image: guide.file, name: guide.title })
+                      }
+                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
+                    >
+                      {guideActionLabel(guide)}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => openGuide(guide)}
+                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
+                    >
+                      {guideActionLabel(guide)}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
+        Guides are hosted with the app (not on your PC). PDFs open in the viewer; Word guides
+        download to your phone — open them from Files or Word.
+      </p>
+
+      {enlargedImage && (
+        <SprinklerLightbox
+          enlargedSprinkler={enlargedImage}
+          onClose={() => setEnlargedImage(null)}
+        />
+      )}
+    </>
+  );
+}
+</file>
+
+<file path="src/index.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.lawn-focus-highlight {
+  outline: 3px solid #16a34a;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
+  transition: outline 0.25s ease, box-shadow 0.25s ease;
+}
+</file>
+
+<file path="src/main.jsx">
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { registerSW } from 'virtual:pwa-register';
+import App from './App.jsx';
+import './index.css';
+
+registerSW({ immediate: true });
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+</file>
+
+<file path="vercel.json">
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "functions": {
+    "api/sync-lawn.js": {
+      "maxDuration": 60
+    }
+  }
+}
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>The Lawn Pack Companion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+</file>
+
 <file path="src/App.jsx">
 import React from 'react';
 import LawnCareApp from './components/lawn/LawnCareApp';
@@ -1669,8 +1856,13 @@ export default function App() {
 </file>
 
 <file path="src/components/lawn/LawnCareApp.jsx">
-import React from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { useLawnCareApp } from '../../hooks/useLawnCareApp';
+import {
+  useMobileBackNavigation,
+  useRegisterBackHandler,
+} from '../../hooks/useMobileBackNavigation';
+import { pushAppHistoryState } from '../../utils/backNavigation';
 import LawnSettings from './LawnSettings';
 import LawnWorkflow from './LawnWorkflow';
 import LawnGuides from './LawnGuides';
@@ -1678,6 +1870,56 @@ import SprinklerLightbox from './SprinklerLightbox';
 
 export default function LawnCareApp() {
   const app = useLawnCareApp();
+
+  const isAtRoot = useCallback(
+    () =>
+      app.activeScreen === 'main' &&
+      !app.enlargedSprinkler &&
+      !app.showLevellingGuide,
+    [app.activeScreen, app.enlargedSprinkler, app.showLevellingGuide]
+  );
+
+  const onReturnToMain = useCallback(() => {
+    app.setActiveScreen('main');
+    app.setShowLevellingGuide(false);
+    app.setEnlargedSprinkler(null);
+  }, [app]);
+
+  useMobileBackNavigation({ isAtRoot, onReturnToMain });
+
+  useEffect(() => {
+    if (app.activeScreen !== 'main') {
+      pushAppHistoryState({ screen: app.activeScreen });
+    }
+  }, [app.activeScreen]);
+
+  useEffect(() => {
+    if (app.enlargedSprinkler) {
+      pushAppHistoryState({ overlay: 'sprinkler' });
+    }
+  }, [app.enlargedSprinkler]);
+
+  useEffect(() => {
+    if (app.showLevellingGuide) {
+      pushAppHistoryState({ overlay: 'levelling' });
+    }
+  }, [app.showLevellingGuide]);
+
+  useRegisterBackHandler(() => {
+    if (app.enlargedSprinkler) {
+      app.setEnlargedSprinkler(null);
+      return true;
+    }
+    return false;
+  }, Boolean(app.enlargedSprinkler));
+
+  useRegisterBackHandler(() => {
+    if (app.showLevellingGuide) {
+      app.setShowLevellingGuide(false);
+      return true;
+    }
+    return false;
+  }, Boolean(app.showLevellingGuide));
 
   return (
     <div className="w-full max-w-xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-4 sm:p-6 border border-green-100">
@@ -1896,72 +2138,6 @@ export default function LawnWorkflow({ app }) {
     </>
   );
 }
-</file>
-
-<file path="src/index.css">
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-.lawn-focus-highlight {
-  outline: 3px solid #16a34a;
-  outline-offset: 4px;
-  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
-  transition: outline 0.25s ease, box-shadow 0.25s ease;
-}
-</file>
-
-<file path="src/main.jsx">
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { registerSW } from 'virtual:pwa-register';
-import App from './App.jsx';
-import './index.css';
-
-registerSW({ immediate: true });
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
-</file>
-
-<file path="vercel.json">
-{
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
-  "functions": {
-    "api/sync-lawn.js": {
-      "maxDuration": 60
-    }
-  }
-}
-</file>
-
-<file path="index.html">
-<!doctype html>
-<html lang="en-GB">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#14532d" />
-    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>The Lawn Pack Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
 </file>
 
 <file path="src/components/lawn/SeasonTimeline.jsx">
@@ -2355,79 +2531,6 @@ export function formatSupabaseSyncError(error) {
 }
 </file>
 
-<file path="vite.config.js">
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
-
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'The Lawn Pack Companion',
-        short_name: 'Lawn Pack',
-        description:
-          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
-        theme_color: '#14532d',
-        background_color: '#f3f4f6',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
-        lang: 'en-GB',
-        categories: ['lifestyle', 'utilities'],
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
-        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
-        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'open-meteo-forecast',
-              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
-            },
-          },
-          {
-            urlPattern: /\.(pdf|docx)$/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'lawn-pack-guides',
-              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-        ],
-      },
-    }),
-  ],
-});
-</file>
-
 <file path="src/data/lawnGuidesData.js">
 /**
  * Lawn Pack literature served from /public.
@@ -2657,6 +2760,79 @@ export function applyLawnFocusFromUrl(options = {}) {
 
   window.setTimeout(() => attempt(retries), delayMs);
 }
+</file>
+
+<file path="vite.config.js">
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'The Lawn Pack Companion',
+        short_name: 'Lawn Pack',
+        description:
+          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
+        theme_color: '#14532d',
+        background_color: '#f3f4f6',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
+        lang: 'en-GB',
+        categories: ['lifestyle', 'utilities'],
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
+        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
+        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'open-meteo-forecast',
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
+            },
+          },
+          {
+            urlPattern: /\.(pdf|docx)$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'lawn-pack-guides',
+              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+        ],
+      },
+    }),
+  ],
+});
 </file>
 
 <file path="package.json">

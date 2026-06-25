@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LAWN_GUIDE_SECTIONS, guideActionLabel } from '../../data/lawnGuidesData';
+import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
+import { pushAppHistoryState } from '../../utils/backNavigation';
 import { openGuide } from '../../utils/openGuide';
 import SprinklerLightbox from './SprinklerLightbox';
 
@@ -8,6 +10,20 @@ export default function LawnGuides({ setActiveScreen }) {
   const [enlargedImage, setEnlargedImage] = useState(
     /** @type {{ image: string, name: string } | null} */ (null)
   );
+
+  useEffect(() => {
+    if (enlargedImage) {
+      pushAppHistoryState({ overlay: 'guide-image' });
+    }
+  }, [enlargedImage]);
+
+  useRegisterBackHandler(() => {
+    if (enlargedImage) {
+      setEnlargedImage(null);
+      return true;
+    }
+    return false;
+  }, Boolean(enlargedImage));
 
   return (
     <>
