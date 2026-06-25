@@ -42,14 +42,34 @@ export const LAWN_GUIDE_SECTIONS = [
     description: 'Part of a 5-part lawn care masterclass.',
     guides: [
       {
-        title: 'Volume 2: Scarification & Aeration',
+        title: 'Volume 2: Scarification & Aeration (image)',
         file: '/Masterclass Vol 2.jpg',
         kind: 'image',
       },
       {
-        title: 'Volume 3',
+        title: 'Volume 3 (image)',
         file: '/Masterclass Vol 3.jpg',
         kind: 'image',
+      },
+      {
+        title: 'Part 2: Scarification & Aeration',
+        file: '/Lawn Masterclass Part 2 Is Here 🏆.pdf',
+        kind: 'pdf',
+      },
+      {
+        title: 'Part 3',
+        file: '/Lawn Masterclass Part Three 🏆.pdf',
+        kind: 'pdf',
+      },
+      {
+        title: 'Part 4',
+        file: '/Lawn Masterclass Part Four 🏆.pdf',
+        kind: 'pdf',
+      },
+      {
+        title: 'Level Up Your Lawn Game!',
+        file: '/Level Up Your Lawn Game! 🌿.pdf',
+        kind: 'pdf',
       },
     ],
   },
