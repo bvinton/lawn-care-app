@@ -51,35 +51,100 @@ function DocxViewer({ fileUrl, title }) {
 }
 
 /**
- * Render a PDF via Google Docs Viewer in an iframe.
+ * Render a PDF in-app with pdf.js (lazy-loaded), one scrollable page stack.
  * @param {{ fileUrl: string, title: string }} props
  */
 function PdfViewer({ fileUrl, title }) {
+  const [pageImages, setPageImages] = useState(/** @type {string[]} */ ([]));
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+
+  useEffect(() => {
+    setLoading(true);
+    setError('');
+    setPageImages([]);
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const pdfjs = await import('pdfjs-dist');
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url,
+        ).href;
+
+        const pdf = await pdfjs.getDocument(fileUrl).promise;
+        const targetWidth = Math.min(window.innerWidth - 32, 720);
+        const images = [];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+          const page = await pdf.getPage(pageNum);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const scale = targetWidth / baseViewport.width;
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Canvas not supported');
+
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          await page.render({ canvasContext: context, viewport, canvas }).promise;
+          images.push(canvas.toDataURL('image/jpeg', 0.88));
+        }
+
+        if (!cancelled) setPageImages(images);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load PDF.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [fileUrl]);
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorState title={title} message={error} />;
 
   return (
-    <>
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10 pointer-events-none">
-          <LoadingSpinner />
-        </div>
-      )}
-      <iframe
-        src={viewerUrl}
-        title={title}
-        className="flex-1 w-full border-0"
-        onLoad={() => setLoading(false)}
-        allow="fullscreen"
-        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-      />
-    </>
+    <div className="flex-1 overflow-y-auto px-2 py-4 space-y-3 bg-gray-50">
+      {pageImages.map((src, index) => (
+        <img
+          key={`${title}-page-${index + 1}`}
+          src={src}
+          alt={`${title} — page ${index + 1}`}
+          className="w-full rounded-lg shadow-sm bg-white"
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Scrollable image gallery (clean masterclass content extracted from Gmail PDFs).
+ * @param {{ images: string[], title: string }} props
+ */
+function GalleryViewer({ images, title }) {
+  return (
+    <div className="flex-1 overflow-y-auto px-2 py-4 space-y-3 bg-gray-50">
+      {images.map((src, index) => (
+        <img
+          key={src}
+          src={src}
+          alt={`${title} — section ${index + 1}`}
+          className="w-full rounded-lg shadow-sm bg-white"
+          loading={index === 0 ? 'eager' : 'lazy'}
+        />
+      ))}
+    </div>
   );
 }
 
 function LoadingSpinner() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 p-8">
+    <div className="flex flex-col items-center justify-center gap-3 p-8 flex-1">
       <div className="w-8 h-8 border-4 border-green-200 border-t-green-700 rounded-full animate-spin" />
       <p className="text-xs text-gray-500 font-medium">Loading guide…</p>
     </div>
@@ -99,7 +164,12 @@ function ErrorState({ title, message }) {
 
 /**
  * @param {{
- *   guide: { file: string, kind: 'pdf' | 'docx', title: string } | null,
+ *   guide: {
+ *     file?: string,
+ *     kind: 'pdf' | 'docx' | 'gallery',
+ *     title: string,
+ *     images?: string[],
+ *   } | null,
  *   onClose: () => void,
  * }} props
  */
@@ -111,7 +181,9 @@ export default function GuideViewerModal({ guide, onClose }) {
 
   if (!guide) return null;
 
-  const fileUrl = new URL(guide.file, window.location.origin).href;
+  const fileUrl = guide.file
+    ? new URL(guide.file, window.location.origin).href
+    : null;
 
   return (
     <div
@@ -120,7 +192,6 @@ export default function GuideViewerModal({ guide, onClose }) {
       aria-modal="true"
       aria-label={guide.title}
     >
-      {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 bg-white shrink-0">
         <p className="text-sm font-bold text-gray-900 truncate flex-1">{guide.title}</p>
         <button
@@ -133,12 +204,15 @@ export default function GuideViewerModal({ guide, onClose }) {
         </button>
       </div>
 
-      {/* Content */}
       <div className="flex flex-col flex-1 overflow-hidden relative">
-        {guide.kind === 'docx' ? (
+        {guide.kind === 'docx' && fileUrl && (
           <DocxViewer fileUrl={fileUrl} title={guide.title} />
-        ) : (
+        )}
+        {guide.kind === 'pdf' && fileUrl && (
           <PdfViewer fileUrl={fileUrl} title={guide.title} />
+        )}
+        {guide.kind === 'gallery' && guide.images && (
+          <GalleryViewer images={guide.images} title={guide.title} />
         )}
       </div>
     </div>

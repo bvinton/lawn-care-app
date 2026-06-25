@@ -8,7 +8,7 @@ import SprinklerLightbox from './SprinklerLightbox';
 /** @param {{ setActiveScreen: (screen: string) => void }} props */
 export default function LawnGuides({ setActiveScreen }) {
   const [openGuide, setOpenGuide] = useState(
-    /** @type {{ file: string, kind: 'pdf' | 'docx', title: string } | null} */ (null)
+    /** @type {{ file?: string, kind: 'pdf' | 'docx' | 'gallery', title: string, images?: string[] } | null} */ (null)
   );
   const [enlargedImage, setEnlargedImage] = useState(
     /** @type {{ image: string, name: string } | null} */ (null)
@@ -55,7 +55,7 @@ export default function LawnGuides({ setActiveScreen }) {
             <ul className="space-y-2">
               {section.guides.map((guide) => (
                 <li
-                  key={guide.file}
+                  key={guide.file ?? guide.title}
                   className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
@@ -77,7 +77,12 @@ export default function LawnGuides({ setActiveScreen }) {
                     <button
                       type="button"
                       onClick={() =>
-                        setOpenGuide({ file: guide.file, kind: guide.kind, title: guide.title })
+                        setOpenGuide({
+                          file: guide.file,
+                          kind: guide.kind,
+                          title: guide.title,
+                          images: guide.images,
+                        })
                       }
                       className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
                     >

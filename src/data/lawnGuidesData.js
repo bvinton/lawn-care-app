@@ -1,7 +1,9 @@
+import masterclassManifest from './masterclassManifest.json';
+
 /**
  * Lawn Pack literature served from /public.
- * @typedef {'pdf' | 'docx' | 'image'} GuideKind
- * @typedef {{ title: string, file: string, kind: GuideKind, description?: string }} LawnGuide
+ * @typedef {'pdf' | 'docx' | 'image' | 'gallery'} GuideKind
+ * @typedef {{ title: string, file?: string, kind: GuideKind, description?: string, images?: string[] }} LawnGuide
  * @typedef {{ title: string, description?: string, guides: LawnGuide[] }} GuideSection
  */
 
@@ -44,23 +46,23 @@ export const LAWN_GUIDE_SECTIONS = [
     guides: [
       {
         title: 'Part 2: Scarification & Aeration',
-        file: '/Lawn Masterclass Part 2.pdf',
-        kind: 'pdf',
+        kind: 'gallery',
+        images: masterclassManifest['part-2'],
       },
       {
         title: 'Part 3: Soil, Feed & Seed',
-        file: '/Lawn Masterclass Part 3.pdf',
-        kind: 'pdf',
+        kind: 'gallery',
+        images: masterclassManifest['part-3'],
       },
       {
         title: 'Part 4: Aftercare',
-        file: '/Lawn Masterclass Part 4.pdf',
-        kind: 'pdf',
+        kind: 'gallery',
+        images: masterclassManifest['part-4'],
       },
       {
         title: 'Part 5: Ongoing Care',
-        file: '/Lawn Masterclass Part 5.pdf',
-        kind: 'pdf',
+        kind: 'gallery',
+        images: masterclassManifest['part-5'],
       },
     ],
   },
@@ -93,9 +95,9 @@ export const LAWN_GUIDE_SECTIONS = [
 export function guideActionLabel(guide) {
   switch (guide.kind) {
     case 'pdf':
-      return 'Open PDF';
     case 'docx':
-      return 'Open guide';
+    case 'gallery':
+      return 'Read guide';
     case 'image':
       return 'View image';
     default:

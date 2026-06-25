@@ -52,6 +52,53 @@ package.json
 postcss.config.js
 public/apple-touch-icon.png
 public/favicon-32x32.png
+public/guides/masterclass/manifest.json
+public/guides/masterclass/part-2/01.webp
+public/guides/masterclass/part-2/02.webp
+public/guides/masterclass/part-2/03.webp
+public/guides/masterclass/part-2/04.webp
+public/guides/masterclass/part-2/05.webp
+public/guides/masterclass/part-2/06.webp
+public/guides/masterclass/part-2/07.webp
+public/guides/masterclass/part-2/08.webp
+public/guides/masterclass/part-2/09.webp
+public/guides/masterclass/part-2/10.webp
+public/guides/masterclass/part-3/01.webp
+public/guides/masterclass/part-3/02.webp
+public/guides/masterclass/part-3/03.webp
+public/guides/masterclass/part-3/04.webp
+public/guides/masterclass/part-3/05.webp
+public/guides/masterclass/part-3/06.webp
+public/guides/masterclass/part-3/07.webp
+public/guides/masterclass/part-3/08.webp
+public/guides/masterclass/part-3/09.webp
+public/guides/masterclass/part-3/10.webp
+public/guides/masterclass/part-3/11.webp
+public/guides/masterclass/part-3/12.webp
+public/guides/masterclass/part-3/13.webp
+public/guides/masterclass/part-4/01.webp
+public/guides/masterclass/part-4/02.webp
+public/guides/masterclass/part-4/03.webp
+public/guides/masterclass/part-4/04.webp
+public/guides/masterclass/part-4/05.webp
+public/guides/masterclass/part-4/06.webp
+public/guides/masterclass/part-4/07.webp
+public/guides/masterclass/part-4/08.webp
+public/guides/masterclass/part-4/09.webp
+public/guides/masterclass/part-4/10.webp
+public/guides/masterclass/part-5/01.webp
+public/guides/masterclass/part-5/02.webp
+public/guides/masterclass/part-5/03.webp
+public/guides/masterclass/part-5/04.webp
+public/guides/masterclass/part-5/05.webp
+public/guides/masterclass/part-5/06.webp
+public/guides/masterclass/part-5/07.webp
+public/guides/masterclass/part-5/08.webp
+public/guides/masterclass/part-5/09.webp
+public/guides/masterclass/part-5/10.webp
+public/guides/masterclass/part-5/11.webp
+public/guides/masterclass/part-5/12.webp
+public/guides/masterclass/part-5/13.webp
 public/hose.jfif
 public/icon.svg
 public/impact.jfif
@@ -73,6 +120,7 @@ public/The Winter Pack.docx
 README.md
 scripts/bundle-sync-api.mjs
 scripts/check-lawn-tasks.mjs
+scripts/extract-masterclass-images.py
 scripts/generate-pwa-icons.mjs
 src/App.jsx
 src/components/lawn/GuideViewerModal.jsx
@@ -87,6 +135,7 @@ src/components/lawn/UkDateInput.jsx
 src/data/lawnGuidesData.js
 src/data/LawnPackData.js
 src/data/lawnUiConfig.jsx
+src/data/masterclassManifest.json
 src/hooks/useLawnCareApp.js
 src/hooks/useMobileBackNavigation.js
 src/index.css
@@ -120,6 +169,267 @@ vite.config.js
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="public/guides/masterclass/manifest.json">
+{
+  "part-2": [
+    "/guides/masterclass/part-2/01.webp",
+    "/guides/masterclass/part-2/02.webp",
+    "/guides/masterclass/part-2/03.webp",
+    "/guides/masterclass/part-2/04.webp",
+    "/guides/masterclass/part-2/05.webp",
+    "/guides/masterclass/part-2/06.webp",
+    "/guides/masterclass/part-2/07.webp",
+    "/guides/masterclass/part-2/08.webp",
+    "/guides/masterclass/part-2/09.webp",
+    "/guides/masterclass/part-2/10.webp"
+  ],
+  "part-3": [
+    "/guides/masterclass/part-3/01.webp",
+    "/guides/masterclass/part-3/02.webp",
+    "/guides/masterclass/part-3/03.webp",
+    "/guides/masterclass/part-3/04.webp",
+    "/guides/masterclass/part-3/05.webp",
+    "/guides/masterclass/part-3/06.webp",
+    "/guides/masterclass/part-3/07.webp",
+    "/guides/masterclass/part-3/08.webp",
+    "/guides/masterclass/part-3/09.webp",
+    "/guides/masterclass/part-3/10.webp",
+    "/guides/masterclass/part-3/11.webp",
+    "/guides/masterclass/part-3/12.webp",
+    "/guides/masterclass/part-3/13.webp"
+  ],
+  "part-4": [
+    "/guides/masterclass/part-4/01.webp",
+    "/guides/masterclass/part-4/02.webp",
+    "/guides/masterclass/part-4/03.webp",
+    "/guides/masterclass/part-4/04.webp",
+    "/guides/masterclass/part-4/05.webp",
+    "/guides/masterclass/part-4/06.webp",
+    "/guides/masterclass/part-4/07.webp",
+    "/guides/masterclass/part-4/08.webp",
+    "/guides/masterclass/part-4/09.webp",
+    "/guides/masterclass/part-4/10.webp"
+  ],
+  "part-5": [
+    "/guides/masterclass/part-5/01.webp",
+    "/guides/masterclass/part-5/02.webp",
+    "/guides/masterclass/part-5/03.webp",
+    "/guides/masterclass/part-5/04.webp",
+    "/guides/masterclass/part-5/05.webp",
+    "/guides/masterclass/part-5/06.webp",
+    "/guides/masterclass/part-5/07.webp",
+    "/guides/masterclass/part-5/08.webp",
+    "/guides/masterclass/part-5/09.webp",
+    "/guides/masterclass/part-5/10.webp",
+    "/guides/masterclass/part-5/11.webp",
+    "/guides/masterclass/part-5/12.webp",
+    "/guides/masterclass/part-5/13.webp"
+  ]
+}
+</file>
+
+<file path="scripts/extract-masterclass-images.py">
+#!/usr/bin/env python3
+"""Extract content images from Gmail-printed masterclass PDFs (drops headers/footers)."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+try:
+    import fitz  # pymupdf
+except ImportError:
+    print("Install pymupdf: pip install pymupdf", file=sys.stderr)
+    sys.exit(1)
+
+ROOT = Path(__file__).resolve().parents[1]
+PUBLIC = ROOT / "public"
+OUT_ROOT = PUBLIC / "guides" / "masterclass"
+MANIFEST_PUBLIC = OUT_ROOT / "manifest.json"
+MANIFEST_SRC = ROOT / "src" / "data" / "masterclassManifest.json"
+
+SOURCES = {
+    "part-2": PUBLIC / "Lawn Masterclass Part 2.pdf",
+    "part-3": PUBLIC / "Lawn Masterclass Part 3.pdf",
+    "part-4": PUBLIC / "Lawn Masterclass Part 4.pdf",
+    "part-5": PUBLIC / "Lawn Masterclass Part 5.pdf",
+}
+
+
+def image_blocks(page: fitz.Page) -> list[tuple[tuple[float, float, float, float], int]]:
+    """Return (bbox, xref) for each image on the page, top-to-bottom."""
+    blocks: list[tuple[tuple[float, float, float, float], int]] = []
+    for xref in page.get_images(full=True):
+        xref_id = xref[0]
+        for rect in page.get_image_rects(xref_id):
+            blocks.append((tuple(rect), xref_id))
+    blocks.sort(key=lambda item: (item[0][1], item[0][0]))
+    return blocks
+
+
+def save_extracted_image(doc: fitz.Document, xref: int, out_path: Path) -> None:
+    info = doc.extract_image(xref)
+    ext = info["ext"].lower()
+    image_bytes = info["image"]
+
+    if ext == "webp":
+        out_path.write_bytes(image_bytes)
+        return
+
+    try:
+        from io import BytesIO
+
+        from PIL import Image
+
+        img = Image.open(BytesIO(image_bytes))
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGB")
+        img.save(out_path, "WEBP", quality=85, method=6)
+    except ImportError:
+        # Fallback: keep original format if Pillow is unavailable
+        fallback = out_path.with_suffix(f".{ext}")
+        fallback.write_bytes(image_bytes)
+        if fallback != out_path:
+            fallback.replace(out_path)
+
+
+def keep_image(page_index: int, page_count: int, bbox: tuple[float, float, float, float]) -> bool:
+    x0, y0, x1, y1 = bbox
+    width = x1 - x0
+    height = y1 - y0
+
+    if width < 60 or height < 60:
+        return False
+
+    # Gmail logo on page 1
+    if page_index == 0 and x0 < 150 and y0 < 100:
+        return False
+
+    # Final page is usually unsubscribe / address footer only
+    if page_index == page_count - 1:
+        return False
+
+    # Thin header strips on the first page (logo bar, spacers)
+    if page_index == 0 and height < 120:
+        return False
+
+    # Gmail footer chrome at the bottom of content pages
+    if y0 > 520 and height < 150:
+        return False
+
+    return True
+
+
+def extract_part(part_id: str, pdf_path: Path) -> list[str]:
+    out_dir = OUT_ROOT / part_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for old in out_dir.glob("*.webp"):
+        old.unlink()
+
+    doc = fitz.open(pdf_path)
+    paths: list[str] = []
+    index = 1
+
+    for page_index in range(len(doc)):
+        page = doc[page_index]
+        for bbox, xref in image_blocks(page):
+            if not keep_image(page_index, len(doc), bbox):
+                continue
+
+            filename = f"{index:02d}.webp"
+            out_path = out_dir / filename
+            save_extracted_image(doc, xref, out_path)
+            paths.append(f"/guides/masterclass/{part_id}/{filename}")
+            index += 1
+
+    doc.close()
+    return paths
+
+
+def main() -> None:
+    manifest: dict[str, list[str]] = {}
+
+    for part_id, pdf_path in SOURCES.items():
+        if not pdf_path.exists():
+            print(f"Missing {pdf_path}", file=sys.stderr)
+            sys.exit(1)
+        manifest[part_id] = extract_part(part_id, pdf_path)
+        print(f"{part_id}: {len(manifest[part_id])} images")
+
+    OUT_ROOT.mkdir(parents=True, exist_ok=True)
+    manifest_json = json.dumps(manifest, indent=2)
+    MANIFEST_PUBLIC.write_text(manifest_json, encoding="utf-8")
+    MANIFEST_SRC.write_text(manifest_json, encoding="utf-8")
+    print(f"Wrote {MANIFEST_PUBLIC}")
+    print(f"Wrote {MANIFEST_SRC}")
+
+
+if __name__ == "__main__":
+    main()
+</file>
+
+<file path="src/data/masterclassManifest.json">
+{
+  "part-2": [
+    "/guides/masterclass/part-2/01.webp",
+    "/guides/masterclass/part-2/02.webp",
+    "/guides/masterclass/part-2/03.webp",
+    "/guides/masterclass/part-2/04.webp",
+    "/guides/masterclass/part-2/05.webp",
+    "/guides/masterclass/part-2/06.webp",
+    "/guides/masterclass/part-2/07.webp",
+    "/guides/masterclass/part-2/08.webp",
+    "/guides/masterclass/part-2/09.webp",
+    "/guides/masterclass/part-2/10.webp"
+  ],
+  "part-3": [
+    "/guides/masterclass/part-3/01.webp",
+    "/guides/masterclass/part-3/02.webp",
+    "/guides/masterclass/part-3/03.webp",
+    "/guides/masterclass/part-3/04.webp",
+    "/guides/masterclass/part-3/05.webp",
+    "/guides/masterclass/part-3/06.webp",
+    "/guides/masterclass/part-3/07.webp",
+    "/guides/masterclass/part-3/08.webp",
+    "/guides/masterclass/part-3/09.webp",
+    "/guides/masterclass/part-3/10.webp",
+    "/guides/masterclass/part-3/11.webp",
+    "/guides/masterclass/part-3/12.webp",
+    "/guides/masterclass/part-3/13.webp"
+  ],
+  "part-4": [
+    "/guides/masterclass/part-4/01.webp",
+    "/guides/masterclass/part-4/02.webp",
+    "/guides/masterclass/part-4/03.webp",
+    "/guides/masterclass/part-4/04.webp",
+    "/guides/masterclass/part-4/05.webp",
+    "/guides/masterclass/part-4/06.webp",
+    "/guides/masterclass/part-4/07.webp",
+    "/guides/masterclass/part-4/08.webp",
+    "/guides/masterclass/part-4/09.webp",
+    "/guides/masterclass/part-4/10.webp"
+  ],
+  "part-5": [
+    "/guides/masterclass/part-5/01.webp",
+    "/guides/masterclass/part-5/02.webp",
+    "/guides/masterclass/part-5/03.webp",
+    "/guides/masterclass/part-5/04.webp",
+    "/guides/masterclass/part-5/05.webp",
+    "/guides/masterclass/part-5/06.webp",
+    "/guides/masterclass/part-5/07.webp",
+    "/guides/masterclass/part-5/08.webp",
+    "/guides/masterclass/part-5/09.webp",
+    "/guides/masterclass/part-5/10.webp",
+    "/guides/masterclass/part-5/11.webp",
+    "/guides/masterclass/part-5/12.webp",
+    "/guides/masterclass/part-5/13.webp"
+  ]
+}
+</file>
 
 <file path=".cursor/rules/git-workflow.mdc">
 ---
@@ -1707,35 +2017,100 @@ function DocxViewer({ fileUrl, title }) {
 }
 
 /**
- * Render a PDF via Google Docs Viewer in an iframe.
+ * Render a PDF in-app with pdf.js (lazy-loaded), one scrollable page stack.
  * @param {{ fileUrl: string, title: string }} props
  */
 function PdfViewer({ fileUrl, title }) {
+  const [pageImages, setPageImages] = useState(/** @type {string[]} */ ([]));
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+
+  useEffect(() => {
+    setLoading(true);
+    setError('');
+    setPageImages([]);
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const pdfjs = await import('pdfjs-dist');
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url,
+        ).href;
+
+        const pdf = await pdfjs.getDocument(fileUrl).promise;
+        const targetWidth = Math.min(window.innerWidth - 32, 720);
+        const images = [];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+          const page = await pdf.getPage(pageNum);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const scale = targetWidth / baseViewport.width;
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Canvas not supported');
+
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          await page.render({ canvasContext: context, viewport, canvas }).promise;
+          images.push(canvas.toDataURL('image/jpeg', 0.88));
+        }
+
+        if (!cancelled) setPageImages(images);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load PDF.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [fileUrl]);
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorState title={title} message={error} />;
 
   return (
-    <>
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10 pointer-events-none">
-          <LoadingSpinner />
-        </div>
-      )}
-      <iframe
-        src={viewerUrl}
-        title={title}
-        className="flex-1 w-full border-0"
-        onLoad={() => setLoading(false)}
-        allow="fullscreen"
-        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-      />
-    </>
+    <div className="flex-1 overflow-y-auto px-2 py-4 space-y-3 bg-gray-50">
+      {pageImages.map((src, index) => (
+        <img
+          key={`${title}-page-${index + 1}`}
+          src={src}
+          alt={`${title} — page ${index + 1}`}
+          className="w-full rounded-lg shadow-sm bg-white"
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Scrollable image gallery (clean masterclass content extracted from Gmail PDFs).
+ * @param {{ images: string[], title: string }} props
+ */
+function GalleryViewer({ images, title }) {
+  return (
+    <div className="flex-1 overflow-y-auto px-2 py-4 space-y-3 bg-gray-50">
+      {images.map((src, index) => (
+        <img
+          key={src}
+          src={src}
+          alt={`${title} — section ${index + 1}`}
+          className="w-full rounded-lg shadow-sm bg-white"
+          loading={index === 0 ? 'eager' : 'lazy'}
+        />
+      ))}
+    </div>
   );
 }
 
 function LoadingSpinner() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 p-8">
+    <div className="flex flex-col items-center justify-center gap-3 p-8 flex-1">
       <div className="w-8 h-8 border-4 border-green-200 border-t-green-700 rounded-full animate-spin" />
       <p className="text-xs text-gray-500 font-medium">Loading guide…</p>
     </div>
@@ -1755,7 +2130,12 @@ function ErrorState({ title, message }) {
 
 /**
  * @param {{
- *   guide: { file: string, kind: 'pdf' | 'docx', title: string } | null,
+ *   guide: {
+ *     file?: string,
+ *     kind: 'pdf' | 'docx' | 'gallery',
+ *     title: string,
+ *     images?: string[],
+ *   } | null,
  *   onClose: () => void,
  * }} props
  */
@@ -1767,7 +2147,9 @@ export default function GuideViewerModal({ guide, onClose }) {
 
   if (!guide) return null;
 
-  const fileUrl = new URL(guide.file, window.location.origin).href;
+  const fileUrl = guide.file
+    ? new URL(guide.file, window.location.origin).href
+    : null;
 
   return (
     <div
@@ -1776,7 +2158,6 @@ export default function GuideViewerModal({ guide, onClose }) {
       aria-modal="true"
       aria-label={guide.title}
     >
-      {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 bg-white shrink-0">
         <p className="text-sm font-bold text-gray-900 truncate flex-1">{guide.title}</p>
         <button
@@ -1789,12 +2170,15 @@ export default function GuideViewerModal({ guide, onClose }) {
         </button>
       </div>
 
-      {/* Content */}
       <div className="flex flex-col flex-1 overflow-hidden relative">
-        {guide.kind === 'docx' ? (
+        {guide.kind === 'docx' && fileUrl && (
           <DocxViewer fileUrl={fileUrl} title={guide.title} />
-        ) : (
+        )}
+        {guide.kind === 'pdf' && fileUrl && (
           <PdfViewer fileUrl={fileUrl} title={guide.title} />
+        )}
+        {guide.kind === 'gallery' && guide.images && (
+          <GalleryViewer images={guide.images} title={guide.title} />
         )}
       </div>
     </div>
@@ -2585,7 +2969,7 @@ import SprinklerLightbox from './SprinklerLightbox';
 /** @param {{ setActiveScreen: (screen: string) => void }} props */
 export default function LawnGuides({ setActiveScreen }) {
   const [openGuide, setOpenGuide] = useState(
-    /** @type {{ file: string, kind: 'pdf' | 'docx', title: string } | null} */ (null)
+    /** @type {{ file?: string, kind: 'pdf' | 'docx' | 'gallery', title: string, images?: string[] } | null} */ (null)
   );
   const [enlargedImage, setEnlargedImage] = useState(
     /** @type {{ image: string, name: string } | null} */ (null)
@@ -2632,7 +3016,7 @@ export default function LawnGuides({ setActiveScreen }) {
             <ul className="space-y-2">
               {section.guides.map((guide) => (
                 <li
-                  key={guide.file}
+                  key={guide.file ?? guide.title}
                   className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
@@ -2654,7 +3038,12 @@ export default function LawnGuides({ setActiveScreen }) {
                     <button
                       type="button"
                       onClick={() =>
-                        setOpenGuide({ file: guide.file, kind: guide.kind, title: guide.title })
+                        setOpenGuide({
+                          file: guide.file,
+                          kind: guide.kind,
+                          title: guide.title,
+                          images: guide.images,
+                        })
                       }
                       className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
                     >
@@ -2687,113 +3076,6 @@ export default function LawnGuides({ setActiveScreen }) {
       )}
     </>
   );
-}
-</file>
-
-<file path="src/data/lawnGuidesData.js">
-/**
- * Lawn Pack literature served from /public.
- * @typedef {'pdf' | 'docx' | 'image'} GuideKind
- * @typedef {{ title: string, file: string, kind: GuideKind, description?: string }} LawnGuide
- * @typedef {{ title: string, description?: string, guides: LawnGuide[] }} GuideSection
- */
-
-/** @type {GuideSection[]} */
-export const LAWN_GUIDE_SECTIONS = [
-  {
-    title: 'Seasonal pack guides',
-    description: 'Application guides for each seasonal delivery.',
-    guides: [
-      {
-        title: 'Spring Pack',
-        file: '/The Spring Pack.docx',
-        kind: 'docx',
-        description: 'March – May · Greener Growth + Biostimulant',
-      },
-      {
-        title: 'Summer Pack',
-        file: '/The Summer Pack.docx',
-        kind: 'docx',
-        description: 'June – August · Summer Thriver + Biostimulant',
-      },
-      {
-        title: 'Autumn Pack',
-        file: '/The Autumn Pack.docx',
-        kind: 'docx',
-        description: 'September – November · Autumn Preparation + Biostimulant',
-      },
-      {
-        title: 'Winter Pack',
-        file: '/The Winter Pack.docx',
-        kind: 'docx',
-        description: 'December – February · Winter Protection + Iron + Biostimulant',
-      },
-    ],
-  },
-  {
-    title: 'Masterclass series',
-    description:
-      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
-    guides: [
-      {
-        title: 'Part 2: Scarification & Aeration',
-        file: '/Lawn Masterclass Part 2.pdf',
-        kind: 'pdf',
-      },
-      {
-        title: 'Part 3: Soil, Feed & Seed',
-        file: '/Lawn Masterclass Part 3.pdf',
-        kind: 'pdf',
-      },
-      {
-        title: 'Part 4: Aftercare',
-        file: '/Lawn Masterclass Part 4.pdf',
-        kind: 'pdf',
-      },
-      {
-        title: 'Part 5: Ongoing Care',
-        file: '/Lawn Masterclass Part 5.pdf',
-        kind: 'pdf',
-      },
-    ],
-  },
-  {
-    title: 'Individual guides',
-    description: 'Product-specific and year-round maintenance references.',
-    guides: [
-      {
-        title: 'Iron Sulphate Guide',
-        file: '/Iron Sulphate Guide.docx',
-        kind: 'docx',
-        description: 'Dosing, dilution, and repeat intervals',
-      },
-      {
-        title: 'Starting your lawn from scratch',
-        file: '/Starting your lawn from scratch guide.docx',
-        kind: 'docx',
-      },
-      {
-        title: 'Maintain your lawn',
-        file: '/Lawn Pack, Maintain your lawn Guide.pdf',
-        kind: 'pdf',
-        description: 'Year-round care and subscription overview',
-      },
-    ],
-  },
-];
-
-/** @param {LawnGuide} guide */
-export function guideActionLabel(guide) {
-  switch (guide.kind) {
-    case 'pdf':
-      return 'Open PDF';
-    case 'docx':
-      return 'Open guide';
-    case 'image':
-      return 'View image';
-    default:
-      return 'Open';
-  }
 }
 </file>
 
@@ -2985,6 +3267,14 @@ export default defineConfig({
             options: {
               cacheName: 'lawn-pack-guides',
               expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+          {
+            urlPattern: /\/guides\/masterclass\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'lawn-masterclass-images',
+              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },
         ],
@@ -3872,6 +4162,115 @@ export default function MaintenancePanel({ app }) {
       )}
     </section>
   );
+}
+</file>
+
+<file path="src/data/lawnGuidesData.js">
+import masterclassManifest from './masterclassManifest.json';
+
+/**
+ * Lawn Pack literature served from /public.
+ * @typedef {'pdf' | 'docx' | 'image' | 'gallery'} GuideKind
+ * @typedef {{ title: string, file?: string, kind: GuideKind, description?: string, images?: string[] }} LawnGuide
+ * @typedef {{ title: string, description?: string, guides: LawnGuide[] }} GuideSection
+ */
+
+/** @type {GuideSection[]} */
+export const LAWN_GUIDE_SECTIONS = [
+  {
+    title: 'Seasonal pack guides',
+    description: 'Application guides for each seasonal delivery.',
+    guides: [
+      {
+        title: 'Spring Pack',
+        file: '/The Spring Pack.docx',
+        kind: 'docx',
+        description: 'March – May · Greener Growth + Biostimulant',
+      },
+      {
+        title: 'Summer Pack',
+        file: '/The Summer Pack.docx',
+        kind: 'docx',
+        description: 'June – August · Summer Thriver + Biostimulant',
+      },
+      {
+        title: 'Autumn Pack',
+        file: '/The Autumn Pack.docx',
+        kind: 'docx',
+        description: 'September – November · Autumn Preparation + Biostimulant',
+      },
+      {
+        title: 'Winter Pack',
+        file: '/The Winter Pack.docx',
+        kind: 'docx',
+        description: 'December – February · Winter Protection + Iron + Biostimulant',
+      },
+    ],
+  },
+  {
+    title: 'Masterclass series',
+    description:
+      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
+    guides: [
+      {
+        title: 'Part 2: Scarification & Aeration',
+        kind: 'gallery',
+        images: masterclassManifest['part-2'],
+      },
+      {
+        title: 'Part 3: Soil, Feed & Seed',
+        kind: 'gallery',
+        images: masterclassManifest['part-3'],
+      },
+      {
+        title: 'Part 4: Aftercare',
+        kind: 'gallery',
+        images: masterclassManifest['part-4'],
+      },
+      {
+        title: 'Part 5: Ongoing Care',
+        kind: 'gallery',
+        images: masterclassManifest['part-5'],
+      },
+    ],
+  },
+  {
+    title: 'Individual guides',
+    description: 'Product-specific and year-round maintenance references.',
+    guides: [
+      {
+        title: 'Iron Sulphate Guide',
+        file: '/Iron Sulphate Guide.docx',
+        kind: 'docx',
+        description: 'Dosing, dilution, and repeat intervals',
+      },
+      {
+        title: 'Starting your lawn from scratch',
+        file: '/Starting your lawn from scratch guide.docx',
+        kind: 'docx',
+      },
+      {
+        title: 'Maintain your lawn',
+        file: '/Lawn Pack, Maintain your lawn Guide.pdf',
+        kind: 'pdf',
+        description: 'Year-round care and subscription overview',
+      },
+    ],
+  },
+];
+
+/** @param {LawnGuide} guide */
+export function guideActionLabel(guide) {
+  switch (guide.kind) {
+    case 'pdf':
+    case 'docx':
+    case 'gallery':
+      return 'Read guide';
+    case 'image':
+      return 'View image';
+    default:
+      return 'Open';
+  }
 }
 </file>
 
@@ -5047,6 +5446,7 @@ export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
     "mammoth": "^1.12.0",
+    "pdfjs-dist": "^6.0.227",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

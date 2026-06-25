@@ -63,6 +63,14 @@ export default defineConfig({
               expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },
+          {
+            urlPattern: /\/guides\/masterclass\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'lawn-masterclass-images',
+              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
         ],
       },
     }),
