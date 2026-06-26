@@ -100,12 +100,14 @@ export default function LawnSettings({ app }) {
 
   const [showMaterialsCalculator, setShowMaterialsCalculator] = useState(false);
   const [topdressingGoal, setTopdressingGoal] = useState('light-seed-bedding');
+  const [materialsCoverage, setMaterialsCoverage] = useState('full');
 
   const selectedTopdressingGoal = TOPDRESSING_GOALS[topdressingGoal];
+  const effectiveSqm = materialsCoverage === 'half' ? sqm / 2 : sqm;
 
   const topdressingMaterials = useMemo(() => {
     const goal = TOPDRESSING_GOALS[topdressingGoal];
-    const totalLitres = sqm * TOPDRESS_DEPTH_MM;
+    const totalLitres = effectiveSqm * TOPDRESS_DEPTH_MM;
     const sandLitres = totalLitres * goal.sand;
     const soilLitres = totalLitres * goal.soil;
     const compostLitres = totalLitres * goal.compost;
@@ -115,6 +117,7 @@ export default function LawnSettings({ app }) {
     const compostBags = compostLitres > 0 ? Math.ceil(compostLitres / COMPOST_BAG_LITRES) : 0;
 
     return {
+      effectiveSqm,
       totalLitres,
       sandLitres,
       soilLitres,
@@ -123,7 +126,7 @@ export default function LawnSettings({ app }) {
       sandBags,
       compostBags,
     };
-  }, [sqm, topdressingGoal]);
+  }, [effectiveSqm, topdressingGoal]);
 
   return (
     <>
@@ -316,10 +319,59 @@ export default function LawnSettings({ app }) {
                       Topdressing &amp; Materials Calculator
                     </h4>
                     <p className="text-[11px] text-amber-900/80 mt-1 leading-snug">
-                      Based on your {sqm} SQM lawn — a {TOPDRESS_DEPTH_MM}mm deep layer ideal for
-                      protecting new seed and filling minor aeration holes.
+                      {materialsCoverage === 'half'
+                        ? `Half-lawn pass — ${formatLitres(topdressingMaterials.effectiveSqm)} SQM of your ${sqm} SQM lawn.`
+                        : `Full lawn — ${sqm} SQM.`}{' '}
+                      A {TOPDRESS_DEPTH_MM}mm deep layer ideal for protecting new seed and filling
+                      minor aeration holes.
                     </p>
                   </div>
+                </div>
+
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-amber-950 mb-1.5">Area to treat</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-2.5 py-2 cursor-pointer text-xs font-semibold transition-all ${
+                        materialsCoverage === 'full'
+                          ? 'border-amber-500 bg-white text-amber-950 ring-1 ring-amber-400/40'
+                          : 'border-amber-200/80 bg-white/60 text-amber-900/80 hover:bg-white/90'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="materials-coverage"
+                        value="full"
+                        checked={materialsCoverage === 'full'}
+                        onChange={() => setMaterialsCoverage('full')}
+                        className="accent-amber-600"
+                      />
+                      Full lawn
+                    </label>
+                    <label
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-2.5 py-2 cursor-pointer text-xs font-semibold transition-all ${
+                        materialsCoverage === 'half'
+                          ? 'border-amber-500 bg-white text-amber-950 ring-1 ring-amber-400/40'
+                          : 'border-amber-200/80 bg-white/60 text-amber-900/80 hover:bg-white/90'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="materials-coverage"
+                        value="half"
+                        checked={materialsCoverage === 'half'}
+                        onChange={() => setMaterialsCoverage('half')}
+                        className="accent-amber-600"
+                      />
+                      Half lawn
+                    </label>
+                  </div>
+                  {materialsCoverage === 'half' && (
+                    <p className="text-[10px] text-amber-800/80 mt-1.5 leading-snug">
+                      Use when you can only fence off one section — e.g. keeping dogs off while it
+                      recovers.
+                    </p>
+                  )}
                 </div>
 
                 <div className="mb-3">
@@ -415,8 +467,10 @@ export default function LawnSettings({ app }) {
                 </dl>
 
                 <p className="mt-3 text-[10px] text-amber-900/75 leading-relaxed italic">
-                  Depth × area: {TOPDRESS_DEPTH_MM}mm over {sqm} SQM = {sqm} × {TOPDRESS_DEPTH_MM}{' '}
-                  = {formatLitres(topdressingMaterials.totalLitres)} litres total, split as{' '}
+                  Depth × area: {TOPDRESS_DEPTH_MM}mm over{' '}
+                  {formatLitres(topdressingMaterials.effectiveSqm)} SQM ={' '}
+                  {formatLitres(topdressingMaterials.effectiveSqm)} × {TOPDRESS_DEPTH_MM} ={' '}
+                  {formatLitres(topdressingMaterials.totalLitres)} litres total, split as{' '}
                   {selectedTopdressingGoal.mixLabel.toLowerCase()}. Bag counts round up so you
                   don&apos;t run short on site.
                 </p>
