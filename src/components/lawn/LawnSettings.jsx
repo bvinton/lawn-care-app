@@ -7,6 +7,34 @@ const COMPOST_BAG_LITRES = 50;
 const SHARP_SAND_BAG_LITRES = 15;
 const TOPDRESS_DEPTH_MM = 5;
 
+const TOPDRESSING_GOALS = {
+  'aeration-recovery': {
+    label: 'Aeration Recovery (High Sand)',
+    mixLabel: '60% Sharp Sand, 20% Screened Topsoil, 20% Compost',
+    sand: 0.6,
+    soil: 0.2,
+    compost: 0.2,
+  },
+  'standard-levelling': {
+    label: 'Standard Levelling',
+    mixLabel: '50% Sharp Sand, 50% Screened Topsoil',
+    sand: 0.5,
+    soil: 0.5,
+    compost: 0,
+  },
+  'light-seed-bedding': {
+    label: 'Light Seed Bedding',
+    mixLabel: '34% Sharp Sand, 33% Screened Topsoil, 33% Compost',
+    sand: 0.34,
+    soil: 0.33,
+    compost: 0.33,
+  },
+};
+
+function formatLitres(litres) {
+  return litres.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
 function CalculatorIcon({ className = 'w-4 h-4' }) {
   return (
     <svg
@@ -71,22 +99,31 @@ export default function LawnSettings({ app }) {
   } = app;
 
   const [showMaterialsCalculator, setShowMaterialsCalculator] = useState(false);
+  const [topdressingGoal, setTopdressingGoal] = useState('light-seed-bedding');
+
+  const selectedTopdressingGoal = TOPDRESSING_GOALS[topdressingGoal];
 
   const topdressingMaterials = useMemo(() => {
+    const goal = TOPDRESSING_GOALS[topdressingGoal];
     const totalLitres = sqm * TOPDRESS_DEPTH_MM;
-    const portionLitres = totalLitres / 3;
+    const sandLitres = totalLitres * goal.sand;
+    const soilLitres = totalLitres * goal.soil;
+    const compostLitres = totalLitres * goal.compost;
+
+    const topsoilBags = soilLitres > 0 ? Math.ceil(soilLitres / TOPSOIL_BAG_LITRES) : 0;
+    const sandBags = sandLitres > 0 ? Math.ceil(sandLitres / SHARP_SAND_BAG_LITRES) : 0;
+    const compostBags = compostLitres > 0 ? Math.ceil(compostLitres / COMPOST_BAG_LITRES) : 0;
 
     return {
       totalLitres,
-      portionLitres,
-      sandLitres: portionLitres,
-      soilLitres: portionLitres,
-      compostLitres: portionLitres,
-      topsoilBags: Math.ceil(portionLitres / TOPSOIL_BAG_LITRES),
-      sandBags: Math.ceil(portionLitres / SHARP_SAND_BAG_LITRES),
-      compostBags: Math.ceil(portionLitres / COMPOST_BAG_LITRES),
+      sandLitres,
+      soilLitres,
+      compostLitres,
+      topsoilBags,
+      sandBags,
+      compostBags,
     };
-  }, [sqm]);
+  }, [sqm, topdressingGoal]);
 
   return (
     <>
@@ -285,70 +322,103 @@ export default function LawnSettings({ app }) {
                   </div>
                 </div>
 
+                <div className="mb-3">
+                  <label
+                    htmlFor="topdressing-goal"
+                    className="block text-xs font-bold text-amber-950 mb-1"
+                  >
+                    Topdressing Goal
+                  </label>
+                  <select
+                    id="topdressing-goal"
+                    value={topdressingGoal}
+                    onChange={(event) => setTopdressingGoal(event.target.value)}
+                    className="w-full bg-white border border-amber-200 rounded-lg p-2 text-sm text-amber-950 font-medium focus:ring-2 focus:ring-amber-400"
+                  >
+                    {Object.entries(TOPDRESSING_GOALS).map(([id, goal]) => (
+                      <option key={id} value={id}>
+                        {goal.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <dl className="space-y-2 text-sm">
                   <div className="flex justify-between gap-3 rounded-lg border border-amber-200/80 bg-white/70 px-3 py-2">
                     <dt className="font-semibold text-amber-950">Total volume</dt>
                     <dd className="font-black text-amber-900 tabular-nums">
-                      {topdressingMaterials.totalLitres.toLocaleString()} L
+                      {formatLitres(topdressingMaterials.totalLitres)} L
                     </dd>
                   </div>
 
                   <div className="rounded-lg border border-amber-200/80 bg-white/70 px-3 py-2.5">
                     <p className="text-xs font-bold text-amber-950 mb-2">
-                      1/3 Sharp Sand, 1/3 Screened Topsoil, 1/3 Compost
+                      {selectedTopdressingGoal.mixLabel}
                     </p>
                     <ul className="space-y-1.5 text-xs text-amber-900">
-                      <li className="flex justify-between gap-3">
-                        <span>Sharp sand</span>
-                        <span className="font-bold tabular-nums">
-                          {topdressingMaterials.sandLitres.toLocaleString()} L
-                        </span>
-                      </li>
-                      <li className="flex justify-between gap-3">
-                        <span>Screened topsoil</span>
-                        <span className="font-bold tabular-nums">
-                          {topdressingMaterials.soilLitres.toLocaleString()} L
-                        </span>
-                      </li>
-                      <li className="flex justify-between gap-3">
-                        <span>Compost</span>
-                        <span className="font-bold tabular-nums">
-                          {topdressingMaterials.compostLitres.toLocaleString()} L
-                        </span>
-                      </li>
+                      {selectedTopdressingGoal.sand > 0 && (
+                        <li className="flex justify-between gap-3">
+                          <span>Sharp sand</span>
+                          <span className="font-bold tabular-nums">
+                            {formatLitres(topdressingMaterials.sandLitres)} L
+                          </span>
+                        </li>
+                      )}
+                      {selectedTopdressingGoal.soil > 0 && (
+                        <li className="flex justify-between gap-3">
+                          <span>Screened topsoil</span>
+                          <span className="font-bold tabular-nums">
+                            {formatLitres(topdressingMaterials.soilLitres)} L
+                          </span>
+                        </li>
+                      )}
+                      {selectedTopdressingGoal.compost > 0 && (
+                        <li className="flex justify-between gap-3">
+                          <span>Compost</span>
+                          <span className="font-bold tabular-nums">
+                            {formatLitres(topdressingMaterials.compostLitres)} L
+                          </span>
+                        </li>
+                      )}
                     </ul>
                   </div>
 
                   <div className="rounded-lg border border-amber-200/80 bg-white/70 px-3 py-2.5">
                     <p className="text-xs font-bold text-amber-950 mb-2">Bags to buy</p>
                     <ul className="space-y-1.5 text-xs text-amber-900">
-                      <li className="flex justify-between gap-3">
-                        <span>Topsoil ({TOPSOIL_BAG_LITRES}L bags)</span>
-                        <span className="font-black tabular-nums">
-                          {topdressingMaterials.topsoilBags}
-                        </span>
-                      </li>
-                      <li className="flex justify-between gap-3">
-                        <span>Sharp sand (25kg ≈ {SHARP_SAND_BAG_LITRES}L)</span>
-                        <span className="font-black tabular-nums">
-                          {topdressingMaterials.sandBags}
-                        </span>
-                      </li>
-                      <li className="flex justify-between gap-3">
-                        <span>Compost ({COMPOST_BAG_LITRES}L bags)</span>
-                        <span className="font-black tabular-nums">
-                          {topdressingMaterials.compostBags}
-                        </span>
-                      </li>
+                      {topdressingMaterials.topsoilBags > 0 && (
+                        <li className="flex justify-between gap-3">
+                          <span>Topsoil ({TOPSOIL_BAG_LITRES}L bags)</span>
+                          <span className="font-black tabular-nums">
+                            {topdressingMaterials.topsoilBags}
+                          </span>
+                        </li>
+                      )}
+                      {topdressingMaterials.sandBags > 0 && (
+                        <li className="flex justify-between gap-3">
+                          <span>Sharp sand (25kg ≈ {SHARP_SAND_BAG_LITRES}L)</span>
+                          <span className="font-black tabular-nums">
+                            {topdressingMaterials.sandBags}
+                          </span>
+                        </li>
+                      )}
+                      {topdressingMaterials.compostBags > 0 && (
+                        <li className="flex justify-between gap-3">
+                          <span>Compost ({COMPOST_BAG_LITRES}L bags)</span>
+                          <span className="font-black tabular-nums">
+                            {topdressingMaterials.compostBags}
+                          </span>
+                        </li>
+                      )}
                     </ul>
                   </div>
                 </dl>
 
                 <p className="mt-3 text-[10px] text-amber-900/75 leading-relaxed italic">
                   Depth × area: {TOPDRESS_DEPTH_MM}mm over {sqm} SQM = {sqm} × {TOPDRESS_DEPTH_MM}{' '}
-                  = {topdressingMaterials.totalLitres} litres total, split equally three ways (
-                  {topdressingMaterials.portionLitres.toLocaleString()} L each). Bag counts round
-                  up so you don&apos;t run short on site.
+                  = {formatLitres(topdressingMaterials.totalLitres)} litres total, split as{' '}
+                  {selectedTopdressingGoal.mixLabel.toLowerCase()}. Bag counts round up so you
+                  don&apos;t run short on site.
                 </p>
               </div>
             </div>
