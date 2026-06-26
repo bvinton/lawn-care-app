@@ -3,6 +3,7 @@ import { SEASONS } from '../../data/LawnPackData';
 import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
 import MaintenancePanel from './MaintenancePanel';
 import SeasonTimeline from './SeasonTimeline';
+import { CalculatorIcon } from './LawnMaterials';
 
 /** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
 export default function LawnWorkflow({ app }) {
@@ -31,6 +32,17 @@ export default function LawnWorkflow({ app }) {
     lastCloudSyncAt,
     setActiveScreen,
   } = app;
+
+  const syncLabel =
+    cloudSyncStatus === 'pulling'
+      ? 'Pull…'
+      : cloudSyncStatus === 'pushing'
+        ? 'Push…'
+        : cloudSyncStatus === 'error'
+          ? 'Retry'
+          : cloudSyncStatus === 'idle'
+            ? 'Sync'
+            : null;
 
   return (
     <>
@@ -129,7 +141,7 @@ export default function LawnWorkflow({ app }) {
             <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-1.5">
           <button
             type="button"
             onClick={() => void runFullCloudSync()}
@@ -141,14 +153,20 @@ export default function LawnWorkflow({ app }) {
                   ? 'Sync problem — tap to retry'
                   : 'Sync schedule to cloud'
             }
-            className={`flex items-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-bold transition-all disabled:opacity-60 ${
+            className={`flex shrink-0 items-center justify-center gap-1 py-2 rounded-lg border text-xs font-bold transition-all disabled:opacity-60 ${
+              syncLabel ? 'px-2.5' : 'px-2 min-w-[2.5rem]'
+            } ${
               cloudSyncStatus === 'synced'
                 ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
                 : cloudSyncStatus === 'error'
                   ? 'border-red-300 bg-red-50 text-red-700'
                   : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
             }`}
-            aria-label="Sync with shared database"
+            aria-label={
+              cloudSyncStatus === 'synced' && lastCloudSyncAt
+                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
+                : 'Sync with shared database'
+            }
           >
             <span
               className={`text-base leading-none ${
@@ -156,34 +174,33 @@ export default function LawnWorkflow({ app }) {
                   ? 'inline-block animate-spin'
                   : ''
               }`}
+              aria-hidden="true"
             >
               {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
             </span>
-            <span>
-              {cloudSyncStatus === 'pulling'
-                ? 'Pull…'
-                : cloudSyncStatus === 'pushing'
-                  ? 'Push…'
-                  : cloudSyncStatus === 'synced'
-                    ? 'Synced'
-                    : cloudSyncStatus === 'error'
-                      ? 'Retry'
-                      : 'Sync'}
-            </span>
+            {syncLabel && <span>{syncLabel}</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('materials')}
+            className="flex flex-1 min-w-0 items-center justify-center gap-1 text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold py-2 px-2 rounded-lg transition-all border border-amber-200"
+          >
+            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Materials</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveScreen('guides')}
-            className="text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-2 px-3 rounded-lg transition-all border border-green-200"
+            className="flex flex-1 min-w-0 items-center justify-center text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-2 px-2 rounded-lg transition-all border border-green-200"
           >
-            📚 Guides
+            <span className="truncate">📚 Guides</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveScreen('settings')}
-            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-3 rounded-lg transition-all"
+            className="flex flex-1 min-w-0 items-center justify-center text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-2 rounded-lg transition-all"
           >
-            ⚙️ Setup
+            <span className="truncate">⚙️ Setup</span>
           </button>
         </div>
       </div>

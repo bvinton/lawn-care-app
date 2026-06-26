@@ -8,6 +8,7 @@ import { pushAppHistoryState } from '../../utils/backNavigation';
 import LawnSettings from './LawnSettings';
 import LawnWorkflow from './LawnWorkflow';
 import LawnGuides from './LawnGuides';
+import LawnMaterials from './LawnMaterials';
 import SprinklerLightbox from './SprinklerLightbox';
 
 export default function LawnCareApp() {
@@ -69,6 +70,8 @@ export default function LawnCareApp() {
         <LawnSettings app={app} />
       ) : app.activeScreen === 'guides' ? (
         <LawnGuides setActiveScreen={app.setActiveScreen} />
+      ) : app.activeScreen === 'materials' ? (
+        <LawnMaterials app={app} />
       ) : (
         <LawnWorkflow app={app} />
       )}
