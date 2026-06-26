@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
 import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
 
-const TOPSOIL_BAG_LITRES = 50;
+const TOPSOIL_BAG_LITRES = 25;
 const COMPOST_BAG_LITRES = 50;
 const SHARP_SAND_BAG_LITRES = 15;
 const TOPDRESS_DEPTH_MM = 5;
