@@ -60,9 +60,11 @@ import {
 import {
   fetchLawnWeatherFromOpenMeteo,
   fetchLawnWeatherSnapshotFromSupabase,
+  computeTodayWateringRainContext,
   computeWateringRainContext,
   getEffectiveNearTermRain,
   getEffectiveRecentPastRain,
+  getWateringRainSkipForDueDate,
   isWeatherSnapshotFresh,
   saveLawnWeatherSnapshot,
 } from '../services/lawnWeather';
@@ -194,6 +196,11 @@ export function useLawnCareApp() {
   const [netWaterNeeded, setNetWaterNeeded] = useState(0);
   const [isNatureProvidingFullSoak, setIsNatureProvidingFullSoak] = useState(false);
   const [soilRecentlyWet, setSoilRecentlyWet] = useState(false);
+  const [dailyForecastByDate, setDailyForecastByDate] = useState(
+    /** @type {Array<{ date: string, mm: number }>} */ ([])
+  );
+  const [recentPastRainBeforeToday, setRecentPastRainBeforeToday] = useState(0);
+  const [todayRainMm, setTodayRainMm] = useState(0);
   const [currentSoilTemp, setCurrentSoilTemp] = useState(
     /** @type {number | null} */ (null)
   );
@@ -308,6 +315,7 @@ export function useLawnCareApp() {
     recentPastRainSum,
     currentSoilTemp,
     isNatureProvidingFullSoak,
+    soilRecentlyWetToday: soilRecentlyWet,
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate,
@@ -359,6 +367,15 @@ export function useLawnCareApp() {
       'Height: Setting 3 (45mm) - Standard safe maintenance cut to prevent scalping';
   }
 
+  const todayRainSkip = getWateringRainSkipForDueDate(
+    todayStr,
+    todayStr,
+    dailyForecastByDate,
+    recentPastRainBeforeToday,
+    todayRainMm,
+    { seedEstablishmentActive }
+  );
+
   const maintenanceDueDates = {
     mowingNextDue: mowingNextDueIso,
     mowingLockedUntil: mowingLockedUntilIso,
@@ -380,7 +397,7 @@ export function useLawnCareApp() {
     mowingStatus: isDormantSeason ? 'dormant' : seedEstablishmentActive ? 'locked' : 'active',
     wateringStatus: isDormantSeason
       ? 'dormant'
-      : (!seedEstablishmentActive && isNatureProvidingFullSoak)
+      : todayRainSkip.skip
         ? 'paused'
         : 'active',
     verticutNextDue: verticutNextDueIso,
@@ -401,8 +418,10 @@ export function useLawnCareApp() {
     (daysSinceMow === null || daysSinceMow >= dynamicMowingDays);
   const wateringDue =
     !isDormantSeason &&
-    (seedEstablishmentActive || (!isNatureProvidingFullSoak && !soilRecentlyWet)) &&
-    (daysSinceWater === null || daysSinceWater >= dynamicWateringDays);
+    !todayRainSkip.skip &&
+    (seedEstablishmentActive ||
+      daysSinceWater === null ||
+      daysSinceWater >= dynamicWateringDays);
   const verticutDue =
     isVerticutSeason &&
     !renovationHoldActive &&
@@ -447,6 +466,13 @@ export function useLawnCareApp() {
         overrides.currentSoilTemp !== undefined ? overrides.currentSoilTemp : currentSoilTemp;
       const nextFullSoak =
         overrides.isNatureProvidingFullSoak ?? isNatureProvidingFullSoak;
+      const nextSoilRecentlyWet =
+        overrides.soilRecentlyWet ?? soilRecentlyWet;
+      const nextDailyForecast =
+        overrides.dailyForecastByDate ?? dailyForecastByDate;
+      const nextPastBeforeToday =
+        overrides.recentPastRainBeforeToday ?? recentPastRainBeforeToday;
+      const nextTodayRain = overrides.todayRainMm ?? todayRainMm;
 
       const maintenance = buildMaintenanceSchedule({
         todayStr,
@@ -455,6 +481,7 @@ export function useLawnCareApp() {
         recentPastRainSum: nextPastRain,
         currentSoilTemp: nextSoilTemp,
         isNatureProvidingFullSoak: nextFullSoak,
+        soilRecentlyWetToday: nextSoilRecentlyWet,
         lastMowedDate: nextLastMowedDate,
         lastWateredDate: nextLastWateredDate,
         lastVerticutDate: nextLastVerticutDate,
@@ -466,6 +493,10 @@ export function useLawnCareApp() {
         pendingDates,
         isDormantSeason: maintenance.isDormantSeason,
         isNatureProvidingFullSoak: maintenance.isNatureProvidingFullSoak,
+        soilRecentlyWet: nextSoilRecentlyWet,
+        dailyForecastByDate: nextDailyForecast,
+        recentPastRainBeforeToday: nextPastBeforeToday,
+        todayRainMm: nextTodayRain,
         seedEstablishmentActive: maintenance.seedEstablishmentActive,
         mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
         mowingNextDueIso: maintenance.mowingNextDueIso,
@@ -494,6 +525,10 @@ export function useLawnCareApp() {
       recentPastRainSum,
       currentSoilTemp,
       isNatureProvidingFullSoak,
+      soilRecentlyWet,
+      dailyForecastByDate,
+      recentPastRainBeforeToday,
+      todayRainMm,
       scheduleReason,
     ]
   );
@@ -564,8 +599,13 @@ export function useLawnCareApp() {
             forecastedRainSum,
             forecastedRainSumNearTerm,
             recentPastRainSum,
-            rainCreditMm: computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm)
-              .rainCreditMm,
+            recentPastRainBeforeToday,
+            todayRainMm,
+            dailyForecastByDate,
+            rainCreditMm: computeTodayWateringRainContext(
+              recentPastRainBeforeToday,
+              todayRainMm
+            ).rainCreditMm,
             currentSoilTemp: currentSoilTemp ?? null,
             currentSoilTempMin: currentSoilTempMin ?? null,
             isRainForecasted,
@@ -737,19 +777,27 @@ export function useLawnCareApp() {
   const applyWeatherSnapshot = useCallback((snapshot) => {
     const nearTerm = getEffectiveNearTermRain(snapshot);
     const pastRain = getEffectiveRecentPastRain(snapshot);
+    const pastBeforeToday =
+      snapshot.recentPastRainBeforeToday ??
+      Math.max(0, pastRain - (snapshot.todayRainMm ?? 0));
+    const todayRain = snapshot.todayRainMm ?? 0;
+    const forecastSeries = snapshot.dailyForecastByDate ?? [];
     const watering =
       typeof snapshot.netWaterNeeded === 'number' &&
       typeof snapshot.isNatureProvidingFullSoak === 'boolean'
         ? {
             netWaterNeeded: snapshot.netWaterNeeded,
             isNatureProvidingFullSoak: snapshot.isNatureProvidingFullSoak,
-            soilRecentlyWet: snapshot.soilRecentlyWet ?? pastRain >= 5,
+            soilRecentlyWet: snapshot.soilRecentlyWet ?? pastBeforeToday + todayRain >= 5,
           }
-        : computeWateringRainContext(pastRain, nearTerm);
+        : computeTodayWateringRainContext(pastBeforeToday, todayRain);
 
     setForecastedRainSum(snapshot.forecastedRainSum);
     setForecastedRainSumNearTerm(nearTerm);
     setRecentPastRainSum(pastRain);
+    setDailyForecastByDate(forecastSeries);
+    setRecentPastRainBeforeToday(pastBeforeToday);
+    setTodayRainMm(todayRain);
     setNetWaterNeeded(watering.netWaterNeeded);
     setIsNatureProvidingFullSoak(watering.isNatureProvidingFullSoak);
     setSoilRecentlyWet(watering.soilRecentlyWet);
@@ -777,16 +825,17 @@ export function useLawnCareApp() {
 
           try {
             const snapshot = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
-            const nearTerm = getEffectiveNearTermRain(snapshot);
-            const pastRain = getEffectiveRecentPastRain(snapshot);
-            const watering = computeWateringRainContext(pastRain, nearTerm);
-            weatherOverrides = {
-              forecastedRainSumNearTerm: nearTerm,
-              recentPastRainSum: pastRain,
-              currentSoilTemp: snapshot.currentSoilTemp,
-              isNatureProvidingFullSoak: watering.isNatureProvidingFullSoak,
-            };
             applyWeatherSnapshot(snapshot);
+            weatherOverrides = {
+              forecastedRainSumNearTerm: snapshot.forecastedRainSumNearTerm,
+              recentPastRainSum: snapshot.recentPastRainSum,
+              currentSoilTemp: snapshot.currentSoilTemp,
+              isNatureProvidingFullSoak: snapshot.isNatureProvidingFullSoak,
+              soilRecentlyWet: snapshot.soilRecentlyWet,
+              dailyForecastByDate: snapshot.dailyForecastByDate ?? [],
+              recentPastRainBeforeToday: snapshot.recentPastRainBeforeToday ?? 0,
+              todayRainMm: snapshot.todayRainMm ?? 0,
+            };
             try {
               await saveLawnWeatherSnapshot(snapshot);
             } catch (saveError) {

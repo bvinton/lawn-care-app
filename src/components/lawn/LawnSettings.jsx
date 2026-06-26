@@ -1,6 +1,39 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
 import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
+
+const TOPSOIL_BAG_LITRES = 50;
+const COMPOST_BAG_LITRES = 50;
+const SHARP_SAND_BAG_LITRES = 15;
+const TOPDRESS_DEPTH_MM = 5;
+
+function CalculatorIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="4" y="2" width="16" height="20" rx="2" />
+      <line x1="8" y1="6" x2="16" y2="6" />
+      <line x1="8" y1="10" x2="8" y2="10.01" />
+      <line x1="12" y1="10" x2="12" y2="10.01" />
+      <line x1="16" y1="10" x2="16" y2="10.01" />
+      <line x1="8" y1="14" x2="8" y2="14.01" />
+      <line x1="12" y1="14" x2="12" y2="14.01" />
+      <line x1="16" y1="14" x2="16" y2="14.01" />
+      <line x1="8" y1="18" x2="8" y2="18.01" />
+      <line x1="12" y1="18" x2="12" y2="18.01" />
+      <line x1="16" y1="18" x2="16" y2="18.01" />
+    </svg>
+  );
+}
 
 /** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
 export default function LawnSettings({ app }) {
@@ -36,6 +69,24 @@ export default function LawnSettings({ app }) {
     setActiveScreen,
     setWeatherLocationError,
   } = app;
+
+  const [showMaterialsCalculator, setShowMaterialsCalculator] = useState(false);
+
+  const topdressingMaterials = useMemo(() => {
+    const totalLitres = sqm * TOPDRESS_DEPTH_MM;
+    const portionLitres = totalLitres / 3;
+
+    return {
+      totalLitres,
+      portionLitres,
+      sandLitres: portionLitres,
+      soilLitres: portionLitres,
+      compostLitres: portionLitres,
+      topsoilBags: Math.ceil(portionLitres / TOPSOIL_BAG_LITRES),
+      sandBags: Math.ceil(portionLitres / SHARP_SAND_BAG_LITRES),
+      compostBags: Math.ceil(portionLitres / COMPOST_BAG_LITRES),
+    };
+  }, [sqm]);
 
   return (
     <>
@@ -199,6 +250,109 @@ export default function LawnSettings({ app }) {
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowMaterialsCalculator((open) => !open)}
+            aria-expanded={showMaterialsCalculator}
+            className="flex w-full items-center gap-2 rounded-lg border border-stone-300 bg-stone-100 px-3 py-2.5 text-sm font-bold text-stone-800 transition-all hover:bg-stone-200/80"
+          >
+            <CalculatorIcon />
+            Materials
+          </button>
+          <div
+            className={`grid transition-all duration-300 ease-in-out ${
+              showMaterialsCalculator
+                ? 'grid-rows-[1fr] opacity-100 mt-3'
+                : 'grid-rows-[0fr] opacity-0 mt-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm">
+                <div className="flex items-start gap-2 mb-3">
+                  <span className="text-lg leading-none" aria-hidden="true">
+                    ⚖️
+                  </span>
+                  <div>
+                    <h4 className="text-sm font-bold text-amber-950">
+                      Topdressing &amp; Materials Calculator
+                    </h4>
+                    <p className="text-[11px] text-amber-900/80 mt-1 leading-snug">
+                      Based on your {sqm} SQM lawn — a {TOPDRESS_DEPTH_MM}mm deep layer ideal for
+                      protecting new seed and filling minor aeration holes.
+                    </p>
+                  </div>
+                </div>
+
+                <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-3 rounded-lg border border-amber-200/80 bg-white/70 px-3 py-2">
+                    <dt className="font-semibold text-amber-950">Total volume</dt>
+                    <dd className="font-black text-amber-900 tabular-nums">
+                      {topdressingMaterials.totalLitres.toLocaleString()} L
+                    </dd>
+                  </div>
+
+                  <div className="rounded-lg border border-amber-200/80 bg-white/70 px-3 py-2.5">
+                    <p className="text-xs font-bold text-amber-950 mb-2">
+                      1/3 Sharp Sand, 1/3 Screened Topsoil, 1/3 Compost
+                    </p>
+                    <ul className="space-y-1.5 text-xs text-amber-900">
+                      <li className="flex justify-between gap-3">
+                        <span>Sharp sand</span>
+                        <span className="font-bold tabular-nums">
+                          {topdressingMaterials.sandLitres.toLocaleString()} L
+                        </span>
+                      </li>
+                      <li className="flex justify-between gap-3">
+                        <span>Screened topsoil</span>
+                        <span className="font-bold tabular-nums">
+                          {topdressingMaterials.soilLitres.toLocaleString()} L
+                        </span>
+                      </li>
+                      <li className="flex justify-between gap-3">
+                        <span>Compost</span>
+                        <span className="font-bold tabular-nums">
+                          {topdressingMaterials.compostLitres.toLocaleString()} L
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-lg border border-amber-200/80 bg-white/70 px-3 py-2.5">
+                    <p className="text-xs font-bold text-amber-950 mb-2">Bags to buy</p>
+                    <ul className="space-y-1.5 text-xs text-amber-900">
+                      <li className="flex justify-between gap-3">
+                        <span>Topsoil ({TOPSOIL_BAG_LITRES}L bags)</span>
+                        <span className="font-black tabular-nums">
+                          {topdressingMaterials.topsoilBags}
+                        </span>
+                      </li>
+                      <li className="flex justify-between gap-3">
+                        <span>Sharp sand (25kg ≈ {SHARP_SAND_BAG_LITRES}L)</span>
+                        <span className="font-black tabular-nums">
+                          {topdressingMaterials.sandBags}
+                        </span>
+                      </li>
+                      <li className="flex justify-between gap-3">
+                        <span>Compost ({COMPOST_BAG_LITRES}L bags)</span>
+                        <span className="font-black tabular-nums">
+                          {topdressingMaterials.compostBags}
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+                </dl>
+
+                <p className="mt-3 text-[10px] text-amber-900/75 leading-relaxed italic">
+                  Depth × area: {TOPDRESS_DEPTH_MM}mm over {sqm} SQM = {sqm} × {TOPDRESS_DEPTH_MM}{' '}
+                  = {topdressingMaterials.totalLitres} litres total, split equally three ways (
+                  {topdressingMaterials.portionLitres.toLocaleString()} L each). Bag counts round
+                  up so you don&apos;t run short on site.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
         <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
           <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>

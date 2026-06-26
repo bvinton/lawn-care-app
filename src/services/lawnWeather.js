@@ -14,7 +14,7 @@ export function buildOpenMeteoForecastUrl(latitude, longitude) {
     latitude: String(latitude),
     longitude: String(longitude),
     daily: 'precipitation_sum',
-    hourly: 'soil_temperature_6cm',
+    hourly: 'soil_temperature_6cm,precipitation',
     timezone: 'Europe/London',
     past_days: String(PAST_RAIN_DAYS),
     forecast_days: String(FORECAST_RAIN_DAYS),
@@ -24,6 +24,8 @@ export function buildOpenMeteoForecastUrl(latitude, longitude) {
 
 export const SOAK_DEPTH_MM = 10;
 export const RAIN_THRESHOLD_MM = 5;
+/** Light surface misting target during seed establishment (~2.5mm). */
+export const SEED_MIST_TARGET_MM = 2.5;
 /** Rain in the next few days drives forward-looking adjustments. */
 export const NEAR_TERM_RAIN_DAYS = 3;
 /** Observed rain history from Open-Meteo. */
@@ -43,6 +45,9 @@ export const RECENT_RAIN_WET_SOIL_MM = 5;
  * @property {boolean} isRainForecasted
  * @property {boolean} isNatureProvidingFullSoak
  * @property {boolean} soilRecentlyWet
+ * @property {number} [recentPastRainBeforeToday]
+ * @property {number} [todayRainMm]
+ * @property {Array<{ date: string, mm: number }>} [dailyForecastByDate]
  * @property {number} netWaterNeeded
  * @property {string} fetchedAt
  * @property {'open-meteo'} source
@@ -79,6 +84,27 @@ export function splitPrecipitationSeries(
   return {
     past: precipitationTotals.slice(0, pastDays),
     forecast: precipitationTotals.slice(pastDays, pastDays + forecastDays),
+  };
+}
+
+/**
+ * Rain credit for pausing watering *today* — past soak + today's rain only.
+ * Tomorrow's forecast does not cancel today's watering.
+ * @param {number} recentPastRainBeforeToday
+ * @param {number} todayRainMm
+ */
+export function computeTodayWateringRainContext(recentPastRainBeforeToday, todayRainMm) {
+  const recentTotal = recentPastRainBeforeToday + todayRainMm;
+  const rainCreditMm = Math.min(SOAK_DEPTH_MM, recentTotal);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
+  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
+  const soilRecentlyWet = recentTotal >= RECENT_RAIN_WET_SOIL_MM;
+
+  return {
+    rainCreditMm,
+    netWaterNeeded,
+    isNatureProvidingFullSoak,
+    soilRecentlyWet,
   };
 }
 
@@ -125,6 +151,171 @@ export function getEffectiveRecentPastRain(weather) {
 }
 
 /**
+ * Sum observed hourly precipitation from midnight today up to the current hour.
+ * @param {{ hourly?: { precipitation?: Array<number | null>, time?: Array<string> } }} data
+ */
+export function getTodayPrecipitationSoFar(data) {
+  const hourlyPrecip = data.hourly?.precipitation;
+  const hourlyTimes = data.hourly?.time;
+  if (!Array.isArray(hourlyPrecip) || !Array.isArray(hourlyTimes) || hourlyPrecip.length === 0) {
+    return 0;
+  }
+
+  const start = PAST_RAIN_DAYS * 24;
+  const now = Date.now();
+  let sum = 0;
+
+  for (let i = start; i < Math.min(start + 24, hourlyPrecip.length); i++) {
+    const hourMs = new Date(hourlyTimes[i]).getTime();
+    if (Number.isNaN(hourMs) || hourMs > now) break;
+    sum += hourlyPrecip[i] ?? 0;
+  }
+
+  return sum;
+}
+
+/**
+ * Daily precipitation from today through the forecast window.
+ * @param {{ daily?: { time?: Array<string>, precipitation_sum?: Array<number | null> } }} data
+ * @returns {Array<{ date: string, mm: number }>}
+ */
+export function buildDailyForecastSeries(data) {
+  const times = data?.daily?.time;
+  const precip = data?.daily?.precipitation_sum;
+  if (!Array.isArray(times) || !Array.isArray(precip)) return [];
+
+  const { forecast } = splitPrecipitationSeries(precip);
+  return times.slice(PAST_RAIN_DAYS, PAST_RAIN_DAYS + FORECAST_RAIN_DAYS).map((date, index) => ({
+    date,
+    mm: forecast[index] ?? 0,
+  }));
+}
+
+/**
+ * Seed establishment: skip light misting only when rain on the due date itself
+ * meets the surface moisture target. Past days do not carry forward — each day
+ * is judged independently because the seed bed surface dries quickly.
+ * @param {string} dueDateIso
+ * @param {string} todayStr
+ * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
+ * @param {number} todayRainMm
+ */
+export function getSeedMistingRainSkipForDueDate(
+  dueDateIso,
+  todayStr,
+  dailyForecastByDate,
+  todayRainMm
+) {
+  const daysUntilDue = Math.floor(
+    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  const rainMm =
+    daysUntilDue === 0
+      ? todayRainMm
+      : (dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0);
+
+  if (rainMm >= SEED_MIST_TARGET_MM) {
+    const dayLabel =
+      daysUntilDue === 0
+        ? 'Rain keeping seed bed moist – skip misting today'
+        : `${rainMm.toFixed(1)}mm rain forecast – skip misting`;
+    return { skip: true, reason: dayLabel, fullSoak: false };
+  }
+
+  return { skip: false, reason: null, fullSoak: false };
+}
+
+/**
+ * Should watering be skipped on a specific due date?
+ * Normal maintenance: deep soak thresholds; past rain can pause for several days.
+ * Seed establishment: surface misting thresholds; only rain on the due date counts.
+ * @param {string} dueDateIso
+ * @param {string} todayStr
+ * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
+ * @param {number} recentPastRainBeforeToday
+ * @param {number} todayRainMm
+ * @param {{ seedEstablishmentActive?: boolean }} [options]
+ */
+export function getWateringRainSkipForDueDate(
+  dueDateIso,
+  todayStr,
+  dailyForecastByDate,
+  recentPastRainBeforeToday,
+  todayRainMm,
+  { seedEstablishmentActive = false } = {}
+) {
+  if (seedEstablishmentActive) {
+    return getSeedMistingRainSkipForDueDate(
+      dueDateIso,
+      todayStr,
+      dailyForecastByDate,
+      todayRainMm
+    );
+  }
+
+  const daysUntilDue = Math.floor(
+    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  if (daysUntilDue === 0) {
+    const todayContext = computeTodayWateringRainContext(
+      recentPastRainBeforeToday,
+      todayRainMm
+    );
+
+    if (todayContext.isNatureProvidingFullSoak) {
+      return {
+        skip: true,
+        reason: 'Heavy rain – nature providing full soak',
+        fullSoak: true,
+      };
+    }
+
+    if (todayContext.soilRecentlyWet) {
+      return {
+        skip: true,
+        reason: 'Recent rain – soil still damp, skip watering',
+        fullSoak: false,
+      };
+    }
+
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  const forecastEntry = dailyForecastByDate.find((entry) => entry.date === dueDateIso);
+  const forecastMm = forecastEntry?.mm ?? 0;
+
+  if (forecastMm >= SOAK_DEPTH_MM) {
+    return {
+      skip: true,
+      reason: `${forecastMm.toFixed(0)}mm rain forecast – skip watering`,
+      fullSoak: true,
+    };
+  }
+
+  if (forecastMm >= RECENT_RAIN_WET_SOIL_MM) {
+    return {
+      skip: true,
+      reason: `${forecastMm.toFixed(1)}mm rain forecast – soil will be damp`,
+      fullSoak: false,
+    };
+  }
+
+  return { skip: false, reason: null, fullSoak: false };
+}
+
+/**
  * Hourly data starts PAST_RAIN_DAYS ago, so today's 24 hours begin at index PAST_RAIN_DAYS * 24.
  * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
  */
@@ -161,28 +352,44 @@ export function getTodayMinSoilTemp(data) {
 export function buildWeatherSnapshotFromOpenMeteo(data) {
   const precipitationTotals = data?.daily?.precipitation_sum;
   const { past, forecast } = splitPrecipitationSeries(precipitationTotals);
-  const recentPastRainSum = sumPrecipitation(
+  const recentPastRainBeforeToday = sumPrecipitation(
     past.slice(-RECENT_PAST_RAIN_DAYS),
     RECENT_PAST_RAIN_DAYS
   );
-  const forecastedRainSumNearTerm = sumPrecipitation(forecast, NEAR_TERM_RAIN_DAYS);
+  const todayRainObservedMm = getTodayPrecipitationSoFar(data);
+  const todayFromDailyForecast = forecast[0] ?? 0;
+  const todayRainMm = Math.max(todayRainObservedMm, todayFromDailyForecast);
+  const effectiveRecentPastRain = recentPastRainBeforeToday + todayRainMm;
+  const forecastNearTermBeyondToday = sumPrecipitation(
+    forecast.slice(1),
+    Math.max(0, NEAR_TERM_RAIN_DAYS - 1)
+  );
+  const forecastedRainSumNearTerm = todayRainMm + forecastNearTermBeyondToday;
   const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
+  const dailyForecastByDate = buildDailyForecastSeries(data);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
-  const watering = computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm);
+  const todayWatering = computeTodayWateringRainContext(
+    recentPastRainBeforeToday,
+    todayRainMm
+  );
 
   return {
     forecastedRainSum,
     forecastedRainSumNearTerm,
-    recentPastRainSum,
-    rainCreditMm: watering.rainCreditMm,
+    recentPastRainSum: effectiveRecentPastRain,
+    recentPastRainBeforeToday,
+    todayRainMm,
+    dailyForecastByDate,
+    rainCreditMm: todayWatering.rainCreditMm,
     currentSoilTemp,
     currentSoilTempMin,
     isRainForecasted:
-      forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM || recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM,
-    isNatureProvidingFullSoak: watering.isNatureProvidingFullSoak,
-    soilRecentlyWet: watering.soilRecentlyWet,
-    netWaterNeeded: watering.netWaterNeeded,
+      forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM ||
+      effectiveRecentPastRain >= RECENT_RAIN_WET_SOIL_MM,
+    isNatureProvidingFullSoak: todayWatering.isNatureProvidingFullSoak,
+    soilRecentlyWet: todayWatering.soilRecentlyWet,
+    netWaterNeeded: todayWatering.netWaterNeeded,
     fetchedAt: new Date().toISOString(),
     source: 'open-meteo',
   };

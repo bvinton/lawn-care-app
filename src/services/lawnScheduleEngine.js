@@ -270,7 +270,8 @@ export function getScheduleReason(input) {
  * @param {number} input.forecastedRainSumNearTerm
  * @param {number} [input.recentPastRainSum]
  * @param {number | null} input.currentSoilTemp
- * @param {boolean} input.isNatureProvidingFullSoak
+ * @param {boolean} input.isNatureProvidingFullSoak - today-only full soak (not future forecast)
+ * @param {boolean} [input.soilRecentlyWetToday]
  * @param {string | null} input.lastMowedDate
  * @param {string | null} input.lastWateredDate
  * @param {string | null} input.lastVerticutDate
@@ -283,6 +284,7 @@ export function buildMaintenanceSchedule(input) {
     recentPastRainSum = 0,
     currentSoilTemp,
     isNatureProvidingFullSoak,
+    soilRecentlyWetToday = null,
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate,
@@ -326,9 +328,14 @@ export function buildMaintenanceSchedule(input) {
   // If rain has recently soaked the soil, treat today as the effective watering date so
   // the next-due calculation counts forward from now rather than from the last manual water.
   // Without this, when rain clears the task immediately reappears overdue.
-  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
+  const soilRecentlyWet =
+    typeof soilRecentlyWetToday === 'boolean'
+      ? soilRecentlyWetToday
+      : recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
   const effectiveLastWateredDate =
-    (!seedEstablishmentActive && (isNatureProvidingFullSoak || soilRecentlyWet)) ? todayStr : lastWateredDate;
+    !seedEstablishmentActive && (isNatureProvidingFullSoak || soilRecentlyWet)
+      ? todayStr
+      : lastWateredDate;
   const wateringNextDueIso = effectiveLastWateredDate
     ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays)
     : null;

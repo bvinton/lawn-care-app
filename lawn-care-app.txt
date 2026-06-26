@@ -170,6 +170,68 @@ vite.config.js
 <files>
 This section contains the contents of the repository's files.
 
+<file path=".cursor/rules/git-workflow.mdc">
+---
+description: How to commit and push — use push-all.ps1 to deploy both apps together
+alwaysApply: true
+---
+
+# Git / deploy workflow
+
+Both apps (Tasks App and Lawn Care App) should always be committed and pushed together using the shared script at `C:\Projects\push-all.ps1`.
+
+## Committing via the agent
+
+When the user says "commit", "push", "deploy", or similar, run:
+
+```powershell
+C:\Projects\push-all.ps1 "commit message here"
+```
+
+This stages all changes, commits, and pushes **both repos** in one command.
+
+## Committing manually (terminal)
+
+The user can open a terminal and run:
+
+```powershell
+C:\Projects\push-all.ps1 "describe what changed"
+```
+
+## Notes
+
+- Always push to `main` (Tasks App) / `master` (Lawn Care App) — never create branches unless explicitly asked.
+- If only one repo has changes the script skips the other automatically.
+</file>
+
+<file path=".husky/pre-commit">
+npx repomix --output "lawn-care-app.txt"
+git add "lawn-care-app.txt"
+</file>
+
+<file path="jsconfig.json">
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2020",
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["src"]
+}
+</file>
+
+<file path="postcss.config.js">
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+</file>
+
 <file path="public/guides/masterclass/manifest.json">
 {
   "part-2": [
@@ -227,6 +289,122 @@ This section contains the contents of the repository's files.
     "/guides/masterclass/part-5/13.webp"
   ]
 }
+</file>
+
+<file path="public/icon.svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Lawn Pack">
+  <rect width="512" height="512" rx="96" fill="#14532d"/>
+  <path fill="#86efac" d="M256 88c-72 0-120 48-120 112 0 40 20 76 52 100 8-36 32-64 68-76-20-28-20-64 0-92-28 12-48 40-52 72 32-16 72-8 96 24 24-56 24-104-12-140z"/>
+  <ellipse cx="256" cy="400" rx="140" ry="28" fill="#166534" opacity="0.5"/>
+</svg>
+</file>
+
+<file path="scripts/bundle-sync-api.mjs">
+import * as esbuild from 'esbuild';
+
+await esbuild.build({
+  entryPoints: ['api/sync-lawn.source.js'],
+  bundle: true,
+  platform: 'node',
+  target: 'node20',
+  format: 'esm',
+  outfile: 'api/sync-lawn.js',
+  logLevel: 'info',
+});
+
+console.log('Bundled api/sync-lawn.js for Vercel');
+</file>
+
+<file path="scripts/check-lawn-tasks.mjs">
+/**
+ * Diagnostic: dumps what lawn task rows exist in Supabase and their
+ * is_completed / last_completed_date values, plus the user_logs from lawn_app_state.
+ *
+ * Run from the project root:
+ *   node scripts/check-lawn-tasks.mjs
+ *
+ * You'll be prompted for your Supabase anon key if VITE_SUPABASE_ANON_KEY
+ * isn't found in a .env.local file.
+ */
+
+import { createInterface } from 'readline';
+import { readFileSync, existsSync } from 'fs';
+
+const SUPABASE_URL = 'https://sbcpszlqycaynyurqfws.supabase.co';
+
+// Try to read the anon key from .env.local
+let anonKey = '';
+for (const envFile of ['.env.local', '.env']) {
+  if (existsSync(envFile)) {
+    const lines = readFileSync(envFile, 'utf8').split('\n');
+    for (const line of lines) {
+      const m = line.match(/^VITE_SUPABASE_ANON_KEY\s*=\s*(.+)/);
+      if (m) { anonKey = m[1].trim(); break; }
+    }
+    if (anonKey) break;
+  }
+}
+
+// Also accept as CLI arg: node check-lawn-tasks.mjs eyJhbG...
+if (!anonKey && process.argv[2]) {
+  anonKey = process.argv[2].trim();
+}
+
+if (!anonKey) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  anonKey = await new Promise(resolve =>
+    rl.question('Paste your Supabase anon key: ', ans => { rl.close(); resolve(ans.trim()); })
+  );
+}
+
+async function supabaseGet(path) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+      Accept: 'application/json',
+    },
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+console.log('\n--- lawn_app_state user_logs ---');
+try {
+  const state = await supabaseGet(`lawn_app_state?id=eq.default&select=user_logs`);
+  const logs = state[0]?.user_logs ?? {};
+  const springKeys = Object.entries(logs)
+    .filter(([k]) => k.startsWith('SPRING:') || k.startsWith('SUMMER:') || k.startsWith('AUTUMN:'));
+  if (springKeys.length === 0) {
+    console.log('No pack step logs found in user_logs.');
+  } else {
+    for (const [k, v] of springKeys.sort()) {
+      console.log(`  ${k} = ${v}`);
+    }
+  }
+} catch (e) {
+  console.error('Error reading lawn_app_state:', e.message);
+}
+
+console.log('\n--- tasks table (lawn, all rows) ---');
+try {
+  const tasks = await supabaseGet(
+    `tasks?app_source=eq.lawn&select=task_name,due_date,is_completed,last_completed_date&order=due_date.asc&limit=100`
+  );
+  if (tasks.length === 0) {
+    console.log('No rows found.');
+  } else {
+    for (const t of tasks) {
+      const lcd = t.last_completed_date ?? '(null)';
+      const done = t.is_completed ? '✓' : '○';
+      console.log(`  ${done}  last_completed=${lcd.padEnd(12)}  due=${t.due_date}  ${t.task_name}`);
+    }
+  }
+} catch (e) {
+  console.error('Error reading tasks:', e.message);
+}
+
+console.log('\nDone. If Spring pack rows are missing, open the Lawn Care App and press Sync.');
 </file>
 
 <file path="scripts/extract-masterclass-images.py">
@@ -372,243 +550,6 @@ if __name__ == "__main__":
     main()
 </file>
 
-<file path="src/data/masterclassManifest.json">
-{
-  "part-2": [
-    "/guides/masterclass/part-2/01.webp",
-    "/guides/masterclass/part-2/02.webp",
-    "/guides/masterclass/part-2/03.webp",
-    "/guides/masterclass/part-2/04.webp",
-    "/guides/masterclass/part-2/05.webp",
-    "/guides/masterclass/part-2/06.webp",
-    "/guides/masterclass/part-2/07.webp",
-    "/guides/masterclass/part-2/08.webp",
-    "/guides/masterclass/part-2/09.webp",
-    "/guides/masterclass/part-2/10.webp"
-  ],
-  "part-3": [
-    "/guides/masterclass/part-3/01.webp",
-    "/guides/masterclass/part-3/02.webp",
-    "/guides/masterclass/part-3/03.webp",
-    "/guides/masterclass/part-3/04.webp",
-    "/guides/masterclass/part-3/05.webp",
-    "/guides/masterclass/part-3/06.webp",
-    "/guides/masterclass/part-3/07.webp",
-    "/guides/masterclass/part-3/08.webp",
-    "/guides/masterclass/part-3/09.webp",
-    "/guides/masterclass/part-3/10.webp",
-    "/guides/masterclass/part-3/11.webp",
-    "/guides/masterclass/part-3/12.webp",
-    "/guides/masterclass/part-3/13.webp"
-  ],
-  "part-4": [
-    "/guides/masterclass/part-4/01.webp",
-    "/guides/masterclass/part-4/02.webp",
-    "/guides/masterclass/part-4/03.webp",
-    "/guides/masterclass/part-4/04.webp",
-    "/guides/masterclass/part-4/05.webp",
-    "/guides/masterclass/part-4/06.webp",
-    "/guides/masterclass/part-4/07.webp",
-    "/guides/masterclass/part-4/08.webp",
-    "/guides/masterclass/part-4/09.webp",
-    "/guides/masterclass/part-4/10.webp"
-  ],
-  "part-5": [
-    "/guides/masterclass/part-5/01.webp",
-    "/guides/masterclass/part-5/02.webp",
-    "/guides/masterclass/part-5/03.webp",
-    "/guides/masterclass/part-5/04.webp",
-    "/guides/masterclass/part-5/05.webp",
-    "/guides/masterclass/part-5/06.webp",
-    "/guides/masterclass/part-5/07.webp",
-    "/guides/masterclass/part-5/08.webp",
-    "/guides/masterclass/part-5/09.webp",
-    "/guides/masterclass/part-5/10.webp",
-    "/guides/masterclass/part-5/11.webp",
-    "/guides/masterclass/part-5/12.webp",
-    "/guides/masterclass/part-5/13.webp"
-  ]
-}
-</file>
-
-<file path=".cursor/rules/git-workflow.mdc">
----
-description: How to commit and push — use push-all.ps1 to deploy both apps together
-alwaysApply: true
----
-
-# Git / deploy workflow
-
-Both apps (Tasks App and Lawn Care App) should always be committed and pushed together using the shared script at `C:\Projects\push-all.ps1`.
-
-## Committing via the agent
-
-When the user says "commit", "push", "deploy", or similar, run:
-
-```powershell
-C:\Projects\push-all.ps1 "commit message here"
-```
-
-This stages all changes, commits, and pushes **both repos** in one command.
-
-## Committing manually (terminal)
-
-The user can open a terminal and run:
-
-```powershell
-C:\Projects\push-all.ps1 "describe what changed"
-```
-
-## Notes
-
-- Always push to `main` (Tasks App) / `master` (Lawn Care App) — never create branches unless explicitly asked.
-- If only one repo has changes the script skips the other automatically.
-</file>
-
-<file path=".husky/pre-commit">
-npx repomix --output "lawn-care-app.txt"
-git add "lawn-care-app.txt"
-</file>
-
-<file path="jsconfig.json">
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "target": "ES2020",
-    "allowJs": true,
-    "checkJs": true
-  },
-  "include": ["src"]
-}
-</file>
-
-<file path="postcss.config.js">
-export default {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-};
-</file>
-
-<file path="public/icon.svg">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Lawn Pack">
-  <rect width="512" height="512" rx="96" fill="#14532d"/>
-  <path fill="#86efac" d="M256 88c-72 0-120 48-120 112 0 40 20 76 52 100 8-36 32-64 68-76-20-28-20-64 0-92-28 12-48 40-52 72 32-16 72-8 96 24 24-56 24-104-12-140z"/>
-  <ellipse cx="256" cy="400" rx="140" ry="28" fill="#166534" opacity="0.5"/>
-</svg>
-</file>
-
-<file path="scripts/bundle-sync-api.mjs">
-import * as esbuild from 'esbuild';
-
-await esbuild.build({
-  entryPoints: ['api/sync-lawn.source.js'],
-  bundle: true,
-  platform: 'node',
-  target: 'node20',
-  format: 'esm',
-  outfile: 'api/sync-lawn.js',
-  logLevel: 'info',
-});
-
-console.log('Bundled api/sync-lawn.js for Vercel');
-</file>
-
-<file path="scripts/check-lawn-tasks.mjs">
-/**
- * Diagnostic: dumps what lawn task rows exist in Supabase and their
- * is_completed / last_completed_date values, plus the user_logs from lawn_app_state.
- *
- * Run from the project root:
- *   node scripts/check-lawn-tasks.mjs
- *
- * You'll be prompted for your Supabase anon key if VITE_SUPABASE_ANON_KEY
- * isn't found in a .env.local file.
- */
-
-import { createInterface } from 'readline';
-import { readFileSync, existsSync } from 'fs';
-
-const SUPABASE_URL = 'https://sbcpszlqycaynyurqfws.supabase.co';
-
-// Try to read the anon key from .env.local
-let anonKey = '';
-for (const envFile of ['.env.local', '.env']) {
-  if (existsSync(envFile)) {
-    const lines = readFileSync(envFile, 'utf8').split('\n');
-    for (const line of lines) {
-      const m = line.match(/^VITE_SUPABASE_ANON_KEY\s*=\s*(.+)/);
-      if (m) { anonKey = m[1].trim(); break; }
-    }
-    if (anonKey) break;
-  }
-}
-
-// Also accept as CLI arg: node check-lawn-tasks.mjs eyJhbG...
-if (!anonKey && process.argv[2]) {
-  anonKey = process.argv[2].trim();
-}
-
-if (!anonKey) {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  anonKey = await new Promise(resolve =>
-    rl.question('Paste your Supabase anon key: ', ans => { rl.close(); resolve(ans.trim()); })
-  );
-}
-
-async function supabaseGet(path) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${anonKey}`,
-      Accept: 'application/json',
-    },
-  });
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-  return res.json();
-}
-
-console.log('\n--- lawn_app_state user_logs ---');
-try {
-  const state = await supabaseGet(`lawn_app_state?id=eq.default&select=user_logs`);
-  const logs = state[0]?.user_logs ?? {};
-  const springKeys = Object.entries(logs)
-    .filter(([k]) => k.startsWith('SPRING:') || k.startsWith('SUMMER:') || k.startsWith('AUTUMN:'));
-  if (springKeys.length === 0) {
-    console.log('No pack step logs found in user_logs.');
-  } else {
-    for (const [k, v] of springKeys.sort()) {
-      console.log(`  ${k} = ${v}`);
-    }
-  }
-} catch (e) {
-  console.error('Error reading lawn_app_state:', e.message);
-}
-
-console.log('\n--- tasks table (lawn, all rows) ---');
-try {
-  const tasks = await supabaseGet(
-    `tasks?app_source=eq.lawn&select=task_name,due_date,is_completed,last_completed_date&order=due_date.asc&limit=100`
-  );
-  if (tasks.length === 0) {
-    console.log('No rows found.');
-  } else {
-    for (const t of tasks) {
-      const lcd = t.last_completed_date ?? '(null)';
-      const done = t.is_completed ? '✓' : '○';
-      console.log(`  ${done}  last_completed=${lcd.padEnd(12)}  due=${t.due_date}  ${t.task_name}`);
-    }
-  }
-} catch (e) {
-  console.error('Error reading tasks:', e.message);
-}
-
-console.log('\nDone. If Spring pack rows are missing, open the Lawn Care App and press Sync.');
-</file>
-
 <file path="scripts/generate-pwa-icons.mjs">
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -632,9 +573,42 @@ for (const { name, size } of sizes) {
 </file>
 
 <file path="src/components/lawn/LawnSettings.jsx">
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
 import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
+
+const TOPSOIL_BAG_LITRES = 50;
+const COMPOST_BAG_LITRES = 50;
+const SHARP_SAND_BAG_LITRES = 15;
+const TOPDRESS_DEPTH_MM = 5;
+
+function CalculatorIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="4" y="2" width="16" height="20" rx="2" />
+      <line x1="8" y1="6" x2="16" y2="6" />
+      <line x1="8" y1="10" x2="8" y2="10.01" />
+      <line x1="12" y1="10" x2="12" y2="10.01" />
+      <line x1="16" y1="10" x2="16" y2="10.01" />
+      <line x1="8" y1="14" x2="8" y2="14.01" />
+      <line x1="12" y1="14" x2="12" y2="14.01" />
+      <line x1="16" y1="14" x2="16" y2="14.01" />
+      <line x1="8" y1="18" x2="8" y2="18.01" />
+      <line x1="12" y1="18" x2="12" y2="18.01" />
+      <line x1="16" y1="18" x2="16" y2="18.01" />
+    </svg>
+  );
+}
 
 /** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
 export default function LawnSettings({ app }) {
@@ -670,6 +644,24 @@ export default function LawnSettings({ app }) {
     setActiveScreen,
     setWeatherLocationError,
   } = app;
+
+  const [showMaterialsCalculator, setShowMaterialsCalculator] = useState(false);
+
+  const topdressingMaterials = useMemo(() => {
+    const totalLitres = sqm * TOPDRESS_DEPTH_MM;
+    const portionLitres = totalLitres / 3;
+
+    return {
+      totalLitres,
+      portionLitres,
+      sandLitres: portionLitres,
+      soilLitres: portionLitres,
+      compostLitres: portionLitres,
+      topsoilBags: Math.ceil(portionLitres / TOPSOIL_BAG_LITRES),
+      sandBags: Math.ceil(portionLitres / SHARP_SAND_BAG_LITRES),
+      compostBags: Math.ceil(portionLitres / COMPOST_BAG_LITRES),
+    };
+  }, [sqm]);
 
   return (
     <>
@@ -833,6 +825,109 @@ export default function LawnSettings({ app }) {
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowMaterialsCalculator((open) => !open)}
+            aria-expanded={showMaterialsCalculator}
+            className="flex w-full items-center gap-2 rounded-lg border border-stone-300 bg-stone-100 px-3 py-2.5 text-sm font-bold text-stone-800 transition-all hover:bg-stone-200/80"
+          >
+            <CalculatorIcon />
+            Materials
+          </button>
+          <div
+            className={`grid transition-all duration-300 ease-in-out ${
+              showMaterialsCalculator
+                ? 'grid-rows-[1fr] opacity-100 mt-3'
+                : 'grid-rows-[0fr] opacity-0 mt-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm">
+                <div className="flex items-start gap-2 mb-3">
+                  <span className="text-lg leading-none" aria-hidden="true">
+                    ⚖️
+                  </span>
+                  <div>
+                    <h4 className="text-sm font-bold text-amber-950">
+                      Topdressing &amp; Materials Calculator
+                    </h4>
+                    <p className="text-[11px] text-amber-900/80 mt-1 leading-snug">
+                      Based on your {sqm} SQM lawn — a {TOPDRESS_DEPTH_MM}mm deep layer ideal for
+                      protecting new seed and filling minor aeration holes.
+                    </p>
+                  </div>
+                </div>
+
+                <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-3 rounded-lg border border-amber-200/80 bg-white/70 px-3 py-2">
+                    <dt className="font-semibold text-amber-950">Total volume</dt>
+                    <dd className="font-black text-amber-900 tabular-nums">
+                      {topdressingMaterials.totalLitres.toLocaleString()} L
+                    </dd>
+                  </div>
+
+                  <div className="rounded-lg border border-amber-200/80 bg-white/70 px-3 py-2.5">
+                    <p className="text-xs font-bold text-amber-950 mb-2">
+                      1/3 Sharp Sand, 1/3 Screened Topsoil, 1/3 Compost
+                    </p>
+                    <ul className="space-y-1.5 text-xs text-amber-900">
+                      <li className="flex justify-between gap-3">
+                        <span>Sharp sand</span>
+                        <span className="font-bold tabular-nums">
+                          {topdressingMaterials.sandLitres.toLocaleString()} L
+                        </span>
+                      </li>
+                      <li className="flex justify-between gap-3">
+                        <span>Screened topsoil</span>
+                        <span className="font-bold tabular-nums">
+                          {topdressingMaterials.soilLitres.toLocaleString()} L
+                        </span>
+                      </li>
+                      <li className="flex justify-between gap-3">
+                        <span>Compost</span>
+                        <span className="font-bold tabular-nums">
+                          {topdressingMaterials.compostLitres.toLocaleString()} L
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-lg border border-amber-200/80 bg-white/70 px-3 py-2.5">
+                    <p className="text-xs font-bold text-amber-950 mb-2">Bags to buy</p>
+                    <ul className="space-y-1.5 text-xs text-amber-900">
+                      <li className="flex justify-between gap-3">
+                        <span>Topsoil ({TOPSOIL_BAG_LITRES}L bags)</span>
+                        <span className="font-black tabular-nums">
+                          {topdressingMaterials.topsoilBags}
+                        </span>
+                      </li>
+                      <li className="flex justify-between gap-3">
+                        <span>Sharp sand (25kg ≈ {SHARP_SAND_BAG_LITRES}L)</span>
+                        <span className="font-black tabular-nums">
+                          {topdressingMaterials.sandBags}
+                        </span>
+                      </li>
+                      <li className="flex justify-between gap-3">
+                        <span>Compost ({COMPOST_BAG_LITRES}L bags)</span>
+                        <span className="font-black tabular-nums">
+                          {topdressingMaterials.compostBags}
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+                </dl>
+
+                <p className="mt-3 text-[10px] text-amber-900/75 leading-relaxed italic">
+                  Depth × area: {TOPDRESS_DEPTH_MM}mm over {sqm} SQM = {sqm} × {TOPDRESS_DEPTH_MM}{' '}
+                  = {topdressingMaterials.totalLitres} litres total, split equally three ways (
+                  {topdressingMaterials.portionLitres.toLocaleString()} L each). Bag counts round
+                  up so you don&apos;t run short on site.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
         <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
           <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
@@ -1132,6 +1227,65 @@ export const DECKING_EDGE_WATERING_SUBTASK = (
     🚰 Secondary Task: 2-minute manual hose blast for the decking edges and blind spots.
   </p>
 );
+</file>
+
+<file path="src/data/masterclassManifest.json">
+{
+  "part-2": [
+    "/guides/masterclass/part-2/01.webp",
+    "/guides/masterclass/part-2/02.webp",
+    "/guides/masterclass/part-2/03.webp",
+    "/guides/masterclass/part-2/04.webp",
+    "/guides/masterclass/part-2/05.webp",
+    "/guides/masterclass/part-2/06.webp",
+    "/guides/masterclass/part-2/07.webp",
+    "/guides/masterclass/part-2/08.webp",
+    "/guides/masterclass/part-2/09.webp",
+    "/guides/masterclass/part-2/10.webp"
+  ],
+  "part-3": [
+    "/guides/masterclass/part-3/01.webp",
+    "/guides/masterclass/part-3/02.webp",
+    "/guides/masterclass/part-3/03.webp",
+    "/guides/masterclass/part-3/04.webp",
+    "/guides/masterclass/part-3/05.webp",
+    "/guides/masterclass/part-3/06.webp",
+    "/guides/masterclass/part-3/07.webp",
+    "/guides/masterclass/part-3/08.webp",
+    "/guides/masterclass/part-3/09.webp",
+    "/guides/masterclass/part-3/10.webp",
+    "/guides/masterclass/part-3/11.webp",
+    "/guides/masterclass/part-3/12.webp",
+    "/guides/masterclass/part-3/13.webp"
+  ],
+  "part-4": [
+    "/guides/masterclass/part-4/01.webp",
+    "/guides/masterclass/part-4/02.webp",
+    "/guides/masterclass/part-4/03.webp",
+    "/guides/masterclass/part-4/04.webp",
+    "/guides/masterclass/part-4/05.webp",
+    "/guides/masterclass/part-4/06.webp",
+    "/guides/masterclass/part-4/07.webp",
+    "/guides/masterclass/part-4/08.webp",
+    "/guides/masterclass/part-4/09.webp",
+    "/guides/masterclass/part-4/10.webp"
+  ],
+  "part-5": [
+    "/guides/masterclass/part-5/01.webp",
+    "/guides/masterclass/part-5/02.webp",
+    "/guides/masterclass/part-5/03.webp",
+    "/guides/masterclass/part-5/04.webp",
+    "/guides/masterclass/part-5/05.webp",
+    "/guides/masterclass/part-5/06.webp",
+    "/guides/masterclass/part-5/07.webp",
+    "/guides/masterclass/part-5/08.webp",
+    "/guides/masterclass/part-5/09.webp",
+    "/guides/masterclass/part-5/10.webp",
+    "/guides/masterclass/part-5/11.webp",
+    "/guides/masterclass/part-5/12.webp",
+    "/guides/masterclass/part-5/13.webp"
+  ]
+}
 </file>
 
 <file path="src/hooks/useMobileBackNavigation.js">
@@ -1963,6 +2117,102 @@ Open **⚙️ Show Setup** in the app to configure:
 Private project — all rights reserved.
 </file>
 
+<file path="src/index.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.lawn-focus-highlight {
+  outline: 3px solid #16a34a;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
+  transition: outline 0.25s ease, box-shadow 0.25s ease;
+}
+</file>
+
+<file path="src/main.jsx">
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { registerSW } from 'virtual:pwa-register';
+import App from './App.jsx';
+import './index.css';
+
+registerSW({ immediate: true });
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+</file>
+
+<file path="vercel.json">
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "functions": {
+    "api/sync-lawn.js": {
+      "maxDuration": 60
+    }
+  }
+}
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>The Lawn Pack Companion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+</file>
+
+<file path="src/App.jsx">
+import React from 'react';
+import LawnCareApp from './components/lawn/LawnCareApp';
+
+export default function App() {
+  return (
+    <div className="min-h-screen bg-gray-100 py-4 sm:py-8">
+      <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
+        <header className="text-center mb-6">
+          <h1 className="text-2xl font-black text-green-950 tracking-tight">
+            🌿 THE LAWN PACK COMPANION
+          </h1>
+          <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mt-1">
+            Data-Driven Multi-Season Task Tracker
+          </p>
+        </header>
+
+        <main>
+          <LawnCareApp />
+        </main>
+
+        <footer className="text-center text-[10px] text-gray-400 mt-6 font-semibold">
+          Lawn Pack Engine v2.0.0 • Verified Sequence Matrix
+        </footer>
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="src/components/lawn/GuideViewerModal.jsx">
 import React, { useEffect, useState } from 'react';
 import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
@@ -2180,102 +2430,6 @@ export default function GuideViewerModal({ guide, onClose }) {
         {guide.kind === 'gallery' && guide.images && (
           <GalleryViewer images={guide.images} title={guide.title} />
         )}
-      </div>
-    </div>
-  );
-}
-</file>
-
-<file path="src/index.css">
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-.lawn-focus-highlight {
-  outline: 3px solid #16a34a;
-  outline-offset: 4px;
-  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
-  transition: outline 0.25s ease, box-shadow 0.25s ease;
-}
-</file>
-
-<file path="src/main.jsx">
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import { registerSW } from 'virtual:pwa-register';
-import App from './App.jsx';
-import './index.css';
-
-registerSW({ immediate: true });
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
-</file>
-
-<file path="vercel.json">
-{
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
-  "functions": {
-    "api/sync-lawn.js": {
-      "maxDuration": 60
-    }
-  }
-}
-</file>
-
-<file path="index.html">
-<!doctype html>
-<html lang="en-GB">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#14532d" />
-    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>The Lawn Pack Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-</file>
-
-<file path="src/App.jsx">
-import React from 'react';
-import LawnCareApp from './components/lawn/LawnCareApp';
-
-export default function App() {
-  return (
-    <div className="min-h-screen bg-gray-100 py-4 sm:py-8">
-      <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
-        <header className="text-center mb-6">
-          <h1 className="text-2xl font-black text-green-950 tracking-tight">
-            🌿 THE LAWN PACK COMPANION
-          </h1>
-          <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mt-1">
-            Data-Driven Multi-Season Task Tracker
-          </p>
-        </header>
-
-        <main>
-          <LawnCareApp />
-        </main>
-
-        <footer className="text-center text-[10px] text-gray-400 mt-6 font-semibold">
-          Lawn Pack Engine v2.0.0 • Verified Sequence Matrix
-        </footer>
       </div>
     </div>
   );
@@ -2958,127 +3112,6 @@ export default function LawnCareApp() {
 }
 </file>
 
-<file path="src/components/lawn/LawnGuides.jsx">
-import React, { useEffect, useState } from 'react';
-import { LAWN_GUIDE_SECTIONS } from '../../data/lawnGuidesData';
-import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
-import { pushAppHistoryState } from '../../utils/backNavigation';
-import GuideViewerModal from './GuideViewerModal';
-import SprinklerLightbox from './SprinklerLightbox';
-
-/** @param {{ setActiveScreen: (screen: string) => void }} props */
-export default function LawnGuides({ setActiveScreen }) {
-  const [openGuide, setOpenGuide] = useState(
-    /** @type {{ file?: string, kind: 'pdf' | 'docx' | 'gallery', title: string, images?: string[] } | null} */ (null)
-  );
-  const [enlargedImage, setEnlargedImage] = useState(
-    /** @type {{ image: string, name: string } | null} */ (null)
-  );
-
-  useEffect(() => {
-    if (openGuide) pushAppHistoryState({ overlay: 'guide-viewer' });
-  }, [openGuide]);
-
-  useEffect(() => {
-    if (enlargedImage) pushAppHistoryState({ overlay: 'guide-image' });
-  }, [enlargedImage]);
-
-  useRegisterBackHandler(() => {
-    if (enlargedImage) { setEnlargedImage(null); return true; }
-    return false;
-  }, Boolean(enlargedImage));
-
-  return (
-    <>
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start mb-6 border-b pb-4">
-        <div className="min-w-0">
-          <h2 className="text-xl font-black text-green-800">📚 Lawn Pack Guides</h2>
-          <p className="text-sm text-green-700 mt-1">
-            Official literature for seasonal packs, masterclasses, and product guides.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setActiveScreen('main')}
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-3 rounded-lg transition-all shrink-0 self-start"
-        >
-          ← Back to Workflow
-        </button>
-      </div>
-
-      <div className="space-y-6">
-        {LAWN_GUIDE_SECTIONS.map((section) => (
-          <section key={section.title}>
-            <h3 className="text-sm font-black text-gray-800 mb-1">{section.title}</h3>
-            {section.description && (
-              <p className="text-xs text-gray-500 mb-3 leading-relaxed">{section.description}</p>
-            )}
-            <ul className="space-y-2">
-              {section.guides.map((guide) => (
-                <li
-                  key={guide.file ?? guide.title}
-                  className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-gray-900">{guide.title}</p>
-                    {guide.description && (
-                      <p className="text-xs text-gray-500 mt-0.5">{guide.description}</p>
-                    )}
-                  </div>
-
-                  {guide.kind === 'image' ? (
-                    <button
-                      type="button"
-                      onClick={() => setEnlargedImage({ image: guide.file, name: guide.title })}
-                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
-                    >
-                      View image
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setOpenGuide({
-                          file: guide.file,
-                          kind: guide.kind,
-                          title: guide.title,
-                          images: guide.images,
-                        })
-                      }
-                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
-                    >
-                      Read guide
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
-
-      <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
-        Guides open in a viewer inside the app. Use your phone&apos;s back button or ✕ to close.
-      </p>
-
-      {/* Inline guide viewer (PDF / DOCX) */}
-      <GuideViewerModal
-        guide={openGuide}
-        onClose={() => setOpenGuide(null)}
-      />
-
-      {/* Image lightbox */}
-      {enlargedImage && (
-        <SprinklerLightbox
-          enlargedSprinkler={enlargedImage}
-          onClose={() => setEnlargedImage(null)}
-        />
-      )}
-    </>
-  );
-}
-</file>
-
 <file path="src/utils/lawnDeepLink.js">
 /** Short keys used in ?focus= from the Tasks app */
 export const LAWN_FOCUS_ALIASES = {
@@ -3203,85 +3236,125 @@ export function applyLawnFocusFromUrl(options = {}) {
 }
 </file>
 
-<file path="vite.config.js">
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
+<file path="src/components/lawn/LawnGuides.jsx">
+import React, { useEffect, useState } from 'react';
+import { LAWN_GUIDE_SECTIONS } from '../../data/lawnGuidesData';
+import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
+import { pushAppHistoryState } from '../../utils/backNavigation';
+import GuideViewerModal from './GuideViewerModal';
+import SprinklerLightbox from './SprinklerLightbox';
 
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'The Lawn Pack Companion',
-        short_name: 'Lawn Pack',
-        description:
-          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
-        theme_color: '#14532d',
-        background_color: '#f3f4f6',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
-        lang: 'en-GB',
-        categories: ['lifestyle', 'utilities'],
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
-        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
-        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'open-meteo-forecast',
-              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
-            },
-          },
-          {
-            urlPattern: /\.(pdf|docx)$/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'lawn-pack-guides',
-              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-          {
-            urlPattern: /\/guides\/masterclass\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'lawn-masterclass-images',
-              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-        ],
-      },
-    }),
-  ],
-});
+/** @param {{ setActiveScreen: (screen: string) => void }} props */
+export default function LawnGuides({ setActiveScreen }) {
+  const [openGuide, setOpenGuide] = useState(
+    /** @type {{ file?: string, kind: 'pdf' | 'docx' | 'gallery', title: string, images?: string[] } | null} */ (null)
+  );
+  const [enlargedImage, setEnlargedImage] = useState(
+    /** @type {{ image: string, name: string } | null} */ (null)
+  );
+
+  useEffect(() => {
+    if (openGuide) pushAppHistoryState({ overlay: 'guide-viewer' });
+  }, [openGuide]);
+
+  useEffect(() => {
+    if (enlargedImage) pushAppHistoryState({ overlay: 'guide-image' });
+  }, [enlargedImage]);
+
+  useRegisterBackHandler(() => {
+    if (enlargedImage) { setEnlargedImage(null); return true; }
+    return false;
+  }, Boolean(enlargedImage));
+
+  return (
+    <>
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start mb-6 border-b pb-4">
+        <div className="min-w-0">
+          <h2 className="text-xl font-black text-green-800">📚 Lawn Pack Guides</h2>
+          <p className="text-sm text-green-700 mt-1">
+            Official literature for seasonal packs, masterclasses, and product guides.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveScreen('main')}
+          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-3 rounded-lg transition-all shrink-0 self-start"
+        >
+          ← Back to Workflow
+        </button>
+      </div>
+
+      <div className="space-y-6">
+        {LAWN_GUIDE_SECTIONS.map((section) => (
+          <section key={section.title}>
+            <h3 className="text-sm font-black text-gray-800 mb-1">{section.title}</h3>
+            {section.description && (
+              <p className="text-xs text-gray-500 mb-3 leading-relaxed">{section.description}</p>
+            )}
+            <ul className="space-y-2">
+              {section.guides.map((guide) => (
+                <li
+                  key={guide.file ?? guide.title}
+                  className="rounded-xl border border-gray-200 bg-gray-50 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-900">{guide.title}</p>
+                    {guide.description && (
+                      <p className="text-xs text-gray-500 mt-0.5">{guide.description}</p>
+                    )}
+                  </div>
+
+                  {guide.kind === 'image' ? (
+                    <button
+                      type="button"
+                      onClick={() => setEnlargedImage({ image: guide.file, name: guide.title })}
+                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
+                    >
+                      View image
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenGuide({
+                          file: guide.file,
+                          kind: guide.kind,
+                          title: guide.title,
+                          images: guide.images,
+                        })
+                      }
+                      className="text-xs font-bold bg-white border border-green-200 text-green-800 py-2 px-3 rounded-lg hover:bg-green-50 transition-all shrink-0 w-full sm:w-auto text-center"
+                    >
+                      Read guide
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      <p className="text-[10px] text-gray-400 mt-6 leading-relaxed">
+        Guides open in a viewer inside the app. Use your phone&apos;s back button or ✕ to close.
+      </p>
+
+      {/* Inline guide viewer (PDF / DOCX) */}
+      <GuideViewerModal
+        guide={openGuide}
+        onClose={() => setOpenGuide(null)}
+      />
+
+      {/* Image lightbox */}
+      {enlargedImage && (
+        <SprinklerLightbox
+          enlargedSprinkler={enlargedImage}
+          onClose={() => setEnlargedImage(null)}
+        />
+      )}
+    </>
+  );
+}
 </file>
 
 <file path="src/components/lawn/MaintenancePanel.jsx">
@@ -4162,115 +4235,6 @@ export default function MaintenancePanel({ app }) {
       )}
     </section>
   );
-}
-</file>
-
-<file path="src/data/lawnGuidesData.js">
-import masterclassManifest from './masterclassManifest.json';
-
-/**
- * Lawn Pack literature served from /public.
- * @typedef {'pdf' | 'docx' | 'image' | 'gallery'} GuideKind
- * @typedef {{ title: string, file?: string, kind: GuideKind, description?: string, images?: string[] }} LawnGuide
- * @typedef {{ title: string, description?: string, guides: LawnGuide[] }} GuideSection
- */
-
-/** @type {GuideSection[]} */
-export const LAWN_GUIDE_SECTIONS = [
-  {
-    title: 'Seasonal pack guides',
-    description: 'Application guides for each seasonal delivery.',
-    guides: [
-      {
-        title: 'Spring Pack',
-        file: '/The Spring Pack.docx',
-        kind: 'docx',
-        description: 'March – May · Greener Growth + Biostimulant',
-      },
-      {
-        title: 'Summer Pack',
-        file: '/The Summer Pack.docx',
-        kind: 'docx',
-        description: 'June – August · Summer Thriver + Biostimulant',
-      },
-      {
-        title: 'Autumn Pack',
-        file: '/The Autumn Pack.docx',
-        kind: 'docx',
-        description: 'September – November · Autumn Preparation + Biostimulant',
-      },
-      {
-        title: 'Winter Pack',
-        file: '/The Winter Pack.docx',
-        kind: 'docx',
-        description: 'December – February · Winter Protection + Iron + Biostimulant',
-      },
-    ],
-  },
-  {
-    title: 'Masterclass series',
-    description:
-      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
-    guides: [
-      {
-        title: 'Part 2: Scarification & Aeration',
-        kind: 'gallery',
-        images: masterclassManifest['part-2'],
-      },
-      {
-        title: 'Part 3: Soil, Feed & Seed',
-        kind: 'gallery',
-        images: masterclassManifest['part-3'],
-      },
-      {
-        title: 'Part 4: Aftercare',
-        kind: 'gallery',
-        images: masterclassManifest['part-4'],
-      },
-      {
-        title: 'Part 5: Ongoing Care',
-        kind: 'gallery',
-        images: masterclassManifest['part-5'],
-      },
-    ],
-  },
-  {
-    title: 'Individual guides',
-    description: 'Product-specific and year-round maintenance references.',
-    guides: [
-      {
-        title: 'Iron Sulphate Guide',
-        file: '/Iron Sulphate Guide.docx',
-        kind: 'docx',
-        description: 'Dosing, dilution, and repeat intervals',
-      },
-      {
-        title: 'Starting your lawn from scratch',
-        file: '/Starting your lawn from scratch guide.docx',
-        kind: 'docx',
-      },
-      {
-        title: 'Maintain your lawn',
-        file: '/Lawn Pack, Maintain your lawn Guide.pdf',
-        kind: 'pdf',
-        description: 'Year-round care and subscription overview',
-      },
-    ],
-  },
-];
-
-/** @param {LawnGuide} guide */
-export function guideActionLabel(guide) {
-  switch (guide.kind) {
-    case 'pdf':
-    case 'docx':
-    case 'gallery':
-      return 'Read guide';
-    case 'image':
-      return 'View image';
-    default:
-      return 'Open';
-  }
 }
 </file>
 
@@ -5164,7 +5128,7 @@ export function buildOpenMeteoForecastUrl(latitude, longitude) {
     latitude: String(latitude),
     longitude: String(longitude),
     daily: 'precipitation_sum',
-    hourly: 'soil_temperature_6cm',
+    hourly: 'soil_temperature_6cm,precipitation',
     timezone: 'Europe/London',
     past_days: String(PAST_RAIN_DAYS),
     forecast_days: String(FORECAST_RAIN_DAYS),
@@ -5174,6 +5138,8 @@ export function buildOpenMeteoForecastUrl(latitude, longitude) {
 
 export const SOAK_DEPTH_MM = 10;
 export const RAIN_THRESHOLD_MM = 5;
+/** Light surface misting target during seed establishment (~2.5mm). */
+export const SEED_MIST_TARGET_MM = 2.5;
 /** Rain in the next few days drives forward-looking adjustments. */
 export const NEAR_TERM_RAIN_DAYS = 3;
 /** Observed rain history from Open-Meteo. */
@@ -5193,6 +5159,9 @@ export const RECENT_RAIN_WET_SOIL_MM = 5;
  * @property {boolean} isRainForecasted
  * @property {boolean} isNatureProvidingFullSoak
  * @property {boolean} soilRecentlyWet
+ * @property {number} [recentPastRainBeforeToday]
+ * @property {number} [todayRainMm]
+ * @property {Array<{ date: string, mm: number }>} [dailyForecastByDate]
  * @property {number} netWaterNeeded
  * @property {string} fetchedAt
  * @property {'open-meteo'} source
@@ -5229,6 +5198,27 @@ export function splitPrecipitationSeries(
   return {
     past: precipitationTotals.slice(0, pastDays),
     forecast: precipitationTotals.slice(pastDays, pastDays + forecastDays),
+  };
+}
+
+/**
+ * Rain credit for pausing watering *today* — past soak + today's rain only.
+ * Tomorrow's forecast does not cancel today's watering.
+ * @param {number} recentPastRainBeforeToday
+ * @param {number} todayRainMm
+ */
+export function computeTodayWateringRainContext(recentPastRainBeforeToday, todayRainMm) {
+  const recentTotal = recentPastRainBeforeToday + todayRainMm;
+  const rainCreditMm = Math.min(SOAK_DEPTH_MM, recentTotal);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
+  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
+  const soilRecentlyWet = recentTotal >= RECENT_RAIN_WET_SOIL_MM;
+
+  return {
+    rainCreditMm,
+    netWaterNeeded,
+    isNatureProvidingFullSoak,
+    soilRecentlyWet,
   };
 }
 
@@ -5275,6 +5265,171 @@ export function getEffectiveRecentPastRain(weather) {
 }
 
 /**
+ * Sum observed hourly precipitation from midnight today up to the current hour.
+ * @param {{ hourly?: { precipitation?: Array<number | null>, time?: Array<string> } }} data
+ */
+export function getTodayPrecipitationSoFar(data) {
+  const hourlyPrecip = data.hourly?.precipitation;
+  const hourlyTimes = data.hourly?.time;
+  if (!Array.isArray(hourlyPrecip) || !Array.isArray(hourlyTimes) || hourlyPrecip.length === 0) {
+    return 0;
+  }
+
+  const start = PAST_RAIN_DAYS * 24;
+  const now = Date.now();
+  let sum = 0;
+
+  for (let i = start; i < Math.min(start + 24, hourlyPrecip.length); i++) {
+    const hourMs = new Date(hourlyTimes[i]).getTime();
+    if (Number.isNaN(hourMs) || hourMs > now) break;
+    sum += hourlyPrecip[i] ?? 0;
+  }
+
+  return sum;
+}
+
+/**
+ * Daily precipitation from today through the forecast window.
+ * @param {{ daily?: { time?: Array<string>, precipitation_sum?: Array<number | null> } }} data
+ * @returns {Array<{ date: string, mm: number }>}
+ */
+export function buildDailyForecastSeries(data) {
+  const times = data?.daily?.time;
+  const precip = data?.daily?.precipitation_sum;
+  if (!Array.isArray(times) || !Array.isArray(precip)) return [];
+
+  const { forecast } = splitPrecipitationSeries(precip);
+  return times.slice(PAST_RAIN_DAYS, PAST_RAIN_DAYS + FORECAST_RAIN_DAYS).map((date, index) => ({
+    date,
+    mm: forecast[index] ?? 0,
+  }));
+}
+
+/**
+ * Seed establishment: skip light misting only when rain on the due date itself
+ * meets the surface moisture target. Past days do not carry forward — each day
+ * is judged independently because the seed bed surface dries quickly.
+ * @param {string} dueDateIso
+ * @param {string} todayStr
+ * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
+ * @param {number} todayRainMm
+ */
+export function getSeedMistingRainSkipForDueDate(
+  dueDateIso,
+  todayStr,
+  dailyForecastByDate,
+  todayRainMm
+) {
+  const daysUntilDue = Math.floor(
+    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  const rainMm =
+    daysUntilDue === 0
+      ? todayRainMm
+      : (dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0);
+
+  if (rainMm >= SEED_MIST_TARGET_MM) {
+    const dayLabel =
+      daysUntilDue === 0
+        ? 'Rain keeping seed bed moist – skip misting today'
+        : `${rainMm.toFixed(1)}mm rain forecast – skip misting`;
+    return { skip: true, reason: dayLabel, fullSoak: false };
+  }
+
+  return { skip: false, reason: null, fullSoak: false };
+}
+
+/**
+ * Should watering be skipped on a specific due date?
+ * Normal maintenance: deep soak thresholds; past rain can pause for several days.
+ * Seed establishment: surface misting thresholds; only rain on the due date counts.
+ * @param {string} dueDateIso
+ * @param {string} todayStr
+ * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
+ * @param {number} recentPastRainBeforeToday
+ * @param {number} todayRainMm
+ * @param {{ seedEstablishmentActive?: boolean }} [options]
+ */
+export function getWateringRainSkipForDueDate(
+  dueDateIso,
+  todayStr,
+  dailyForecastByDate,
+  recentPastRainBeforeToday,
+  todayRainMm,
+  { seedEstablishmentActive = false } = {}
+) {
+  if (seedEstablishmentActive) {
+    return getSeedMistingRainSkipForDueDate(
+      dueDateIso,
+      todayStr,
+      dailyForecastByDate,
+      todayRainMm
+    );
+  }
+
+  const daysUntilDue = Math.floor(
+    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  if (daysUntilDue === 0) {
+    const todayContext = computeTodayWateringRainContext(
+      recentPastRainBeforeToday,
+      todayRainMm
+    );
+
+    if (todayContext.isNatureProvidingFullSoak) {
+      return {
+        skip: true,
+        reason: 'Heavy rain – nature providing full soak',
+        fullSoak: true,
+      };
+    }
+
+    if (todayContext.soilRecentlyWet) {
+      return {
+        skip: true,
+        reason: 'Recent rain – soil still damp, skip watering',
+        fullSoak: false,
+      };
+    }
+
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  const forecastEntry = dailyForecastByDate.find((entry) => entry.date === dueDateIso);
+  const forecastMm = forecastEntry?.mm ?? 0;
+
+  if (forecastMm >= SOAK_DEPTH_MM) {
+    return {
+      skip: true,
+      reason: `${forecastMm.toFixed(0)}mm rain forecast – skip watering`,
+      fullSoak: true,
+    };
+  }
+
+  if (forecastMm >= RECENT_RAIN_WET_SOIL_MM) {
+    return {
+      skip: true,
+      reason: `${forecastMm.toFixed(1)}mm rain forecast – soil will be damp`,
+      fullSoak: false,
+    };
+  }
+
+  return { skip: false, reason: null, fullSoak: false };
+}
+
+/**
  * Hourly data starts PAST_RAIN_DAYS ago, so today's 24 hours begin at index PAST_RAIN_DAYS * 24.
  * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
  */
@@ -5311,28 +5466,44 @@ export function getTodayMinSoilTemp(data) {
 export function buildWeatherSnapshotFromOpenMeteo(data) {
   const precipitationTotals = data?.daily?.precipitation_sum;
   const { past, forecast } = splitPrecipitationSeries(precipitationTotals);
-  const recentPastRainSum = sumPrecipitation(
+  const recentPastRainBeforeToday = sumPrecipitation(
     past.slice(-RECENT_PAST_RAIN_DAYS),
     RECENT_PAST_RAIN_DAYS
   );
-  const forecastedRainSumNearTerm = sumPrecipitation(forecast, NEAR_TERM_RAIN_DAYS);
+  const todayRainObservedMm = getTodayPrecipitationSoFar(data);
+  const todayFromDailyForecast = forecast[0] ?? 0;
+  const todayRainMm = Math.max(todayRainObservedMm, todayFromDailyForecast);
+  const effectiveRecentPastRain = recentPastRainBeforeToday + todayRainMm;
+  const forecastNearTermBeyondToday = sumPrecipitation(
+    forecast.slice(1),
+    Math.max(0, NEAR_TERM_RAIN_DAYS - 1)
+  );
+  const forecastedRainSumNearTerm = todayRainMm + forecastNearTermBeyondToday;
   const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
+  const dailyForecastByDate = buildDailyForecastSeries(data);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
-  const watering = computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm);
+  const todayWatering = computeTodayWateringRainContext(
+    recentPastRainBeforeToday,
+    todayRainMm
+  );
 
   return {
     forecastedRainSum,
     forecastedRainSumNearTerm,
-    recentPastRainSum,
-    rainCreditMm: watering.rainCreditMm,
+    recentPastRainSum: effectiveRecentPastRain,
+    recentPastRainBeforeToday,
+    todayRainMm,
+    dailyForecastByDate,
+    rainCreditMm: todayWatering.rainCreditMm,
     currentSoilTemp,
     currentSoilTempMin,
     isRainForecasted:
-      forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM || recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM,
-    isNatureProvidingFullSoak: watering.isNatureProvidingFullSoak,
-    soilRecentlyWet: watering.soilRecentlyWet,
-    netWaterNeeded: watering.netWaterNeeded,
+      forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM ||
+      effectiveRecentPastRain >= RECENT_RAIN_WET_SOIL_MM,
+    isNatureProvidingFullSoak: todayWatering.isNatureProvidingFullSoak,
+    soilRecentlyWet: todayWatering.soilRecentlyWet,
+    netWaterNeeded: todayWatering.netWaterNeeded,
     fetchedAt: new Date().toISOString(),
     source: 'open-meteo',
   };
@@ -5427,6 +5598,196 @@ export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
   if (!fetchedAt) return false;
   const ageMs = Date.now() - new Date(fetchedAt).getTime();
   return ageMs >= 0 && ageMs < maxAgeHours * 60 * 60 * 1000;
+}
+</file>
+
+<file path="vite.config.js">
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'The Lawn Pack Companion',
+        short_name: 'Lawn Pack',
+        description:
+          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
+        theme_color: '#14532d',
+        background_color: '#f3f4f6',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
+        lang: 'en-GB',
+        categories: ['lifestyle', 'utilities'],
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
+        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
+        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'open-meteo-forecast',
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
+            },
+          },
+          {
+            urlPattern: /\.(pdf|docx)$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'lawn-pack-guides',
+              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+          {
+            urlPattern: /\/guides\/masterclass\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'lawn-masterclass-images',
+              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+        ],
+      },
+    }),
+  ],
+});
+</file>
+
+<file path="src/data/lawnGuidesData.js">
+import masterclassManifest from './masterclassManifest.json';
+
+/**
+ * Lawn Pack literature served from /public.
+ * @typedef {'pdf' | 'docx' | 'image' | 'gallery'} GuideKind
+ * @typedef {{ title: string, file?: string, kind: GuideKind, description?: string, images?: string[] }} LawnGuide
+ * @typedef {{ title: string, description?: string, guides: LawnGuide[] }} GuideSection
+ */
+
+/** @type {GuideSection[]} */
+export const LAWN_GUIDE_SECTIONS = [
+  {
+    title: 'Seasonal pack guides',
+    description: 'Application guides for each seasonal delivery.',
+    guides: [
+      {
+        title: 'Spring Pack',
+        file: '/The Spring Pack.docx',
+        kind: 'docx',
+        description: 'March – May · Greener Growth + Biostimulant',
+      },
+      {
+        title: 'Summer Pack',
+        file: '/The Summer Pack.docx',
+        kind: 'docx',
+        description: 'June – August · Summer Thriver + Biostimulant',
+      },
+      {
+        title: 'Autumn Pack',
+        file: '/The Autumn Pack.docx',
+        kind: 'docx',
+        description: 'September – November · Autumn Preparation + Biostimulant',
+      },
+      {
+        title: 'Winter Pack',
+        file: '/The Winter Pack.docx',
+        kind: 'docx',
+        description: 'December – February · Winter Protection + Iron + Biostimulant',
+      },
+    ],
+  },
+  {
+    title: 'Masterclass series',
+    description:
+      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
+    guides: [
+      {
+        title: 'Part 2: Scarification & Aeration',
+        kind: 'gallery',
+        images: masterclassManifest['part-2'],
+      },
+      {
+        title: 'Part 3: Soil, Feed & Seed',
+        kind: 'gallery',
+        images: masterclassManifest['part-3'],
+      },
+      {
+        title: 'Part 4: Aftercare',
+        kind: 'gallery',
+        images: masterclassManifest['part-4'],
+      },
+      {
+        title: 'Part 5: Ongoing Care',
+        kind: 'gallery',
+        images: masterclassManifest['part-5'],
+      },
+    ],
+  },
+  {
+    title: 'Individual guides',
+    description: 'Product-specific and year-round maintenance references.',
+    guides: [
+      {
+        title: 'Iron Sulphate Guide',
+        file: '/Iron Sulphate Guide.docx',
+        kind: 'docx',
+        description: 'Dosing, dilution, and repeat intervals',
+      },
+      {
+        title: 'Starting your lawn from scratch',
+        file: '/Starting your lawn from scratch guide.docx',
+        kind: 'docx',
+      },
+      {
+        title: 'Maintain your lawn',
+        file: '/Lawn Pack, Maintain your lawn Guide.pdf',
+        kind: 'pdf',
+        description: 'Year-round care and subscription overview',
+      },
+    ],
+  },
+];
+
+/** @param {LawnGuide} guide */
+export function guideActionLabel(guide) {
+  switch (guide.kind) {
+    case 'pdf':
+    case 'docx':
+    case 'gallery':
+      return 'Read guide';
+    case 'image':
+      return 'View image';
+    default:
+      return 'Open';
+  }
 }
 </file>
 
@@ -5592,6 +5953,12 @@ export async function runLawnCloudSync() {
   const recentPastRainSum = getEffectiveRecentPastRain(weather);
   const currentSoilTemp = weather.currentSoilTemp;
   const isNatureProvidingFullSoak = weather.isNatureProvidingFullSoak;
+  const soilRecentlyWet = weather.soilRecentlyWet ?? false;
+  const dailyForecastByDate = weather.dailyForecastByDate ?? [];
+  const recentPastRainBeforeToday =
+    weather.recentPastRainBeforeToday ??
+    Math.max(0, recentPastRainSum - (weather.todayRainMm ?? 0));
+  const todayRainMm = weather.todayRainMm ?? 0;
 
   const pendingDates =
     scheduleSnapshot.pendingDates ??
@@ -5604,6 +5971,7 @@ export async function runLawnCloudSync() {
     recentPastRainSum,
     currentSoilTemp,
     isNatureProvidingFullSoak,
+    soilRecentlyWetToday: soilRecentlyWet,
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate,
@@ -5626,6 +5994,10 @@ export async function runLawnCloudSync() {
     pendingDates,
     isDormantSeason: maintenance.isDormantSeason,
     isNatureProvidingFullSoak: maintenance.isNatureProvidingFullSoak,
+    soilRecentlyWet,
+    dailyForecastByDate,
+    recentPastRainBeforeToday,
+    todayRainMm,
     seedEstablishmentActive: maintenance.seedEstablishmentActive,
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,
@@ -5943,7 +6315,8 @@ export function getScheduleReason(input) {
  * @param {number} input.forecastedRainSumNearTerm
  * @param {number} [input.recentPastRainSum]
  * @param {number | null} input.currentSoilTemp
- * @param {boolean} input.isNatureProvidingFullSoak
+ * @param {boolean} input.isNatureProvidingFullSoak - today-only full soak (not future forecast)
+ * @param {boolean} [input.soilRecentlyWetToday]
  * @param {string | null} input.lastMowedDate
  * @param {string | null} input.lastWateredDate
  * @param {string | null} input.lastVerticutDate
@@ -5956,6 +6329,7 @@ export function buildMaintenanceSchedule(input) {
     recentPastRainSum = 0,
     currentSoilTemp,
     isNatureProvidingFullSoak,
+    soilRecentlyWetToday = null,
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate,
@@ -5999,9 +6373,14 @@ export function buildMaintenanceSchedule(input) {
   // If rain has recently soaked the soil, treat today as the effective watering date so
   // the next-due calculation counts forward from now rather than from the last manual water.
   // Without this, when rain clears the task immediately reappears overdue.
-  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
+  const soilRecentlyWet =
+    typeof soilRecentlyWetToday === 'boolean'
+      ? soilRecentlyWetToday
+      : recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
   const effectiveLastWateredDate =
-    (!seedEstablishmentActive && (isNatureProvidingFullSoak || soilRecentlyWet)) ? todayStr : lastWateredDate;
+    !seedEstablishmentActive && (isNatureProvidingFullSoak || soilRecentlyWet)
+      ? todayStr
+      : lastWateredDate;
   const wateringNextDueIso = effectiveLastWateredDate
     ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays)
     : null;
@@ -6120,9 +6499,11 @@ import {
 import {
   fetchLawnWeatherFromOpenMeteo,
   fetchLawnWeatherSnapshotFromSupabase,
+  computeTodayWateringRainContext,
   computeWateringRainContext,
   getEffectiveNearTermRain,
   getEffectiveRecentPastRain,
+  getWateringRainSkipForDueDate,
   isWeatherSnapshotFresh,
   saveLawnWeatherSnapshot,
 } from '../services/lawnWeather';
@@ -6254,6 +6635,11 @@ export function useLawnCareApp() {
   const [netWaterNeeded, setNetWaterNeeded] = useState(0);
   const [isNatureProvidingFullSoak, setIsNatureProvidingFullSoak] = useState(false);
   const [soilRecentlyWet, setSoilRecentlyWet] = useState(false);
+  const [dailyForecastByDate, setDailyForecastByDate] = useState(
+    /** @type {Array<{ date: string, mm: number }>} */ ([])
+  );
+  const [recentPastRainBeforeToday, setRecentPastRainBeforeToday] = useState(0);
+  const [todayRainMm, setTodayRainMm] = useState(0);
   const [currentSoilTemp, setCurrentSoilTemp] = useState(
     /** @type {number | null} */ (null)
   );
@@ -6368,6 +6754,7 @@ export function useLawnCareApp() {
     recentPastRainSum,
     currentSoilTemp,
     isNatureProvidingFullSoak,
+    soilRecentlyWetToday: soilRecentlyWet,
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate,
@@ -6419,6 +6806,15 @@ export function useLawnCareApp() {
       'Height: Setting 3 (45mm) - Standard safe maintenance cut to prevent scalping';
   }
 
+  const todayRainSkip = getWateringRainSkipForDueDate(
+    todayStr,
+    todayStr,
+    dailyForecastByDate,
+    recentPastRainBeforeToday,
+    todayRainMm,
+    { seedEstablishmentActive }
+  );
+
   const maintenanceDueDates = {
     mowingNextDue: mowingNextDueIso,
     mowingLockedUntil: mowingLockedUntilIso,
@@ -6440,7 +6836,7 @@ export function useLawnCareApp() {
     mowingStatus: isDormantSeason ? 'dormant' : seedEstablishmentActive ? 'locked' : 'active',
     wateringStatus: isDormantSeason
       ? 'dormant'
-      : (!seedEstablishmentActive && isNatureProvidingFullSoak)
+      : todayRainSkip.skip
         ? 'paused'
         : 'active',
     verticutNextDue: verticutNextDueIso,
@@ -6461,8 +6857,10 @@ export function useLawnCareApp() {
     (daysSinceMow === null || daysSinceMow >= dynamicMowingDays);
   const wateringDue =
     !isDormantSeason &&
-    (seedEstablishmentActive || (!isNatureProvidingFullSoak && !soilRecentlyWet)) &&
-    (daysSinceWater === null || daysSinceWater >= dynamicWateringDays);
+    !todayRainSkip.skip &&
+    (seedEstablishmentActive ||
+      daysSinceWater === null ||
+      daysSinceWater >= dynamicWateringDays);
   const verticutDue =
     isVerticutSeason &&
     !renovationHoldActive &&
@@ -6507,6 +6905,13 @@ export function useLawnCareApp() {
         overrides.currentSoilTemp !== undefined ? overrides.currentSoilTemp : currentSoilTemp;
       const nextFullSoak =
         overrides.isNatureProvidingFullSoak ?? isNatureProvidingFullSoak;
+      const nextSoilRecentlyWet =
+        overrides.soilRecentlyWet ?? soilRecentlyWet;
+      const nextDailyForecast =
+        overrides.dailyForecastByDate ?? dailyForecastByDate;
+      const nextPastBeforeToday =
+        overrides.recentPastRainBeforeToday ?? recentPastRainBeforeToday;
+      const nextTodayRain = overrides.todayRainMm ?? todayRainMm;
 
       const maintenance = buildMaintenanceSchedule({
         todayStr,
@@ -6515,6 +6920,7 @@ export function useLawnCareApp() {
         recentPastRainSum: nextPastRain,
         currentSoilTemp: nextSoilTemp,
         isNatureProvidingFullSoak: nextFullSoak,
+        soilRecentlyWetToday: nextSoilRecentlyWet,
         lastMowedDate: nextLastMowedDate,
         lastWateredDate: nextLastWateredDate,
         lastVerticutDate: nextLastVerticutDate,
@@ -6526,6 +6932,10 @@ export function useLawnCareApp() {
         pendingDates,
         isDormantSeason: maintenance.isDormantSeason,
         isNatureProvidingFullSoak: maintenance.isNatureProvidingFullSoak,
+        soilRecentlyWet: nextSoilRecentlyWet,
+        dailyForecastByDate: nextDailyForecast,
+        recentPastRainBeforeToday: nextPastBeforeToday,
+        todayRainMm: nextTodayRain,
         seedEstablishmentActive: maintenance.seedEstablishmentActive,
         mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
         mowingNextDueIso: maintenance.mowingNextDueIso,
@@ -6554,6 +6964,10 @@ export function useLawnCareApp() {
       recentPastRainSum,
       currentSoilTemp,
       isNatureProvidingFullSoak,
+      soilRecentlyWet,
+      dailyForecastByDate,
+      recentPastRainBeforeToday,
+      todayRainMm,
       scheduleReason,
     ]
   );
@@ -6624,8 +7038,13 @@ export function useLawnCareApp() {
             forecastedRainSum,
             forecastedRainSumNearTerm,
             recentPastRainSum,
-            rainCreditMm: computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm)
-              .rainCreditMm,
+            recentPastRainBeforeToday,
+            todayRainMm,
+            dailyForecastByDate,
+            rainCreditMm: computeTodayWateringRainContext(
+              recentPastRainBeforeToday,
+              todayRainMm
+            ).rainCreditMm,
             currentSoilTemp: currentSoilTemp ?? null,
             currentSoilTempMin: currentSoilTempMin ?? null,
             isRainForecasted,
@@ -6797,19 +7216,27 @@ export function useLawnCareApp() {
   const applyWeatherSnapshot = useCallback((snapshot) => {
     const nearTerm = getEffectiveNearTermRain(snapshot);
     const pastRain = getEffectiveRecentPastRain(snapshot);
+    const pastBeforeToday =
+      snapshot.recentPastRainBeforeToday ??
+      Math.max(0, pastRain - (snapshot.todayRainMm ?? 0));
+    const todayRain = snapshot.todayRainMm ?? 0;
+    const forecastSeries = snapshot.dailyForecastByDate ?? [];
     const watering =
       typeof snapshot.netWaterNeeded === 'number' &&
       typeof snapshot.isNatureProvidingFullSoak === 'boolean'
         ? {
             netWaterNeeded: snapshot.netWaterNeeded,
             isNatureProvidingFullSoak: snapshot.isNatureProvidingFullSoak,
-            soilRecentlyWet: snapshot.soilRecentlyWet ?? pastRain >= 5,
+            soilRecentlyWet: snapshot.soilRecentlyWet ?? pastBeforeToday + todayRain >= 5,
           }
-        : computeWateringRainContext(pastRain, nearTerm);
+        : computeTodayWateringRainContext(pastBeforeToday, todayRain);
 
     setForecastedRainSum(snapshot.forecastedRainSum);
     setForecastedRainSumNearTerm(nearTerm);
     setRecentPastRainSum(pastRain);
+    setDailyForecastByDate(forecastSeries);
+    setRecentPastRainBeforeToday(pastBeforeToday);
+    setTodayRainMm(todayRain);
     setNetWaterNeeded(watering.netWaterNeeded);
     setIsNatureProvidingFullSoak(watering.isNatureProvidingFullSoak);
     setSoilRecentlyWet(watering.soilRecentlyWet);
@@ -6837,16 +7264,17 @@ export function useLawnCareApp() {
 
           try {
             const snapshot = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
-            const nearTerm = getEffectiveNearTermRain(snapshot);
-            const pastRain = getEffectiveRecentPastRain(snapshot);
-            const watering = computeWateringRainContext(pastRain, nearTerm);
-            weatherOverrides = {
-              forecastedRainSumNearTerm: nearTerm,
-              recentPastRainSum: pastRain,
-              currentSoilTemp: snapshot.currentSoilTemp,
-              isNatureProvidingFullSoak: watering.isNatureProvidingFullSoak,
-            };
             applyWeatherSnapshot(snapshot);
+            weatherOverrides = {
+              forecastedRainSumNearTerm: snapshot.forecastedRainSumNearTerm,
+              recentPastRainSum: snapshot.recentPastRainSum,
+              currentSoilTemp: snapshot.currentSoilTemp,
+              isNatureProvidingFullSoak: snapshot.isNatureProvidingFullSoak,
+              soilRecentlyWet: snapshot.soilRecentlyWet,
+              dailyForecastByDate: snapshot.dailyForecastByDate ?? [],
+              recentPastRainBeforeToday: snapshot.recentPastRainBeforeToday ?? 0,
+              todayRainMm: snapshot.todayRainMm ?? 0,
+            };
             try {
               await saveLawnWeatherSnapshot(snapshot);
             } catch (saveError) {
@@ -7669,6 +8097,7 @@ import {
   VERTICUT_BLADE_HEIGHT_RULE,
   VERTICUT_MOW_PAIRING_NOTE,
 } from '../services/lawnScheduleEngine';
+import { getWateringRainSkipForDueDate, SEED_MIST_TARGET_MM } from '../services/lawnWeather';
 import { VERTICUT_TASK_NAME } from '../services/lawnMaintenanceSync';
 
 const GYPSUM_CYCLE_DAYS = 182;
@@ -7717,11 +8146,45 @@ function daysBetween(from, to) {
   return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+/** @param {string} dueDateIso @param {string} reason */
+function pushRainSkippedWaterTasks(compiledTasks, seedEstablishmentActive, dueDateIso, reason) {
+  if (seedEstablishmentActive) {
+    for (const session of [
+      { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
+      { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
+      { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
+    ]) {
+      compiledTasks.push({
+        id: session.id,
+        title: session.title,
+        dueDate: dueDateIso,
+        status: 'completed',
+        module: 'lawn',
+        reason,
+      });
+    }
+    return;
+  }
+
+  compiledTasks.push({
+    id: 'lawn-water',
+    title: 'Water lawn',
+    dueDate: dueDateIso,
+    status: 'completed',
+    module: 'lawn',
+    reason,
+  });
+}
+
 /**
  * @param {Object} input
  * @param {string} input.todayStr
  * @param {boolean} input.isDormantSeason   - calendar-based (Dec–Feb): grass not growing
  * @param {boolean} input.isNatureProvidingFullSoak
+ * @param {boolean} [input.soilRecentlyWet]
+ * @param {Array<{ date: string, mm: number }>} [input.dailyForecastByDate]
+ * @param {number} [input.recentPastRainBeforeToday]
+ * @param {number} [input.todayRainMm]
  * @param {boolean} input.seedEstablishmentActive
  * @param {string | null} input.mowingLockedUntilIso
  * @param {string | null} input.mowingNextDueIso    - pre-computed from dynamic interval
@@ -7740,6 +8203,10 @@ export function compileLawnTasks({
   todayStr,
   isDormantSeason,
   isNatureProvidingFullSoak,
+  soilRecentlyWet = false,
+  dailyForecastByDate = [],
+  recentPastRainBeforeToday = 0,
+  todayRainMm = 0,
   seedEstablishmentActive,
   mowingLockedUntilIso,
   mowingNextDueIso,
@@ -7864,59 +8331,91 @@ export function compileLawnTasks({
     });
   }
 
-  if (isDormantSeason || (!seedEstablishmentActive && isNatureProvidingFullSoak)) {
+  if (isDormantSeason) {
     compiledTasks.push({
       id: 'lawn-water',
       title: 'Water lawn',
       dueDate: wateringNextDueIso ?? todayStr,
       status: 'completed',
       module: 'lawn',
-      reason: isDormantSeason
-        ? 'Winter dormancy – watering suspended'
-        : 'Heavy rain forecast – nature providing full soak',
-    });
-  } else if (seedEstablishmentActive) {
-    const waterDueDate = wateringNextDueIso ?? todayStr;
-    const waterStatus = taskStatusFromDue(waterDueDate);
-    const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
-    const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
-    const perSessionText = mistingMins > 0 ? `Run for ${mistingMins} minutes` : 'divide daily duration by 3';
-    const mistingReason = `${baseReason}Light surface misting · ${perSessionText}`;
-
-    compiledTasks.push({
-      id: 'lawn-water-morning',
-      title: 'Water lawn (Morning)',
-      dueDate: waterDueDate,
-      status: waterStatus,
-      module: 'lawn',
-      reason: mistingReason,
-    });
-    compiledTasks.push({
-      id: 'lawn-water-midday',
-      title: 'Water lawn (Midday)',
-      dueDate: waterDueDate,
-      status: waterStatus,
-      module: 'lawn',
-      reason: mistingReason,
-    });
-    compiledTasks.push({
-      id: 'lawn-water-evening',
-      title: 'Water lawn (Evening)',
-      dueDate: waterDueDate,
-      status: waterStatus,
-      module: 'lawn',
-      reason: mistingReason,
+      reason: 'Winter dormancy – watering suspended',
     });
   } else {
     const waterDueDate = wateringNextDueIso ?? todayStr;
-    compiledTasks.push({
-      id: 'lawn-water',
-      title: 'Water lawn',
-      dueDate: waterDueDate,
-      status: taskStatusFromDue(waterDueDate),
-      module: 'lawn',
-      reason: scheduleReason?.water ?? null,
-    });
+    const rainSkip =
+      dailyForecastByDate.length > 0
+        ? getWateringRainSkipForDueDate(
+            waterDueDate,
+            todayStr,
+            dailyForecastByDate,
+            recentPastRainBeforeToday,
+            todayRainMm,
+            { seedEstablishmentActive }
+          )
+        : {
+            skip: seedEstablishmentActive
+              ? todayRainMm >= SEED_MIST_TARGET_MM
+              : isNatureProvidingFullSoak || soilRecentlyWet,
+            reason: seedEstablishmentActive
+              ? todayRainMm >= SEED_MIST_TARGET_MM
+                ? 'Rain keeping seed bed moist – skip misting today'
+                : null
+              : isNatureProvidingFullSoak
+                ? 'Heavy rain – nature providing full soak'
+                : soilRecentlyWet
+                  ? 'Recent rain – soil still damp, skip watering'
+                  : null,
+          };
+
+    if (rainSkip.skip && rainSkip.reason) {
+      pushRainSkippedWaterTasks(
+        compiledTasks,
+        seedEstablishmentActive,
+        waterDueDate,
+        rainSkip.reason
+      );
+    } else if (seedEstablishmentActive) {
+      const waterStatus = taskStatusFromDue(waterDueDate);
+      const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
+      const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
+      const perSessionText =
+        mistingMins > 0 ? `Run for ${mistingMins} minutes` : 'divide daily duration by 3';
+      const mistingReason = `${baseReason}Light surface misting · ${perSessionText}`;
+
+      compiledTasks.push({
+        id: 'lawn-water-morning',
+        title: 'Water lawn (Morning)',
+        dueDate: waterDueDate,
+        status: waterStatus,
+        module: 'lawn',
+        reason: mistingReason,
+      });
+      compiledTasks.push({
+        id: 'lawn-water-midday',
+        title: 'Water lawn (Midday)',
+        dueDate: waterDueDate,
+        status: waterStatus,
+        module: 'lawn',
+        reason: mistingReason,
+      });
+      compiledTasks.push({
+        id: 'lawn-water-evening',
+        title: 'Water lawn (Evening)',
+        dueDate: waterDueDate,
+        status: waterStatus,
+        module: 'lawn',
+        reason: mistingReason,
+      });
+    } else {
+      compiledTasks.push({
+        id: 'lawn-water',
+        title: 'Water lawn',
+        dueDate: waterDueDate,
+        status: taskStatusFromDue(waterDueDate),
+        module: 'lawn',
+        reason: scheduleReason?.water ?? null,
+      });
+    }
   }
 
   const gypsum = getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr);
@@ -8005,6 +8504,10 @@ export function compileAllLawnTasks(input) {
     pendingDates,
     isDormantSeason,
     isNatureProvidingFullSoak,
+    soilRecentlyWet = false,
+    dailyForecastByDate = [],
+    recentPastRainBeforeToday = 0,
+    todayRainMm = 0,
     seedEstablishmentActive,
     mowingLockedUntilIso,
     mowingNextDueIso,
@@ -8027,6 +8530,10 @@ export function compileAllLawnTasks(input) {
       todayStr,
       isDormantSeason,
       isNatureProvidingFullSoak,
+      soilRecentlyWet,
+      dailyForecastByDate,
+      recentPastRainBeforeToday,
+      todayRainMm,
       seedEstablishmentActive,
       mowingLockedUntilIso,
       mowingNextDueIso,
@@ -31417,7 +31924,7 @@ function buildOpenMeteoForecastUrl(latitude, longitude) {
     latitude: String(latitude),
     longitude: String(longitude),
     daily: "precipitation_sum",
-    hourly: "soil_temperature_6cm",
+    hourly: "soil_temperature_6cm,precipitation",
     timezone: "Europe/London",
     past_days: String(PAST_RAIN_DAYS),
     forecast_days: String(FORECAST_RAIN_DAYS)
@@ -31426,6 +31933,7 @@ function buildOpenMeteoForecastUrl(latitude, longitude) {
 }
 var SOAK_DEPTH_MM = 10;
 var RAIN_THRESHOLD_MM = 5;
+var SEED_MIST_TARGET_MM = 2.5;
 var NEAR_TERM_RAIN_DAYS = 3;
 var PAST_RAIN_DAYS = 7;
 var RECENT_PAST_RAIN_DAYS = 3;
@@ -31444,6 +31952,19 @@ function splitPrecipitationSeries(precipitationTotals, pastDays = PAST_RAIN_DAYS
   return {
     past: precipitationTotals.slice(0, pastDays),
     forecast: precipitationTotals.slice(pastDays, pastDays + forecastDays)
+  };
+}
+function computeTodayWateringRainContext(recentPastRainBeforeToday, todayRainMm) {
+  const recentTotal = recentPastRainBeforeToday + todayRainMm;
+  const rainCreditMm = Math.min(SOAK_DEPTH_MM, recentTotal);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
+  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
+  const soilRecentlyWet = recentTotal >= RECENT_RAIN_WET_SOIL_MM;
+  return {
+    rainCreditMm,
+    netWaterNeeded,
+    isNatureProvidingFullSoak,
+    soilRecentlyWet
   };
 }
 function computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm) {
@@ -31474,6 +31995,100 @@ function getEffectiveRecentPastRain(weather) {
   }
   return 0;
 }
+function getTodayPrecipitationSoFar(data) {
+  const hourlyPrecip = data.hourly?.precipitation;
+  const hourlyTimes = data.hourly?.time;
+  if (!Array.isArray(hourlyPrecip) || !Array.isArray(hourlyTimes) || hourlyPrecip.length === 0) {
+    return 0;
+  }
+  const start = PAST_RAIN_DAYS * 24;
+  const now = Date.now();
+  let sum = 0;
+  for (let i = start; i < Math.min(start + 24, hourlyPrecip.length); i++) {
+    const hourMs = new Date(hourlyTimes[i]).getTime();
+    if (Number.isNaN(hourMs) || hourMs > now) break;
+    sum += hourlyPrecip[i] ?? 0;
+  }
+  return sum;
+}
+function buildDailyForecastSeries(data) {
+  const times = data?.daily?.time;
+  const precip = data?.daily?.precipitation_sum;
+  if (!Array.isArray(times) || !Array.isArray(precip)) return [];
+  const { forecast } = splitPrecipitationSeries(precip);
+  return times.slice(PAST_RAIN_DAYS, PAST_RAIN_DAYS + FORECAST_RAIN_DAYS).map((date, index) => ({
+    date,
+    mm: forecast[index] ?? 0
+  }));
+}
+function getSeedMistingRainSkipForDueDate(dueDateIso, todayStr, dailyForecastByDate, todayRainMm) {
+  const daysUntilDue = Math.floor(
+    ((/* @__PURE__ */ new Date(`${dueDateIso}T12:00:00`)).getTime() - (/* @__PURE__ */ new Date(`${todayStr}T12:00:00`)).getTime()) / (1e3 * 60 * 60 * 24)
+  );
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+  const rainMm = daysUntilDue === 0 ? todayRainMm : dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0;
+  if (rainMm >= SEED_MIST_TARGET_MM) {
+    const dayLabel = daysUntilDue === 0 ? "Rain keeping seed bed moist \u2013 skip misting today" : `${rainMm.toFixed(1)}mm rain forecast \u2013 skip misting`;
+    return { skip: true, reason: dayLabel, fullSoak: false };
+  }
+  return { skip: false, reason: null, fullSoak: false };
+}
+function getWateringRainSkipForDueDate(dueDateIso, todayStr, dailyForecastByDate, recentPastRainBeforeToday, todayRainMm, { seedEstablishmentActive = false } = {}) {
+  if (seedEstablishmentActive) {
+    return getSeedMistingRainSkipForDueDate(
+      dueDateIso,
+      todayStr,
+      dailyForecastByDate,
+      todayRainMm
+    );
+  }
+  const daysUntilDue = Math.floor(
+    ((/* @__PURE__ */ new Date(`${dueDateIso}T12:00:00`)).getTime() - (/* @__PURE__ */ new Date(`${todayStr}T12:00:00`)).getTime()) / (1e3 * 60 * 60 * 24)
+  );
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+  if (daysUntilDue === 0) {
+    const todayContext = computeTodayWateringRainContext(
+      recentPastRainBeforeToday,
+      todayRainMm
+    );
+    if (todayContext.isNatureProvidingFullSoak) {
+      return {
+        skip: true,
+        reason: "Heavy rain \u2013 nature providing full soak",
+        fullSoak: true
+      };
+    }
+    if (todayContext.soilRecentlyWet) {
+      return {
+        skip: true,
+        reason: "Recent rain \u2013 soil still damp, skip watering",
+        fullSoak: false
+      };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+  const forecastEntry = dailyForecastByDate.find((entry) => entry.date === dueDateIso);
+  const forecastMm = forecastEntry?.mm ?? 0;
+  if (forecastMm >= SOAK_DEPTH_MM) {
+    return {
+      skip: true,
+      reason: `${forecastMm.toFixed(0)}mm rain forecast \u2013 skip watering`,
+      fullSoak: true
+    };
+  }
+  if (forecastMm >= RECENT_RAIN_WET_SOIL_MM) {
+    return {
+      skip: true,
+      reason: `${forecastMm.toFixed(1)}mm rain forecast \u2013 soil will be damp`,
+      fullSoak: false
+    };
+  }
+  return { skip: false, reason: null, fullSoak: false };
+}
 function getTodayMaxSoilTemp(data) {
   const hourlyTemps = data.hourly?.soil_temperature_6cm;
   if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
@@ -31503,26 +32118,41 @@ function getTodayMinSoilTemp(data) {
 function buildWeatherSnapshotFromOpenMeteo(data) {
   const precipitationTotals = data?.daily?.precipitation_sum;
   const { past, forecast } = splitPrecipitationSeries(precipitationTotals);
-  const recentPastRainSum = sumPrecipitation(
+  const recentPastRainBeforeToday = sumPrecipitation(
     past.slice(-RECENT_PAST_RAIN_DAYS),
     RECENT_PAST_RAIN_DAYS
   );
-  const forecastedRainSumNearTerm = sumPrecipitation(forecast, NEAR_TERM_RAIN_DAYS);
+  const todayRainObservedMm = getTodayPrecipitationSoFar(data);
+  const todayFromDailyForecast = forecast[0] ?? 0;
+  const todayRainMm = Math.max(todayRainObservedMm, todayFromDailyForecast);
+  const effectiveRecentPastRain = recentPastRainBeforeToday + todayRainMm;
+  const forecastNearTermBeyondToday = sumPrecipitation(
+    forecast.slice(1),
+    Math.max(0, NEAR_TERM_RAIN_DAYS - 1)
+  );
+  const forecastedRainSumNearTerm = todayRainMm + forecastNearTermBeyondToday;
   const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
+  const dailyForecastByDate = buildDailyForecastSeries(data);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
-  const watering = computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm);
+  const todayWatering = computeTodayWateringRainContext(
+    recentPastRainBeforeToday,
+    todayRainMm
+  );
   return {
     forecastedRainSum,
     forecastedRainSumNearTerm,
-    recentPastRainSum,
-    rainCreditMm: watering.rainCreditMm,
+    recentPastRainSum: effectiveRecentPastRain,
+    recentPastRainBeforeToday,
+    todayRainMm,
+    dailyForecastByDate,
+    rainCreditMm: todayWatering.rainCreditMm,
     currentSoilTemp,
     currentSoilTempMin,
-    isRainForecasted: forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM || recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM,
-    isNatureProvidingFullSoak: watering.isNatureProvidingFullSoak,
-    soilRecentlyWet: watering.soilRecentlyWet,
-    netWaterNeeded: watering.netWaterNeeded,
+    isRainForecasted: forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM || effectiveRecentPastRain >= RECENT_RAIN_WET_SOIL_MM,
+    isNatureProvidingFullSoak: todayWatering.isNatureProvidingFullSoak,
+    soilRecentlyWet: todayWatering.soilRecentlyWet,
+    netWaterNeeded: todayWatering.netWaterNeeded,
     fetchedAt: (/* @__PURE__ */ new Date()).toISOString(),
     source: "open-meteo"
   };
@@ -31716,6 +32346,7 @@ function buildMaintenanceSchedule(input) {
     recentPastRainSum = 0,
     currentSoilTemp,
     isNatureProvidingFullSoak,
+    soilRecentlyWetToday = null,
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate
@@ -31737,7 +32368,7 @@ function buildMaintenanceSchedule(input) {
   const effectiveLastMowedDate = lastMowedDate && springScarifyDate ? lastMowedDate > springScarifyDate ? lastMowedDate : springScarifyDate : lastMowedDate ?? springScarifyDate ?? null;
   const effectiveMowingDays = wasScalped ? Math.max(dynamicMowingDays, 10) : dynamicMowingDays;
   const mowingNextDueIso = effectiveLastMowedDate ? addDaysToDateString(effectiveLastMowedDate, effectiveMowingDays) : null;
-  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
+  const soilRecentlyWet = typeof soilRecentlyWetToday === "boolean" ? soilRecentlyWetToday : recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
   const effectiveLastWateredDate = !seedEstablishmentActive && (isNatureProvidingFullSoak || soilRecentlyWet) ? todayStr : lastWateredDate;
   const wateringNextDueIso = effectiveLastWateredDate ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays) : null;
   const isVerticutSeason = isVerticutSeasonForDate(todayStr);
@@ -31809,10 +32440,41 @@ function daysBetween(from, to) {
   const end = typeof to === "string" ? /* @__PURE__ */ new Date(`${to}T12:00:00`) : to;
   return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
 }
+function pushRainSkippedWaterTasks(compiledTasks, seedEstablishmentActive, dueDateIso, reason) {
+  if (seedEstablishmentActive) {
+    for (const session of [
+      { id: "lawn-water-morning", title: "Water lawn (Morning)" },
+      { id: "lawn-water-midday", title: "Water lawn (Midday)" },
+      { id: "lawn-water-evening", title: "Water lawn (Evening)" }
+    ]) {
+      compiledTasks.push({
+        id: session.id,
+        title: session.title,
+        dueDate: dueDateIso,
+        status: "completed",
+        module: "lawn",
+        reason
+      });
+    }
+    return;
+  }
+  compiledTasks.push({
+    id: "lawn-water",
+    title: "Water lawn",
+    dueDate: dueDateIso,
+    status: "completed",
+    module: "lawn",
+    reason
+  });
+}
 function compileLawnTasks({
   todayStr,
   isDormantSeason,
   isNatureProvidingFullSoak,
+  soilRecentlyWet = false,
+  dailyForecastByDate = [],
+  recentPastRainBeforeToday = 0,
+  todayRainMm = 0,
   seedEstablishmentActive,
   mowingLockedUntilIso,
   mowingNextDueIso,
@@ -31918,56 +32580,75 @@ function compileLawnTasks({
       reason: buildVerticutReason()
     });
   }
-  if (isDormantSeason || !seedEstablishmentActive && isNatureProvidingFullSoak) {
+  if (isDormantSeason) {
     compiledTasks.push({
       id: "lawn-water",
       title: "Water lawn",
       dueDate: wateringNextDueIso ?? todayStr,
       status: "completed",
       module: "lawn",
-      reason: isDormantSeason ? "Winter dormancy \u2013 watering suspended" : "Heavy rain forecast \u2013 nature providing full soak"
-    });
-  } else if (seedEstablishmentActive) {
-    const waterDueDate = wateringNextDueIso ?? todayStr;
-    const waterStatus = taskStatusFromDue(waterDueDate);
-    const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
-    const baseReason = scheduleReason?.water ? `${scheduleReason.water} \xB7 ` : "";
-    const perSessionText = mistingMins > 0 ? `Run for ${mistingMins} minutes` : "divide daily duration by 3";
-    const mistingReason = `${baseReason}Light surface misting \xB7 ${perSessionText}`;
-    compiledTasks.push({
-      id: "lawn-water-morning",
-      title: "Water lawn (Morning)",
-      dueDate: waterDueDate,
-      status: waterStatus,
-      module: "lawn",
-      reason: mistingReason
-    });
-    compiledTasks.push({
-      id: "lawn-water-midday",
-      title: "Water lawn (Midday)",
-      dueDate: waterDueDate,
-      status: waterStatus,
-      module: "lawn",
-      reason: mistingReason
-    });
-    compiledTasks.push({
-      id: "lawn-water-evening",
-      title: "Water lawn (Evening)",
-      dueDate: waterDueDate,
-      status: waterStatus,
-      module: "lawn",
-      reason: mistingReason
+      reason: "Winter dormancy \u2013 watering suspended"
     });
   } else {
     const waterDueDate = wateringNextDueIso ?? todayStr;
-    compiledTasks.push({
-      id: "lawn-water",
-      title: "Water lawn",
-      dueDate: waterDueDate,
-      status: taskStatusFromDue(waterDueDate),
-      module: "lawn",
-      reason: scheduleReason?.water ?? null
-    });
+    const rainSkip = dailyForecastByDate.length > 0 ? getWateringRainSkipForDueDate(
+      waterDueDate,
+      todayStr,
+      dailyForecastByDate,
+      recentPastRainBeforeToday,
+      todayRainMm,
+      { seedEstablishmentActive }
+    ) : {
+      skip: seedEstablishmentActive ? todayRainMm >= SEED_MIST_TARGET_MM : isNatureProvidingFullSoak || soilRecentlyWet,
+      reason: seedEstablishmentActive ? todayRainMm >= SEED_MIST_TARGET_MM ? "Rain keeping seed bed moist \u2013 skip misting today" : null : isNatureProvidingFullSoak ? "Heavy rain \u2013 nature providing full soak" : soilRecentlyWet ? "Recent rain \u2013 soil still damp, skip watering" : null
+    };
+    if (rainSkip.skip && rainSkip.reason) {
+      pushRainSkippedWaterTasks(
+        compiledTasks,
+        seedEstablishmentActive,
+        waterDueDate,
+        rainSkip.reason
+      );
+    } else if (seedEstablishmentActive) {
+      const waterStatus = taskStatusFromDue(waterDueDate);
+      const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
+      const baseReason = scheduleReason?.water ? `${scheduleReason.water} \xB7 ` : "";
+      const perSessionText = mistingMins > 0 ? `Run for ${mistingMins} minutes` : "divide daily duration by 3";
+      const mistingReason = `${baseReason}Light surface misting \xB7 ${perSessionText}`;
+      compiledTasks.push({
+        id: "lawn-water-morning",
+        title: "Water lawn (Morning)",
+        dueDate: waterDueDate,
+        status: waterStatus,
+        module: "lawn",
+        reason: mistingReason
+      });
+      compiledTasks.push({
+        id: "lawn-water-midday",
+        title: "Water lawn (Midday)",
+        dueDate: waterDueDate,
+        status: waterStatus,
+        module: "lawn",
+        reason: mistingReason
+      });
+      compiledTasks.push({
+        id: "lawn-water-evening",
+        title: "Water lawn (Evening)",
+        dueDate: waterDueDate,
+        status: waterStatus,
+        module: "lawn",
+        reason: mistingReason
+      });
+    } else {
+      compiledTasks.push({
+        id: "lawn-water",
+        title: "Water lawn",
+        dueDate: waterDueDate,
+        status: taskStatusFromDue(waterDueDate),
+        module: "lawn",
+        reason: scheduleReason?.water ?? null
+      });
+    }
   }
   const gypsum = getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr);
   compiledTasks.push({
@@ -32026,6 +32707,10 @@ function compileAllLawnTasks(input) {
     pendingDates,
     isDormantSeason,
     isNatureProvidingFullSoak,
+    soilRecentlyWet = false,
+    dailyForecastByDate = [],
+    recentPastRainBeforeToday = 0,
+    todayRainMm = 0,
     seedEstablishmentActive,
     mowingLockedUntilIso,
     mowingNextDueIso,
@@ -32047,6 +32732,10 @@ function compileAllLawnTasks(input) {
       todayStr,
       isDormantSeason,
       isNatureProvidingFullSoak,
+      soilRecentlyWet,
+      dailyForecastByDate,
+      recentPastRainBeforeToday,
+      todayRainMm,
       seedEstablishmentActive,
       mowingLockedUntilIso,
       mowingNextDueIso,
@@ -32146,6 +32835,10 @@ async function runLawnCloudSync() {
   const recentPastRainSum = getEffectiveRecentPastRain(weather);
   const currentSoilTemp = weather.currentSoilTemp;
   const isNatureProvidingFullSoak = weather.isNatureProvidingFullSoak;
+  const soilRecentlyWet = weather.soilRecentlyWet ?? false;
+  const dailyForecastByDate = weather.dailyForecastByDate ?? [];
+  const recentPastRainBeforeToday = weather.recentPastRainBeforeToday ?? Math.max(0, recentPastRainSum - (weather.todayRainMm ?? 0));
+  const todayRainMm = weather.todayRainMm ?? 0;
   const pendingDates = scheduleSnapshot.pendingDates ?? createInitialPendingDates(null, userLogs);
   const maintenance = buildMaintenanceSchedule({
     todayStr,
@@ -32154,6 +32847,7 @@ async function runLawnCloudSync() {
     recentPastRainSum,
     currentSoilTemp,
     isNatureProvidingFullSoak,
+    soilRecentlyWetToday: soilRecentlyWet,
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate
@@ -32174,6 +32868,10 @@ async function runLawnCloudSync() {
     pendingDates,
     isDormantSeason: maintenance.isDormantSeason,
     isNatureProvidingFullSoak: maintenance.isNatureProvidingFullSoak,
+    soilRecentlyWet,
+    dailyForecastByDate,
+    recentPastRainBeforeToday,
+    todayRainMm,
     seedEstablishmentActive: maintenance.seedEstablishmentActive,
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,
