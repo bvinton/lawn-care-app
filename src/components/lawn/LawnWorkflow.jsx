@@ -141,7 +141,7 @@ export default function LawnWorkflow({ app }) {
             <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
           </p>
         </div>
-        <div className="flex gap-1.5">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => void runFullCloudSync()}
@@ -153,9 +153,7 @@ export default function LawnWorkflow({ app }) {
                   ? 'Sync problem — tap to retry'
                   : 'Sync schedule to cloud'
             }
-            className={`flex shrink-0 items-center justify-center gap-1 py-2 rounded-lg border text-xs font-bold transition-all disabled:opacity-60 ${
-              syncLabel ? 'px-2.5' : 'px-2 min-w-[2.5rem]'
-            } ${
+            className={`flex w-full items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border text-xs font-bold transition-all disabled:opacity-60 ${
               cloudSyncStatus === 'synced'
                 ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
                 : cloudSyncStatus === 'error'
@@ -183,24 +181,24 @@ export default function LawnWorkflow({ app }) {
           <button
             type="button"
             onClick={() => setActiveScreen('materials')}
-            className="flex flex-1 min-w-0 items-center justify-center gap-1 text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold py-2 px-2 rounded-lg transition-all border border-amber-200"
+            className="flex w-full items-center justify-center gap-1.5 text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold py-2.5 px-3 rounded-lg transition-all border border-amber-200"
           >
             <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Materials</span>
+            <span>Materials</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveScreen('guides')}
-            className="flex flex-1 min-w-0 items-center justify-center text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-2 px-2 rounded-lg transition-all border border-green-200"
+            className="flex w-full items-center justify-center gap-1.5 text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-2.5 px-3 rounded-lg transition-all border border-green-200"
           >
-            <span className="truncate">📚 Guides</span>
+            <span>📚 Guides</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveScreen('settings')}
-            className="flex flex-1 min-w-0 items-center justify-center text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2 px-2 rounded-lg transition-all"
+            className="flex w-full items-center justify-center gap-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2.5 px-3 rounded-lg transition-all"
           >
-            <span className="truncate">⚙️ Setup</span>
+            <span>⚙️ Setup</span>
           </button>
         </div>
       </div>
