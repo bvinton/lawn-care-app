@@ -11,9 +11,16 @@ import {
   MOW_TASK_NAME,
   WATER_TASK_NAME,
   VERTICUT_TASK_NAME,
+  resolveSeedWateringNextDueIso,
 } from '../services/lawnMaintenanceSync.js';
 import { buildMaintenanceSchedule, getScheduleReason } from '../services/lawnScheduleEngine.js';
-import { applyInboundTaskCompletions, GYPSUM_POSTPONE_KEY } from '../services/lawnTaskInboundSync.js';
+import {
+  applyInboundTaskCompletions,
+  applyInboundTaskSkips,
+  countFullySkippedWateringDays,
+  countRecentWateringSkips,
+  GYPSUM_POSTPONE_KEY,
+} from '../services/lawnTaskInboundSync.js';
 import {
   fetchLawnTasksForInboundSync,
   syncLawnTasksToSupabase,
@@ -69,6 +76,8 @@ export async function runLawnCloudSync() {
   lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
   lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
 
+  userLogs = applyInboundTaskSkips(inboundRows, userLogs);
+
   const maintenanceRows = inboundRows.filter((row) =>
     [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name) ||
     (typeof row.task_name === 'string' && row.task_name.startsWith('Water lawn ('))
@@ -77,6 +86,11 @@ export async function runLawnCloudSync() {
   lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
   lastWateredDate = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
   lastVerticutDate = mergeMaintenanceDate(lastVerticutDate, inferred.lastVerticutDate);
+
+  const establishmentExtraDays = Math.min(
+    7,
+    countFullySkippedWateringDays(userLogs, todayStr)
+  );
 
   await saveLawnUserLogsToSupabase(userLogs);
 
@@ -147,7 +161,17 @@ export async function runLawnCloudSync() {
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate,
+    establishmentExtraDays,
   });
+
+  let wateringNextDueIso = maintenance.wateringNextDueIso;
+  if (maintenance.seedEstablishmentActive) {
+    wateringNextDueIso = resolveSeedWateringNextDueIso(
+      wateringNextDueIso,
+      maintenanceRows,
+      todayStr
+    );
+  }
 
   const scheduleReason = getScheduleReason({
     forecastedRainSumNearTerm,
@@ -173,7 +197,7 @@ export async function runLawnCloudSync() {
     seedEstablishmentActive: maintenance.seedEstablishmentActive,
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,
-    wateringNextDueIso: maintenance.wateringNextDueIso,
+    wateringNextDueIso,
     isVerticutSeason: maintenance.isVerticutSeason,
     renovationHoldActive: maintenance.renovationHoldActive,
     verticutLockedUntilIso: maintenance.verticutLockedUntilIso,
@@ -183,6 +207,7 @@ export async function runLawnCloudSync() {
     lastGypsumDate: userLogs.lastGypsumDate ?? null,
     gypsumPostponedUntil: userLogs[GYPSUM_POSTPONE_KEY] ?? null,
     scheduleReason,
+    recentWateringSkips: countRecentWateringSkips(userLogs, todayStr),
   });
 
   await syncLawnTasksToSupabase(
@@ -197,7 +222,7 @@ export async function runLawnCloudSync() {
       lastWateredDate,
       lastVerticutDate,
       mowingNextDueIso: maintenance.mowingNextDueIso,
-      wateringNextDueIso: maintenance.wateringNextDueIso,
+      wateringNextDueIso,
       verticutNextDueIso: maintenance.verticutNextDueIso,
       forecastedRainSum,
       forecastedRainSumNearTerm,

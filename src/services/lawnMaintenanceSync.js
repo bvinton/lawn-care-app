@@ -3,6 +3,7 @@ import {
   getSupabaseConfigError,
   formatSupabaseSyncError,
 } from '../lib/supabase';
+import { addDaysToDateString } from '../data/LawnPackData';
 import { LAWN_APP_SOURCE } from './lawnTasks';
 
 export const MOW_TASK_NAME = 'Mow lawn';
@@ -16,9 +17,52 @@ export const WATERING_SESSION_NAMES = [
 
 /** @type {boolean | null} */
 let lastCompletedColumnAvailable = null;
+/** @type {boolean | null} */
+let skippedOnColumnAvailable = null;
 
 export function resetLastCompletedColumnProbe() {
   lastCompletedColumnAvailable = null;
+}
+
+export function resetSkippedOnColumnProbe() {
+  skippedOnColumnAvailable = null;
+}
+
+/** @param {unknown} error */
+export function isMissingSkippedOnColumnError(error) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String(/** @type {{ message: unknown }} */ (error).message)
+        : String(error);
+  return /skipped_on|42703|PGRST204|schema cache/i.test(message);
+}
+
+/** @param {Record<string, unknown>} payload */
+export function withoutSkippedOn(payload) {
+  const next = { ...payload };
+  delete next.skipped_on;
+  return next;
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<boolean>}
+ */
+export async function probeSkippedOnColumn(supabase) {
+  if (skippedOnColumnAvailable !== null) {
+    return skippedOnColumnAvailable;
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .select('skipped_on')
+    .eq('app_source', LAWN_APP_SOURCE)
+    .limit(1);
+
+  skippedOnColumnAvailable = !error;
+  return skippedOnColumnAvailable;
 }
 
 /** @param {unknown} error */
@@ -87,12 +131,13 @@ export function pickLatestIsoDate(...dates) {
  * @property {string} due_date
  * @property {boolean} is_completed
  * @property {string | null} [last_completed_date]
+ * @property {string | null} [skipped_on]
  * @property {string | null} [updated_at]
  * @property {string | null} [created_at]
  */
 
 const MAINTENANCE_SELECT_FULL =
-  'task_name, due_date, is_completed, last_completed_date, created_at';
+  'task_name, due_date, is_completed, last_completed_date, skipped_on, created_at';
 const MAINTENANCE_SELECT_FALLBACK = 'task_name, due_date, is_completed, created_at';
 
 /**
@@ -200,6 +245,99 @@ export function inferMaintenanceDatesFromRows(rows, todayStr) {
   }
 
   return { lastMowedDate, lastWateredDate, lastVerticutDate };
+}
+
+/**
+ * Whether a session row is resolved for its current due cycle (done or skipped).
+ * @param {LawnMaintenanceRow} row
+ * @param {string} todayStr
+ */
+function isWateringSessionResolved(row, todayStr) {
+  const dueDate = row.due_date;
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return false;
+
+  if (row.skipped_on && row.skipped_on >= dueDate) {
+    return true;
+  }
+
+  const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+  return Boolean(inferred && inferred >= dueDate);
+}
+
+/**
+ * Progress for seed watering sessions sharing the oldest unresolved due date.
+ * @param {LawnMaintenanceRow[]} rows
+ * @param {string} todayStr
+ * @returns {{ dueDate: string, done: number, skipped: number, pending: number } | null}
+ */
+export function inferWateringDayProgress(rows, todayStr) {
+  const sessionRows = rows.filter((r) => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length === 0) return null;
+
+  const dueDates = [...new Set(sessionRows.map((r) => r.due_date).filter(Boolean))].sort();
+  for (const dueDate of dueDates) {
+    const forDay = sessionRows.filter((r) => r.due_date === dueDate);
+    if (forDay.length === 0) continue;
+
+    let done = 0;
+    let skipped = 0;
+    let pending = 0;
+
+    for (const row of forDay) {
+      if (row.skipped_on && row.skipped_on >= dueDate) {
+        skipped += 1;
+      } else if (isWateringSessionResolved(row, todayStr) && !row.skipped_on) {
+        done += 1;
+      } else {
+        const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+        if (inferred && inferred >= dueDate) {
+          done += 1;
+        } else {
+          pending += 1;
+        }
+      }
+    }
+
+    if (pending > 0) {
+      return { dueDate, done, skipped, pending };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Advance seed watering due date past fully resolved overdue days.
+ * @param {string | null} wateringNextDueIso
+ * @param {LawnMaintenanceRow[]} rows
+ * @param {string} todayStr
+ * @returns {string | null}
+ */
+export function resolveSeedWateringNextDueIso(wateringNextDueIso, rows, todayStr) {
+  const sessionRows = rows.filter((r) => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length === 0) {
+    return wateringNextDueIso;
+  }
+
+  let nextDue = wateringNextDueIso ?? todayStr;
+  const dueDates = [...new Set(sessionRows.map((r) => r.due_date).filter(Boolean))].sort();
+
+  for (const dueDate of dueDates) {
+    if (dueDate > todayStr) continue;
+
+    const forDay = sessionRows.filter((r) => r.due_date === dueDate);
+    if (forDay.length === 0) continue;
+
+    const allResolved = forDay.every((row) => isWateringSessionResolved(row, todayStr));
+    if (!allResolved) {
+      return pickLatestIsoDate(nextDue, dueDate) ?? dueDate;
+    }
+
+    const dayAfter = addDaysToDateString(dueDate, 1);
+    nextDue = pickLatestIsoDate(nextDue, dayAfter) ?? dayAfter;
+  }
+
+  return nextDue;
 }
 
 /**

@@ -4,9 +4,13 @@ import {
   WATER_TASK_NAME,
   VERTICUT_TASK_NAME,
   isMissingLastCompletedColumnError,
+  isMissingSkippedOnColumnError,
   withoutLastCompletedDate,
+  withoutSkippedOn,
   probeLastCompletedColumn,
+  probeSkippedOnColumn,
   resetLastCompletedColumnProbe,
+  resetSkippedOnColumnProbe,
   pickLatestIsoDate,
   inferLastDoneFromMaintenanceRow,
 } from './lawnMaintenanceSync';
@@ -70,9 +74,34 @@ function isSyntheticMaintenanceComplete(task) {
 }
 
 /**
+ * @param {Array<{ due_date: string, last_completed_date?: string | null, skipped_on?: string | null }>} existingRows
+ * @param {string} taskDueDate
+ * @param {string} todayStr
+ * @returns {string | null}
+ */
+function getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr) {
+  let resolvedOn = null;
+
+  for (const existing of existingRows ?? []) {
+    if (existing.skipped_on && existing.skipped_on >= taskDueDate) {
+      resolvedOn = pickLatestIsoDate(resolvedOn, existing.skipped_on);
+    }
+    if (existing.last_completed_date && existing.last_completed_date >= taskDueDate) {
+      resolvedOn = pickLatestIsoDate(resolvedOn, existing.last_completed_date);
+    }
+  }
+
+  if (!resolvedOn) return null;
+
+  const nextDay = addDaysToDateString(resolvedOn, 1);
+  const tomorrowFromToday = addDaysToDateString(todayStr, 1);
+  return nextDay > tomorrowFromToday ? nextDay : tomorrowFromToday;
+}
+
+/**
  * @param {CompiledLawnTask} task
  * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
- * @param {Array<{ due_date: string, is_completed: boolean, last_completed_date?: string | null }>} [existingRows]
+ * @param {Array<{ due_date: string, is_completed: boolean, last_completed_date?: string | null, skipped_on?: string | null }>} [existingRows]
  * @param {string} todayStr
  */
 function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
@@ -109,15 +138,30 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     due_date: task.dueDate,
   };
 
-  // For individual watering sessions: if this session was already completed today,
-  // advance its due_date to tomorrow so it disappears from today's view while any
-  // sibling sessions that haven't been done yet remain visible.
+  const taskDueDate = task.dueDate;
+
   if (task.title.startsWith('Water lawn (')) {
-    const completedToday = (existingRows ?? []).some(
-      r => r.last_completed_date === todayStr
-    );
-    if (completedToday) {
-      row.due_date = addDaysToDateString(todayStr, 1);
+    const advancedDue = getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr);
+    if (advancedDue) {
+      row.due_date = advancedDue;
+    }
+  } else if ((existingRows ?? []).some((r) => r.skipped_on && r.skipped_on >= taskDueDate)) {
+    const advancedDue = getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr);
+    if (advancedDue) {
+      row.due_date = advancedDue;
+    }
+  }
+
+  if (getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr)) {
+    row.skipped_on = null;
+  } else {
+    const pendingSkip = (existingRows ?? [])
+      .map((r) => r.skipped_on ?? null)
+      .filter((d) => d && d >= taskDueDate)
+      .sort()
+      .at(-1);
+    if (pendingSkip) {
+      row.skipped_on = pendingSkip;
     }
   }
 
@@ -136,10 +180,11 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
  */
 /**
  * @param {CompiledLawnTask} task
- * @param {Array<{ is_completed?: boolean, last_completed_date?: string | null }>} [existingRows]
+ * @param {Array<{ is_completed?: boolean, last_completed_date?: string | null, skipped_on?: string | null, due_date?: string }>} [existingRows]
  * @param {boolean} canUseLastCompleted
+ * @param {string} todayStr
  */
-function buildPackSyncRow(task, existingRows, canUseLastCompleted) {
+function buildPackSyncRow(task, existingRows, canUseLastCompleted, todayStr) {
   const existing = existingRows?.[0];
   /** @type {Record<string, unknown>} */
   const row = {
@@ -147,6 +192,15 @@ function buildPackSyncRow(task, existingRows, canUseLastCompleted) {
     task_name: task.title,
     due_date: task.dueDate,
   };
+
+  const taskDueDate = task.dueDate;
+  const advancedDue = getSessionAdvancedDueDate(existingRows ?? [], taskDueDate, todayStr);
+  if (advancedDue && (existingRows ?? []).some((r) => r.skipped_on && r.skipped_on >= taskDueDate)) {
+    row.due_date = advancedDue;
+    row.skipped_on = null;
+  } else if (existing?.skipped_on && existing.skipped_on >= taskDueDate) {
+    row.skipped_on = existing.skipped_on;
+  }
 
   if (task.status === 'completed') {
     row.is_completed = true;
@@ -236,10 +290,28 @@ async function writeTaskPayload(supabase, task, maintenance, todayStr) {
     (typeof taskTitle === 'string' && taskTitle.startsWith('Water lawn ('));
   let existingResult = await supabase
     .from('tasks')
-    .select('id, due_date, is_completed, last_completed_date')
+    .select('id, due_date, is_completed, last_completed_date, skipped_on')
     .eq('app_source', LAWN_APP_SOURCE)
     .eq('task_name', taskTitle)
     .order('id', { ascending: true });
+
+  if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
+    existingResult = await supabase
+      .from('tasks')
+      .select('id, due_date, is_completed, skipped_on')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .eq('task_name', taskTitle)
+      .order('id', { ascending: true });
+  }
+
+  if (existingResult.error && isMissingSkippedOnColumnError(existingResult.error)) {
+    existingResult = await supabase
+      .from('tasks')
+      .select('id, due_date, is_completed, last_completed_date')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .eq('task_name', taskTitle)
+      .order('id', { ascending: true });
+  }
 
   if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
     existingResult = await supabase
@@ -258,12 +330,19 @@ async function writeTaskPayload(supabase, task, maintenance, todayStr) {
 
   const existing = existingResult.data;
   const canUseLastCompleted = await probeLastCompletedColumn(supabase);
+  const canUseSkippedOn = await probeSkippedOnColumn(supabase);
 
   let payload = isMaintenance
     ? buildMaintenanceSyncRow(task, maintenance, existing ?? [], todayStr)
-    : buildPackSyncRow(task, existing ?? [], canUseLastCompleted);
+    : buildPackSyncRow(task, existing ?? [], canUseLastCompleted, todayStr);
 
-  let body = canUseLastCompleted ? payload : withoutLastCompletedDate(payload);
+  let body = { ...payload };
+  if (!canUseLastCompleted) {
+    body = withoutLastCompletedDate(body);
+  }
+  if (!canUseSkippedOn) {
+    body = withoutSkippedOn(body);
+  }
 
   if (existing && existing.length > 0) {
     const [primary, ...duplicates] = existing;
@@ -273,6 +352,13 @@ async function writeTaskPayload(supabase, task, maintenance, todayStr) {
     if (error && isMissingLastCompletedColumnError(error)) {
       resetLastCompletedColumnProbe();
       body = withoutLastCompletedDate(payload);
+      if (!canUseSkippedOn) body = withoutSkippedOn(body);
+      ({ error } = await supabase.from('tasks').update(body).eq('id', primary.id));
+    }
+
+    if (error && isMissingSkippedOnColumnError(error)) {
+      resetSkippedOnColumnProbe();
+      body = withoutSkippedOn(body);
       ({ error } = await supabase.from('tasks').update(body).eq('id', primary.id));
     }
 
@@ -346,9 +432,25 @@ export async function fetchLawnTasksForInboundSync() {
 
   let result = await supabase
     .from('tasks')
-    .select('id, app_source, task_name, due_date, is_completed, last_completed_date')
+    .select('id, app_source, task_name, due_date, is_completed, last_completed_date, skipped_on')
     .eq('app_source', LAWN_APP_SOURCE)
     .order('due_date', { ascending: true });
+
+  if (result.error && isMissingLastCompletedColumnError(result.error)) {
+    result = await supabase
+      .from('tasks')
+      .select('id, app_source, task_name, due_date, is_completed, skipped_on')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .order('due_date', { ascending: true });
+  }
+
+  if (result.error && isMissingSkippedOnColumnError(result.error)) {
+    result = await supabase
+      .from('tasks')
+      .select('id, app_source, task_name, due_date, is_completed, last_completed_date')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .order('due_date', { ascending: true });
+  }
 
   if (result.error && isMissingLastCompletedColumnError(result.error)) {
     result = await supabase
@@ -372,11 +474,15 @@ export async function fetchLawnTasksForInboundSync() {
 export async function clearLawnTaskCompletion(taskName) {
   const supabase = requireSupabase();
   const canUseLastCompleted = await probeLastCompletedColumn(supabase);
+  const canUseSkippedOn = await probeSkippedOnColumn(supabase);
 
   /** @type {Record<string, unknown>} */
   let body = { is_completed: false };
   if (canUseLastCompleted) {
     body.last_completed_date = null;
+  }
+  if (canUseSkippedOn) {
+    body.skipped_on = null;
   }
 
   let { error } = await supabase
@@ -387,6 +493,46 @@ export async function clearLawnTaskCompletion(taskName) {
 
   if (error && isMissingLastCompletedColumnError(error)) {
     body = { is_completed: false };
+    ({ error } = await supabase
+      .from('tasks')
+      .update(body)
+      .eq('app_source', LAWN_APP_SOURCE)
+      .eq('task_name', taskName));
+  }
+
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+}
+
+/**
+ * Record a skip for a lawn task by title (Tasks app parity from Lawn app UI).
+ * @param {string} taskName
+ * @param {string} skippedDate YYYY-MM-DD
+ */
+export async function skipLawnTaskByName(taskName, skippedDate) {
+  const supabase = requireSupabase();
+  const canUseLastCompleted = await probeLastCompletedColumn(supabase);
+  const canUseSkippedOn = await probeSkippedOnColumn(supabase);
+
+  /** @type {Record<string, unknown>} */
+  let body = { is_completed: false };
+  if (canUseLastCompleted) {
+    body.last_completed_date = null;
+  }
+  if (canUseSkippedOn) {
+    body.skipped_on = skippedDate;
+  }
+
+  let { error } = await supabase
+    .from('tasks')
+    .update(body)
+    .eq('app_source', LAWN_APP_SOURCE)
+    .eq('task_name', taskName);
+
+  if (error && isMissingSkippedOnColumnError(error)) {
+    resetSkippedOnColumnProbe();
+    body = withoutSkippedOn(body);
     ({ error } = await supabase
       .from('tasks')
       .update(body)

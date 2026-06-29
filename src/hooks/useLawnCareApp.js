@@ -28,6 +28,7 @@ import {
 } from '../services/lawnTasks';
 import {
   applyInboundTaskCompletions,
+  applyInboundTaskSkips,
   GYPSUM_LOG_KEY,
   GYPSUM_POSTPONE_KEY,
 } from '../services/lawnTaskInboundSync';
@@ -710,6 +711,7 @@ export function useLawnCareApp() {
       nextVerticut = inbound.lastVerticutDate ?? nextVerticut;
       inboundPack = inbound.packStepsUpdated;
       inboundMaintenance = inbound.maintenanceUpdated;
+      nextUserLogs = applyInboundTaskSkips(rows, nextUserLogs);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn('[Lawn Care] Task inbound pull failed:', error);

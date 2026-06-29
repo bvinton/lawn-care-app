@@ -22387,6 +22387,7 @@ function formatSupabaseSyncError(error) {
 var GYPSUM_TASK_NAME = "Apply Liquid Gypsum";
 var GYPSUM_LOG_KEY = "lastGypsumDate";
 var GYPSUM_POSTPONE_KEY = "gypsumPostponedUntil";
+var TASK_SKIPS_LOG_KEY = "taskSkips";
 var taskNameToStepKey = null;
 function getTaskNameToStepKeyMap() {
   if (!taskNameToStepKey) {
@@ -22402,6 +22403,74 @@ function getTaskNameToStepKeyMap() {
     );
   }
   return taskNameToStepKey;
+}
+function parseTaskSkips(userLogs) {
+  const raw = userLogs[TASK_SKIPS_LOG_KEY];
+  if (!raw) return (
+    /** @type {TaskSkipEntry[]} */
+    []
+  );
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function applyInboundTaskSkips(rows, userLogs) {
+  const nextLogs = { ...userLogs };
+  const existing = parseTaskSkips(nextLogs);
+  const seen = new Set(existing.map((entry) => `${entry.taskName}:${entry.skippedOn}`));
+  let updated = false;
+  for (const row of rows) {
+    if (!row.skipped_on) continue;
+    const key = `${row.task_name}:${row.skipped_on}`;
+    if (seen.has(key)) continue;
+    existing.push({ taskName: row.task_name, skippedOn: row.skipped_on });
+    seen.add(key);
+    updated = true;
+  }
+  if (updated) {
+    nextLogs[TASK_SKIPS_LOG_KEY] = JSON.stringify(existing);
+  }
+  return nextLogs;
+}
+function daysBetweenIso(todayStr, fromIso) {
+  const start = /* @__PURE__ */ new Date(`${fromIso}T12:00:00`);
+  const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
+  return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
+}
+function countRecentWateringSkips(userLogs, todayStr, withinDays = 7) {
+  const skips = parseTaskSkips(userLogs);
+  let count = 0;
+  for (const skip of skips) {
+    if (skip.taskName !== WATER_TASK_NAME && !skip.taskName.startsWith("Water lawn (")) {
+      continue;
+    }
+    const days = daysBetweenIso(todayStr, skip.skippedOn);
+    if (days >= 0 && days <= withinDays) {
+      count += 1;
+    }
+  }
+  return count;
+}
+function countFullySkippedWateringDays(userLogs, todayStr, withinDays = 7) {
+  const skips = parseTaskSkips(userLogs);
+  const byDate = /* @__PURE__ */ new Map();
+  for (const skip of skips) {
+    if (!skip.taskName.startsWith("Water lawn (")) continue;
+    const days = daysBetweenIso(todayStr, skip.skippedOn);
+    if (days < 0 || days > withinDays) continue;
+    if (!byDate.has(skip.skippedOn)) byDate.set(skip.skippedOn, /* @__PURE__ */ new Set());
+    byDate.get(skip.skippedOn)?.add(skip.taskName);
+  }
+  let fullDays = 0;
+  for (const names of byDate.values()) {
+    if (WATERING_SESSION_NAMES.every((name) => names.has(name))) {
+      fullDays += 1;
+    }
+  }
+  return fullDays;
 }
 function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenance = {}) {
   const stepMap = getTaskNameToStepKeyMap();
@@ -22485,6 +22554,21 @@ function isSyntheticMaintenanceComplete(task) {
     task.reason
   );
 }
+function getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr) {
+  let resolvedOn = null;
+  for (const existing of existingRows ?? []) {
+    if (existing.skipped_on && existing.skipped_on >= taskDueDate) {
+      resolvedOn = pickLatestIsoDate(resolvedOn, existing.skipped_on);
+    }
+    if (existing.last_completed_date && existing.last_completed_date >= taskDueDate) {
+      resolvedOn = pickLatestIsoDate(resolvedOn, existing.last_completed_date);
+    }
+  }
+  if (!resolvedOn) return null;
+  const nextDay = addDaysToDateString(resolvedOn, 1);
+  const tomorrowFromToday = addDaysToDateString(todayStr, 1);
+  return nextDay > tomorrowFromToday ? nextDay : tomorrowFromToday;
+}
 function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
   const localLast = task.title === MOW_TASK_NAME ? maintenance.lastMowedDate : task.title === WATER_TASK_NAME || task.title.startsWith("Water lawn (") ? maintenance.lastWateredDate : task.title === VERTICUT_TASK_NAME ? maintenance.lastVerticutDate : null;
   let lastCompleted = localLast ?? null;
@@ -22508,12 +22592,24 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     task_name: task.title,
     due_date: task.dueDate
   };
+  const taskDueDate = task.dueDate;
   if (task.title.startsWith("Water lawn (")) {
-    const completedToday = (existingRows ?? []).some(
-      (r) => r.last_completed_date === todayStr
-    );
-    if (completedToday) {
-      row.due_date = addDaysToDateString(todayStr, 1);
+    const advancedDue = getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr);
+    if (advancedDue) {
+      row.due_date = advancedDue;
+    }
+  } else if ((existingRows ?? []).some((r) => r.skipped_on && r.skipped_on >= taskDueDate)) {
+    const advancedDue = getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr);
+    if (advancedDue) {
+      row.due_date = advancedDue;
+    }
+  }
+  if (getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr)) {
+    row.skipped_on = null;
+  } else {
+    const pendingSkip = (existingRows ?? []).map((r) => r.skipped_on ?? null).filter((d) => d && d >= taskDueDate).sort().at(-1);
+    if (pendingSkip) {
+      row.skipped_on = pendingSkip;
     }
   }
   if (lastCompleted) {
@@ -22522,13 +22618,21 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
   row.is_completed = isSyntheticMaintenanceComplete(task);
   return row;
 }
-function buildPackSyncRow(task, existingRows, canUseLastCompleted) {
+function buildPackSyncRow(task, existingRows, canUseLastCompleted, todayStr) {
   const existing = existingRows?.[0];
   const row = {
     app_source: LAWN_APP_SOURCE,
     task_name: task.title,
     due_date: task.dueDate
   };
+  const taskDueDate = task.dueDate;
+  const advancedDue = getSessionAdvancedDueDate(existingRows ?? [], taskDueDate, todayStr);
+  if (advancedDue && (existingRows ?? []).some((r) => r.skipped_on && r.skipped_on >= taskDueDate)) {
+    row.due_date = advancedDue;
+    row.skipped_on = null;
+  } else if (existing?.skipped_on && existing.skipped_on >= taskDueDate) {
+    row.skipped_on = existing.skipped_on;
+  }
   if (task.status === "completed") {
     row.is_completed = true;
     if (canUseLastCompleted) {
@@ -22560,7 +22664,13 @@ async function applyTaskWrite(supabase, body, taskTitle, fullPayload) {
 async function writeTaskPayload(supabase, task, maintenance, todayStr) {
   const taskTitle = task.title;
   const isMaintenance = MAINTENANCE_TASK_NAMES.has(taskTitle) || typeof taskTitle === "string" && taskTitle.startsWith("Water lawn (");
-  let existingResult = await supabase.from("tasks").select("id, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
+  let existingResult = await supabase.from("tasks").select("id, due_date, is_completed, last_completed_date, skipped_on").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
+  if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
+    existingResult = await supabase.from("tasks").select("id, due_date, is_completed, skipped_on").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
+  }
+  if (existingResult.error && isMissingSkippedOnColumnError(existingResult.error)) {
+    existingResult = await supabase.from("tasks").select("id, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
+  }
   if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
     existingResult = await supabase.from("tasks").select("id, due_date, is_completed").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
   }
@@ -22571,14 +22681,27 @@ async function writeTaskPayload(supabase, task, maintenance, todayStr) {
   }
   const existing = existingResult.data;
   const canUseLastCompleted = await probeLastCompletedColumn(supabase);
-  let payload = isMaintenance ? buildMaintenanceSyncRow(task, maintenance, existing ?? [], todayStr) : buildPackSyncRow(task, existing ?? [], canUseLastCompleted);
-  let body = canUseLastCompleted ? payload : withoutLastCompletedDate(payload);
+  const canUseSkippedOn = await probeSkippedOnColumn(supabase);
+  let payload = isMaintenance ? buildMaintenanceSyncRow(task, maintenance, existing ?? [], todayStr) : buildPackSyncRow(task, existing ?? [], canUseLastCompleted, todayStr);
+  let body = { ...payload };
+  if (!canUseLastCompleted) {
+    body = withoutLastCompletedDate(body);
+  }
+  if (!canUseSkippedOn) {
+    body = withoutSkippedOn(body);
+  }
   if (existing && existing.length > 0) {
     const [primary, ...duplicates] = existing;
     let { error } = await supabase.from("tasks").update(body).eq("id", primary.id);
     if (error && isMissingLastCompletedColumnError(error)) {
       resetLastCompletedColumnProbe();
       body = withoutLastCompletedDate(payload);
+      if (!canUseSkippedOn) body = withoutSkippedOn(body);
+      ({ error } = await supabase.from("tasks").update(body).eq("id", primary.id));
+    }
+    if (error && isMissingSkippedOnColumnError(error)) {
+      resetSkippedOnColumnProbe();
+      body = withoutSkippedOn(body);
       ({ error } = await supabase.from("tasks").update(body).eq("id", primary.id));
     }
     if (error) {
@@ -22608,7 +22731,13 @@ async function syncLawnTasksToSupabase(compiledTasks, maintenance = {}, todayStr
 }
 async function fetchLawnTasksForInboundSync() {
   const supabase = requireSupabase();
-  let result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
+  let result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed, last_completed_date, skipped_on").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
+  if (result.error && isMissingLastCompletedColumnError(result.error)) {
+    result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed, skipped_on").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
+  }
+  if (result.error && isMissingSkippedOnColumnError(result.error)) {
+    result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
+  }
   if (result.error && isMissingLastCompletedColumnError(result.error)) {
     result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
   }
@@ -22648,8 +22777,32 @@ var WATERING_SESSION_NAMES = [
   "Water lawn (Evening)"
 ];
 var lastCompletedColumnAvailable = null;
+var skippedOnColumnAvailable = null;
 function resetLastCompletedColumnProbe() {
   lastCompletedColumnAvailable = null;
+}
+function resetSkippedOnColumnProbe() {
+  skippedOnColumnAvailable = null;
+}
+function isMissingSkippedOnColumnError(error) {
+  const message = error instanceof Error ? error.message : typeof error === "object" && error !== null && "message" in error ? String(
+    /** @type {{ message: unknown }} */
+    error.message
+  ) : String(error);
+  return /skipped_on|42703|PGRST204|schema cache/i.test(message);
+}
+function withoutSkippedOn(payload) {
+  const next = { ...payload };
+  delete next.skipped_on;
+  return next;
+}
+async function probeSkippedOnColumn(supabase) {
+  if (skippedOnColumnAvailable !== null) {
+    return skippedOnColumnAvailable;
+  }
+  const { error } = await supabase.from("tasks").select("skipped_on").eq("app_source", LAWN_APP_SOURCE).limit(1);
+  skippedOnColumnAvailable = !error;
+  return skippedOnColumnAvailable;
 }
 function isMissingLastCompletedColumnError(error) {
   const message = error instanceof Error ? error.message : typeof error === "object" && error !== null && "message" in error ? String(
@@ -22724,6 +22877,35 @@ function inferMaintenanceDatesFromRows(rows, todayStr) {
     }
   }
   return { lastMowedDate, lastWateredDate, lastVerticutDate };
+}
+function isWateringSessionResolved(row, todayStr) {
+  const dueDate = row.due_date;
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return false;
+  if (row.skipped_on && row.skipped_on >= dueDate) {
+    return true;
+  }
+  const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+  return Boolean(inferred && inferred >= dueDate);
+}
+function resolveSeedWateringNextDueIso(wateringNextDueIso, rows, todayStr) {
+  const sessionRows = rows.filter((r) => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length === 0) {
+    return wateringNextDueIso;
+  }
+  let nextDue = wateringNextDueIso ?? todayStr;
+  const dueDates = [...new Set(sessionRows.map((r) => r.due_date).filter(Boolean))].sort();
+  for (const dueDate of dueDates) {
+    if (dueDate > todayStr) continue;
+    const forDay = sessionRows.filter((r) => r.due_date === dueDate);
+    if (forDay.length === 0) continue;
+    const allResolved = forDay.every((row) => isWateringSessionResolved(row, todayStr));
+    if (!allResolved) {
+      return pickLatestIsoDate(nextDue, dueDate) ?? dueDate;
+    }
+    const dayAfter = addDaysToDateString(dueDate, 1);
+    nextDue = pickLatestIsoDate(nextDue, dayAfter) ?? dayAfter;
+  }
+  return nextDue;
 }
 function mergeMaintenanceDate(localDate, remoteDate) {
   return pickLatestIsoDate(localDate, remoteDate);
@@ -23168,7 +23350,7 @@ function getVerticutRenovationState(todayStr, userLogs) {
       verticutLockedUntilIso: null
     };
   }
-  const daysSinceRenovation = daysBetweenIso(todayStr, renovationDate);
+  const daysSinceRenovation = daysBetweenIso2(todayStr, renovationDate);
   const renovationHoldActive = daysSinceRenovation < VERTICUT_RENOVATION_HOLD_DAYS;
   const verticutLockedUntilIso = renovationHoldActive ? addDaysToDateString(renovationDate, VERTICUT_RENOVATION_HOLD_DAYS) : null;
   return { renovationDate, renovationHoldActive, verticutLockedUntilIso };
@@ -23179,13 +23361,14 @@ function isVerticutHeatDroughtPaused(currentSoilTemp, forecastedRainSumNearTerm,
   }
   return currentSoilTemp !== null && currentSoilTemp >= 22 && forecastedRainSumNearTerm < 2 && recentPastRainSum < RECENT_RAIN_WET_SOIL_MM;
 }
-function getSeedState(todayStr, springSeedDate) {
-  const daysSinceSeed = springSeedDate ? daysBetweenIso(todayStr, springSeedDate) : null;
-  const seedEstablishmentActive = springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed <= SEED_ESTABLISHMENT_DAYS;
-  const mowingLockedUntilIso = seedEstablishmentActive && springSeedDate ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS) : null;
+function getSeedState(todayStr, springSeedDate, establishmentExtraDays = 0) {
+  const daysSinceSeed = springSeedDate ? daysBetweenIso2(todayStr, springSeedDate) : null;
+  const totalEstablishmentDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
+  const seedEstablishmentActive = springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed <= totalEstablishmentDays;
+  const mowingLockedUntilIso = seedEstablishmentActive && springSeedDate ? addDaysToDateString(springSeedDate, totalEstablishmentDays) : null;
   return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
 }
-function daysBetweenIso(todayStr, pastIso) {
+function daysBetweenIso2(todayStr, pastIso) {
   const start = /* @__PURE__ */ new Date(`${pastIso}T12:00:00`);
   const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
   return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
@@ -23193,7 +23376,7 @@ function daysBetweenIso(todayStr, pastIso) {
 function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
   const temp = currentSoilTemp;
   if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
+    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
     if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
   }
   if (temp !== null && temp < 8) return 14;
@@ -23206,7 +23389,7 @@ function getDynamicWateringDays(forecastedRainSumNearTerm, currentSoilTemp, spri
   const rain = forecastedRainSumNearTerm;
   if (seedEstablishmentActive) return 1;
   if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
+    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
     if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 2;
   }
   if (recentPastRainSum >= 8) return 5;
@@ -23234,7 +23417,7 @@ function getScheduleReason(input) {
   const waterReasons = [];
   const verticutReasons = [];
   if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
+    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
     if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) {
       mowReasons.push("gentle recovery schedule after seeding");
       waterReasons.push("enhanced watering during turf recovery");
@@ -23292,10 +23475,15 @@ function buildMaintenanceSchedule(input) {
     soilRecentlyWetToday = null,
     lastMowedDate,
     lastWateredDate,
-    lastVerticutDate
+    lastVerticutDate,
+    establishmentExtraDays = 0
   } = input;
   const springSeedDate = userLogs[makeStepKey("SPRING", "seed")] ?? null;
-  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(todayStr, springSeedDate);
+  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(
+    todayStr,
+    springSeedDate,
+    establishmentExtraDays
+  );
   const isDormantSeason = isDormantSeasonForDate(todayStr);
   const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
   const dynamicWateringDays = getDynamicWateringDays(
@@ -23325,7 +23513,7 @@ function buildMaintenanceSchedule(input) {
     recentPastRainSum
   );
   const verticutNaturalNextDueIso = lastVerticutDate ? addDaysToDateString(lastVerticutDate, VERTICUT_INTERVAL_DAYS) : mowingNextDueIso;
-  const verticutIntervalElapsed = lastVerticutDate === null || daysBetweenIso(todayStr, lastVerticutDate) >= VERTICUT_INTERVAL_DAYS;
+  const verticutIntervalElapsed = lastVerticutDate === null || daysBetweenIso2(todayStr, lastVerticutDate) >= VERTICUT_INTERVAL_DAYS;
   let verticutNextDueIso = null;
   let verticutPairedWithMow = false;
   if (isVerticutSeason && !renovationHoldActive && !verticutHeatDroughtPaused) {
@@ -23431,7 +23619,8 @@ function compileLawnTasks({
   lastGypsumDate,
   gypsumPostponedUntil = null,
   scheduleReason = null,
-  dynamicMinutes = 0
+  dynamicMinutes = 0,
+  recentWateringSkips = 0
 }) {
   const taskStatusFromDue = (dueDateIso) => daysBetween(dueDateIso, todayStr) >= 0 ? "urgent" : "pending";
   const compiledTasks = [];
@@ -23557,7 +23746,8 @@ function compileLawnTasks({
       const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
       const baseReason = scheduleReason?.water ? `${scheduleReason.water} \xB7 ` : "";
       const perSessionText = mistingMins > 0 ? `Run for ${mistingMins} minutes` : "divide daily duration by 3";
-      const mistingReason = `${baseReason}Light surface misting \xB7 ${perSessionText}`;
+      const missAdvisory = recentWateringSkips > 0 ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? "" : "s"} this week \u2014 keep seed bed moist` : null;
+      const mistingReason = [`${baseReason}Light surface misting \xB7 ${perSessionText}`, missAdvisory].filter(Boolean).join(" \xB7 ");
       compiledTasks.push({
         id: "lawn-water-morning",
         title: "Water lawn (Morning)",
@@ -23667,7 +23857,8 @@ function compileAllLawnTasks(input) {
     lastGypsumDate,
     gypsumPostponedUntil = null,
     scheduleReason = null,
-    dynamicMinutes = 0
+    dynamicMinutes = 0,
+    recentWateringSkips = 0
   } = input;
   return [
     ...compilePackStepTasks({ todayStr, userLogs, pendingDates }),
@@ -23692,7 +23883,8 @@ function compileAllLawnTasks(input) {
       lastGypsumDate,
       gypsumPostponedUntil,
       scheduleReason,
-      dynamicMinutes
+      dynamicMinutes,
+      recentWateringSkips
     })
   ];
 }
@@ -23728,6 +23920,7 @@ async function runLawnCloudSync() {
   lastMowedDate = inbound.lastMowedDate ?? lastMowedDate;
   lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
   lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
+  userLogs = applyInboundTaskSkips(inboundRows, userLogs);
   const maintenanceRows = inboundRows.filter(
     (row) => [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name) || typeof row.task_name === "string" && row.task_name.startsWith("Water lawn (")
   );
@@ -23735,6 +23928,10 @@ async function runLawnCloudSync() {
   lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
   lastWateredDate = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
   lastVerticutDate = mergeMaintenanceDate(lastVerticutDate, inferred.lastVerticutDate);
+  const establishmentExtraDays = Math.min(
+    7,
+    countFullySkippedWateringDays(userLogs, todayStr)
+  );
   await saveLawnUserLogsToSupabase(userLogs);
   const weatherLocation = resolveWeatherLocation(scheduleSnapshot.weatherLocation);
   let weather;
@@ -23793,8 +23990,17 @@ async function runLawnCloudSync() {
     soilRecentlyWetToday: soilRecentlyWet,
     lastMowedDate,
     lastWateredDate,
-    lastVerticutDate
+    lastVerticutDate,
+    establishmentExtraDays
   });
+  let wateringNextDueIso = maintenance.wateringNextDueIso;
+  if (maintenance.seedEstablishmentActive) {
+    wateringNextDueIso = resolveSeedWateringNextDueIso(
+      wateringNextDueIso,
+      maintenanceRows,
+      todayStr
+    );
+  }
   const scheduleReason = getScheduleReason({
     forecastedRainSumNearTerm,
     forecastedRainSumWeek: forecastedRainSum,
@@ -23818,7 +24024,7 @@ async function runLawnCloudSync() {
     seedEstablishmentActive: maintenance.seedEstablishmentActive,
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,
-    wateringNextDueIso: maintenance.wateringNextDueIso,
+    wateringNextDueIso,
     isVerticutSeason: maintenance.isVerticutSeason,
     renovationHoldActive: maintenance.renovationHoldActive,
     verticutLockedUntilIso: maintenance.verticutLockedUntilIso,
@@ -23827,7 +24033,8 @@ async function runLawnCloudSync() {
     verticutPairedWithMow: maintenance.verticutPairedWithMow,
     lastGypsumDate: userLogs.lastGypsumDate ?? null,
     gypsumPostponedUntil: userLogs[GYPSUM_POSTPONE_KEY] ?? null,
-    scheduleReason
+    scheduleReason,
+    recentWateringSkips: countRecentWateringSkips(userLogs, todayStr)
   });
   await syncLawnTasksToSupabase(
     compiledTasks,
@@ -23840,7 +24047,7 @@ async function runLawnCloudSync() {
       lastWateredDate,
       lastVerticutDate,
       mowingNextDueIso: maintenance.mowingNextDueIso,
-      wateringNextDueIso: maintenance.wateringNextDueIso,
+      wateringNextDueIso,
       verticutNextDueIso: maintenance.verticutNextDueIso,
       forecastedRainSum,
       forecastedRainSumNearTerm,

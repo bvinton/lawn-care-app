@@ -2619,219 +2619,6 @@ export function formatSupabaseSyncError(error) {
 }
 </file>
 
-<file path="src/components/lawn/LawnWorkflow.jsx">
-import React from 'react';
-import { SEASONS } from '../../data/LawnPackData';
-import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
-import MaintenancePanel from './MaintenancePanel';
-import SeasonTimeline from './SeasonTimeline';
-import { CalculatorIcon } from './LawnMaterials';
-
-/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
-export default function LawnWorkflow({ app }) {
-  const {
-    supabaseSyncError,
-    petLockoutActive,
-    petLockoutHoursRemaining,
-    springPackIncomplete,
-    currentSeason,
-    incompleteSpringSteps,
-    calendarSeason,
-    weedolLoggedDate,
-    springRenovationPending,
-    weedolBarrierActive,
-    weedolClearanceDate,
-    weedolDaysRemaining,
-    setCurrentSeason,
-    setSeasonManuallySelected,
-    isCatchUpMode,
-    seasonManuallySelected,
-    sqm,
-    length,
-    width,
-    runFullCloudSync,
-    cloudSyncStatus,
-    lastCloudSyncAt,
-    setActiveScreen,
-  } = app;
-
-  const syncLabel =
-    cloudSyncStatus === 'pulling'
-      ? 'Pull…'
-      : cloudSyncStatus === 'pushing'
-        ? 'Push…'
-        : cloudSyncStatus === 'error'
-          ? 'Retry'
-          : cloudSyncStatus === 'idle'
-            ? 'Sync'
-            : null;
-
-  return (
-    <>
-      {supabaseSyncError && (
-        <div
-          className={`mb-4 rounded-lg border p-3 text-xs font-semibold leading-relaxed ${
-            supabaseSyncError.includes('maintenance_link.sql')
-              ? 'border-amber-400 bg-amber-50 text-amber-950'
-              : 'border-red-300 bg-red-50 text-red-800'
-          }`}
-        >
-          {supabaseSyncError.includes('maintenance_link.sql') ||
-          supabaseSyncError.includes('lawn_app_state.sql') ? (
-            <>
-              <p className="font-bold mb-1">One-time database setup</p>
-              <p>{supabaseSyncError}</p>
-              {supabaseSyncError.includes('lawn_app_state.sql') ? (
-                <p className="mt-2 text-[10px]">
-                  Run the SQL file <strong>supabase/lawn_app_state.sql</strong> in Supabase (creates
-                  the lawn progress table).
-                </p>
-              ) : (
-                <p className="mt-2 font-mono text-[10px] break-all">
-                  alter table public.tasks add column if not exists last_completed_date date;
-                </p>
-              )}
-            </>
-          ) : (
-            <>Supabase sync failed: {supabaseSyncError}</>
-          )}
-        </div>
-      )}
-      {petLockoutActive && (
-        <div className="mb-4 rounded-lg border border-orange-300 bg-gradient-to-r from-red-50 to-orange-50 p-3 text-sm font-bold text-orange-900 shadow-sm">
-          🚫 PAWS OFF: Chemical drying in progress. Safe in {petLockoutHoursRemaining} hour
-          {petLockoutHoursRemaining !== 1 ? 's' : ''}.
-        </div>
-      )}
-      {springPackIncomplete && currentSeason !== 'SPRING' && (
-        <div className="mb-4 rounded-lg border border-amber-400 bg-amber-50 p-3 text-xs text-amber-950 leading-relaxed">
-          <p className="font-bold mb-1">
-            📋 Spring Pack still in progress ({incompleteSpringSteps.length} step
-            {incompleteSpringSteps.length !== 1 ? 's' : ''} left)
-          </p>
-          <p className="mb-2">
-            The calendar says {SEASONS[calendarSeason].name}, but you have unfinished Spring
-            work — we won&apos;t skip ahead until those steps are logged.
-          </p>
-          {weedolLoggedDate && springRenovationPending && (
-            <p className="mb-2 font-semibold">
-              {weedolBarrierActive ? (
-                <>
-                  ⏳ Weedol barrier: scarify &amp; seed locked until{' '}
-                  <strong>{formatDisplayDate(weedolClearanceDate)}</strong> (
-                  {weedolDaysRemaining} day{weedolDaysRemaining !== 1 ? 's' : ''} left).
-                </>
-              ) : (
-                <>
-                  ✅ Weedol clearance passed ({formatDisplayDate(weedolClearanceDate)}) —
-                  you can scarify and seed when ready.
-                </>
-              )}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setCurrentSeason('SPRING');
-              setSeasonManuallySelected(true);
-            }}
-            className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-amber-600 text-white hover:bg-amber-700"
-          >
-            Open Spring Pack timeline
-          </button>
-        </div>
-      )}
-      {currentSeason === 'SPRING' && isCatchUpMode && !seasonManuallySelected && (
-        <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs font-semibold text-emerald-900 leading-relaxed">
-          📅 Catch-up mode: calendar is {SEASONS[calendarSeason].name}, but Spring Pack steps
-          remain — complete them before Summer tasks unlock here.
-          {weedolBarrierActive && springRenovationPending && weedolClearanceDate && (
-            <span className="block mt-1 font-bold text-amber-900">
-              ⏳ Weedol barrier until {formatDisplayDate(weedolClearanceDate)} — prep &amp; seed
-              steps below show the countdown.
-            </span>
-          )}
-        </div>
-      )}
-      <div className="mb-6 border-b pb-4 space-y-3">
-        <div className="min-w-0">
-          <h2 className="text-lg sm:text-xl font-black text-green-800 leading-tight">
-            📋 Lawn Pack Workflow
-          </h2>
-          <p className="text-sm text-green-700 mt-1">
-            <span className="font-black">{sqm} SQM</span>
-            <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => void runFullCloudSync()}
-            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
-            title={
-              cloudSyncStatus === 'synced' && lastCloudSyncAt
-                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
-                : cloudSyncStatus === 'error'
-                  ? 'Sync problem — tap to retry'
-                  : 'Sync schedule to cloud'
-            }
-            className={`flex w-full items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border text-xs font-bold transition-all disabled:opacity-60 ${
-              cloudSyncStatus === 'synced'
-                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                : cloudSyncStatus === 'error'
-                  ? 'border-red-300 bg-red-50 text-red-700'
-                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
-            }`}
-            aria-label={
-              cloudSyncStatus === 'synced' && lastCloudSyncAt
-                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
-                : 'Sync with shared database'
-            }
-          >
-            <span
-              className={`text-base leading-none ${
-                cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'
-                  ? 'inline-block animate-spin'
-                  : ''
-              }`}
-              aria-hidden="true"
-            >
-              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
-            </span>
-            {syncLabel && <span>{syncLabel}</span>}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveScreen('materials')}
-            className="flex w-full items-center justify-center gap-1.5 text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold py-2.5 px-3 rounded-lg transition-all border border-amber-200"
-          >
-            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
-            <span>Materials</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveScreen('guides')}
-            className="flex w-full items-center justify-center gap-1.5 text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-2.5 px-3 rounded-lg transition-all border border-green-200"
-          >
-            <span>📚 Guides</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveScreen('settings')}
-            className="flex w-full items-center justify-center gap-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2.5 px-3 rounded-lg transition-all"
-          >
-            <span>⚙️ Setup</span>
-          </button>
-        </div>
-      </div>
-
-      <MaintenancePanel app={app} />
-      <SeasonTimeline app={app} />
-    </>
-  );
-}
-</file>
-
 <file path="src/utils/lawnDeepLink.js">
 /** Short keys used in ?focus= from the Tasks app */
 export const LAWN_FOCUS_ALIASES = {
@@ -3167,10 +2954,223 @@ export default function LawnGuides({ setActiveScreen }) {
 }
 </file>
 
+<file path="src/components/lawn/LawnWorkflow.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
+import MaintenancePanel from './MaintenancePanel';
+import SeasonTimeline from './SeasonTimeline';
+import { CalculatorIcon } from './LawnMaterials';
+
+/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
+export default function LawnWorkflow({ app }) {
+  const {
+    supabaseSyncError,
+    petLockoutActive,
+    petLockoutHoursRemaining,
+    springPackIncomplete,
+    currentSeason,
+    incompleteSpringSteps,
+    calendarSeason,
+    weedolLoggedDate,
+    springRenovationPending,
+    weedolBarrierActive,
+    weedolClearanceDate,
+    weedolDaysRemaining,
+    setCurrentSeason,
+    setSeasonManuallySelected,
+    isCatchUpMode,
+    seasonManuallySelected,
+    sqm,
+    length,
+    width,
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    setActiveScreen,
+  } = app;
+
+  const syncLabel =
+    cloudSyncStatus === 'pulling'
+      ? 'Pull…'
+      : cloudSyncStatus === 'pushing'
+        ? 'Push…'
+        : cloudSyncStatus === 'error'
+          ? 'Retry'
+          : cloudSyncStatus === 'idle'
+            ? 'Sync'
+            : null;
+
+  return (
+    <>
+      {supabaseSyncError && (
+        <div
+          className={`mb-4 rounded-lg border p-3 text-xs font-semibold leading-relaxed ${
+            supabaseSyncError.includes('maintenance_link.sql')
+              ? 'border-amber-400 bg-amber-50 text-amber-950'
+              : 'border-red-300 bg-red-50 text-red-800'
+          }`}
+        >
+          {supabaseSyncError.includes('maintenance_link.sql') ||
+          supabaseSyncError.includes('lawn_app_state.sql') ? (
+            <>
+              <p className="font-bold mb-1">One-time database setup</p>
+              <p>{supabaseSyncError}</p>
+              {supabaseSyncError.includes('lawn_app_state.sql') ? (
+                <p className="mt-2 text-[10px]">
+                  Run the SQL file <strong>supabase/lawn_app_state.sql</strong> in Supabase (creates
+                  the lawn progress table).
+                </p>
+              ) : (
+                <p className="mt-2 font-mono text-[10px] break-all">
+                  alter table public.tasks add column if not exists last_completed_date date;
+                </p>
+              )}
+            </>
+          ) : (
+            <>Supabase sync failed: {supabaseSyncError}</>
+          )}
+        </div>
+      )}
+      {petLockoutActive && (
+        <div className="mb-4 rounded-lg border border-orange-300 bg-gradient-to-r from-red-50 to-orange-50 p-3 text-sm font-bold text-orange-900 shadow-sm">
+          🚫 PAWS OFF: Chemical drying in progress. Safe in {petLockoutHoursRemaining} hour
+          {petLockoutHoursRemaining !== 1 ? 's' : ''}.
+        </div>
+      )}
+      {springPackIncomplete && currentSeason !== 'SPRING' && (
+        <div className="mb-4 rounded-lg border border-amber-400 bg-amber-50 p-3 text-xs text-amber-950 leading-relaxed">
+          <p className="font-bold mb-1">
+            📋 Spring Pack still in progress ({incompleteSpringSteps.length} step
+            {incompleteSpringSteps.length !== 1 ? 's' : ''} left)
+          </p>
+          <p className="mb-2">
+            The calendar says {SEASONS[calendarSeason].name}, but you have unfinished Spring
+            work — we won&apos;t skip ahead until those steps are logged.
+          </p>
+          {weedolLoggedDate && springRenovationPending && (
+            <p className="mb-2 font-semibold">
+              {weedolBarrierActive ? (
+                <>
+                  ⏳ Weedol barrier: scarify &amp; seed locked until{' '}
+                  <strong>{formatDisplayDate(weedolClearanceDate)}</strong> (
+                  {weedolDaysRemaining} day{weedolDaysRemaining !== 1 ? 's' : ''} left).
+                </>
+              ) : (
+                <>
+                  ✅ Weedol clearance passed ({formatDisplayDate(weedolClearanceDate)}) —
+                  you can scarify and seed when ready.
+                </>
+              )}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentSeason('SPRING');
+              setSeasonManuallySelected(true);
+            }}
+            className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-amber-600 text-white hover:bg-amber-700"
+          >
+            Open Spring Pack timeline
+          </button>
+        </div>
+      )}
+      {currentSeason === 'SPRING' && isCatchUpMode && !seasonManuallySelected && (
+        <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs font-semibold text-emerald-900 leading-relaxed">
+          📅 Catch-up mode: calendar is {SEASONS[calendarSeason].name}, but Spring Pack steps
+          remain — complete them before Summer tasks unlock here.
+          {weedolBarrierActive && springRenovationPending && weedolClearanceDate && (
+            <span className="block mt-1 font-bold text-amber-900">
+              ⏳ Weedol barrier until {formatDisplayDate(weedolClearanceDate)} — prep &amp; seed
+              steps below show the countdown.
+            </span>
+          )}
+        </div>
+      )}
+      <div className="mb-6 border-b pb-4 space-y-3">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-black text-green-800 leading-tight">
+            📋 Lawn Pack Workflow
+          </h2>
+          <p className="text-sm text-green-700 mt-1">
+            <span className="font-black">{sqm} SQM</span>
+            <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => void runFullCloudSync()}
+            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
+            title={
+              cloudSyncStatus === 'synced' && lastCloudSyncAt
+                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
+                : cloudSyncStatus === 'error'
+                  ? 'Sync problem — tap to retry'
+                  : 'Sync schedule to cloud'
+            }
+            className={`flex w-full items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border text-xs font-bold transition-all disabled:opacity-60 ${
+              cloudSyncStatus === 'synced'
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                : cloudSyncStatus === 'error'
+                  ? 'border-red-300 bg-red-50 text-red-700'
+                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+            }`}
+            aria-label={
+              cloudSyncStatus === 'synced' && lastCloudSyncAt
+                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
+                : 'Sync with shared database'
+            }
+          >
+            <span
+              className={`text-base leading-none ${
+                cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'
+                  ? 'inline-block animate-spin'
+                  : ''
+              }`}
+              aria-hidden="true"
+            >
+              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
+            </span>
+            {syncLabel && <span>{syncLabel}</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('materials')}
+            className="flex w-full items-center justify-center gap-1.5 text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold py-2.5 px-3 rounded-lg transition-all border border-amber-200"
+          >
+            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
+            <span>Materials</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('guides')}
+            className="flex w-full items-center justify-center gap-1.5 text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-2.5 px-3 rounded-lg transition-all border border-green-200"
+          >
+            <span>📚 Guides</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('settings')}
+            className="flex w-full items-center justify-center gap-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2.5 px-3 rounded-lg transition-all"
+          >
+            <span>⚙️ Setup</span>
+          </button>
+        </div>
+      </div>
+
+      <MaintenancePanel app={app} />
+      <SeasonTimeline app={app} />
+    </>
+  );
+}
+</file>
+
 <file path="src/components/lawn/MaintenancePanel.jsx">
 import React from 'react';
 import { addDaysToDateString } from '../../data/LawnPackData';
-import { LAWN_APP_SOURCE } from '../../services/lawnTasks';
+import { LAWN_APP_SOURCE, skipLawnTaskByName } from '../../services/lawnTasks';
 import {
   GYPSUM_LOG_KEY,
   GYPSUM_POSTPONE_KEY,
@@ -3600,6 +3600,31 @@ export default function MaintenancePanel({ app }) {
                 </p>
                 <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
                   🚰 3x Daily Misting: Each session should be ~{dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0} minutes (1/3 of your normal {dynamicMinutes} min soak) using your {activeSprinkler.name}.
+                </div>
+                <div className="mt-2 space-y-1">
+                  <p className="text-[10px] font-semibold text-gray-600">
+                    Skip a session (won&apos;t catch up):
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      'Water lawn (Morning)',
+                      'Water lawn (Midday)',
+                      'Water lawn (Evening)',
+                    ].map((taskName) => (
+                      <button
+                        key={taskName}
+                        type="button"
+                        className="text-[10px] font-bold py-1 px-2 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                        onClick={() => {
+                          void skipLawnTaskByName(taskName, todayStr).then(() =>
+                            pushLawnTasksToSupabase({}, { quiet: true })
+                          );
+                        }}
+                      >
+                        Skip {taskName.replace('Water lawn (', '').replace(')', '')}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </>
             ) : wateringDue ? (
@@ -4798,11 +4823,18 @@ export function getLawnAppStateSetupHint() {
 
 <file path="src/services/lawnTaskInboundSync.js">
 import { SEASONS, makeStepKey } from '../data/LawnPackData';
-import { MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME, pickLatestIsoDate } from './lawnMaintenanceSync';
+import {
+  MOW_TASK_NAME,
+  WATER_TASK_NAME,
+  VERTICUT_TASK_NAME,
+  WATERING_SESSION_NAMES,
+  pickLatestIsoDate,
+} from './lawnMaintenanceSync';
 
 export const GYPSUM_TASK_NAME = 'Apply Liquid Gypsum';
 export const GYPSUM_LOG_KEY = 'lastGypsumDate';
 export const GYPSUM_POSTPONE_KEY = 'gypsumPostponedUntil';
+export const TASK_SKIPS_LOG_KEY = 'taskSkips';
 
 /** @type {Array<{ label: string, days: number }>} */
 export const GYPSUM_POSTPONE_OPTIONS = [
@@ -4822,7 +4854,6 @@ function getTaskNameToStepKeyMap() {
         taskNameToStepKey.set(step.label, makeStepKey(seasonKey, step.id));
       }
     }
-    // Legacy task title before iron was split into two winter doses.
     taskNameToStepKey.set(
       'Step 2: Apply Deeper Green Iron Sulphate',
       makeStepKey('WINTER', 'iron1')
@@ -4837,7 +4868,114 @@ function getTaskNameToStepKeyMap() {
  * @property {string} due_date
  * @property {boolean} is_completed
  * @property {string | null} [last_completed_date]
+ * @property {string | null} [skipped_on]
  */
+
+/**
+ * @typedef {{ taskName: string, skippedOn: string }} TaskSkipEntry
+ */
+
+/** @param {Record<string, string>} userLogs */
+export function parseTaskSkips(userLogs) {
+  const raw = userLogs[TASK_SKIPS_LOG_KEY];
+  if (!raw) return /** @type {TaskSkipEntry[]} */ ([]);
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * @param {InboundTaskRow[]} rows
+ * @param {Record<string, string>} userLogs
+ */
+export function applyInboundTaskSkips(rows, userLogs) {
+  /** @type {Record<string, string>} */
+  const nextLogs = { ...userLogs };
+  const existing = parseTaskSkips(nextLogs);
+  const seen = new Set(existing.map((entry) => `${entry.taskName}:${entry.skippedOn}`));
+  let updated = false;
+
+  for (const row of rows) {
+    if (!row.skipped_on) continue;
+    const key = `${row.task_name}:${row.skipped_on}`;
+    if (seen.has(key)) continue;
+    existing.push({ taskName: row.task_name, skippedOn: row.skipped_on });
+    seen.add(key);
+    updated = true;
+  }
+
+  if (updated) {
+    nextLogs[TASK_SKIPS_LOG_KEY] = JSON.stringify(existing);
+  }
+
+  return nextLogs;
+}
+
+/**
+ * @param {string} todayStr
+ * @param {string} fromIso
+ */
+function daysBetweenIso(todayStr, fromIso) {
+  const start = new Date(`${fromIso}T12:00:00`);
+  const end = new Date(`${todayStr}T12:00:00`);
+  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * @param {Record<string, string>} userLogs
+ * @param {string} todayStr
+ * @param {number} [withinDays]
+ */
+export function countRecentWateringSkips(userLogs, todayStr, withinDays = 7) {
+  const skips = parseTaskSkips(userLogs);
+  let count = 0;
+
+  for (const skip of skips) {
+    if (
+      skip.taskName !== WATER_TASK_NAME &&
+      !skip.taskName.startsWith('Water lawn (')
+    ) {
+      continue;
+    }
+    const days = daysBetweenIso(todayStr, skip.skippedOn);
+    if (days >= 0 && days <= withinDays) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+/**
+ * @param {Record<string, string>} userLogs
+ * @param {string} todayStr
+ * @param {number} [withinDays]
+ */
+export function countFullySkippedWateringDays(userLogs, todayStr, withinDays = 7) {
+  const skips = parseTaskSkips(userLogs);
+  /** @type {Map<string, Set<string>>} */
+  const byDate = new Map();
+
+  for (const skip of skips) {
+    if (!skip.taskName.startsWith('Water lawn (')) continue;
+    const days = daysBetweenIso(todayStr, skip.skippedOn);
+    if (days < 0 || days > withinDays) continue;
+    if (!byDate.has(skip.skippedOn)) byDate.set(skip.skippedOn, new Set());
+    byDate.get(skip.skippedOn)?.add(skip.taskName);
+  }
+
+  let fullDays = 0;
+  for (const names of byDate.values()) {
+    if (WATERING_SESSION_NAMES.every((name) => names.has(name))) {
+      fullDays += 1;
+    }
+  }
+
+  return fullDays;
+}
 
 /**
  * Merge Tasks app / Supabase completions into lawn pack logs and maintenance dates.
@@ -5982,9 +6120,16 @@ import {
   MOW_TASK_NAME,
   WATER_TASK_NAME,
   VERTICUT_TASK_NAME,
+  resolveSeedWateringNextDueIso,
 } from '../services/lawnMaintenanceSync.js';
 import { buildMaintenanceSchedule, getScheduleReason } from '../services/lawnScheduleEngine.js';
-import { applyInboundTaskCompletions, GYPSUM_POSTPONE_KEY } from '../services/lawnTaskInboundSync.js';
+import {
+  applyInboundTaskCompletions,
+  applyInboundTaskSkips,
+  countFullySkippedWateringDays,
+  countRecentWateringSkips,
+  GYPSUM_POSTPONE_KEY,
+} from '../services/lawnTaskInboundSync.js';
 import {
   fetchLawnTasksForInboundSync,
   syncLawnTasksToSupabase,
@@ -6040,6 +6185,8 @@ export async function runLawnCloudSync() {
   lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
   lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
 
+  userLogs = applyInboundTaskSkips(inboundRows, userLogs);
+
   const maintenanceRows = inboundRows.filter((row) =>
     [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name) ||
     (typeof row.task_name === 'string' && row.task_name.startsWith('Water lawn ('))
@@ -6048,6 +6195,11 @@ export async function runLawnCloudSync() {
   lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
   lastWateredDate = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
   lastVerticutDate = mergeMaintenanceDate(lastVerticutDate, inferred.lastVerticutDate);
+
+  const establishmentExtraDays = Math.min(
+    7,
+    countFullySkippedWateringDays(userLogs, todayStr)
+  );
 
   await saveLawnUserLogsToSupabase(userLogs);
 
@@ -6118,7 +6270,17 @@ export async function runLawnCloudSync() {
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate,
+    establishmentExtraDays,
   });
+
+  let wateringNextDueIso = maintenance.wateringNextDueIso;
+  if (maintenance.seedEstablishmentActive) {
+    wateringNextDueIso = resolveSeedWateringNextDueIso(
+      wateringNextDueIso,
+      maintenanceRows,
+      todayStr
+    );
+  }
 
   const scheduleReason = getScheduleReason({
     forecastedRainSumNearTerm,
@@ -6144,7 +6306,7 @@ export async function runLawnCloudSync() {
     seedEstablishmentActive: maintenance.seedEstablishmentActive,
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,
-    wateringNextDueIso: maintenance.wateringNextDueIso,
+    wateringNextDueIso,
     isVerticutSeason: maintenance.isVerticutSeason,
     renovationHoldActive: maintenance.renovationHoldActive,
     verticutLockedUntilIso: maintenance.verticutLockedUntilIso,
@@ -6154,6 +6316,7 @@ export async function runLawnCloudSync() {
     lastGypsumDate: userLogs.lastGypsumDate ?? null,
     gypsumPostponedUntil: userLogs[GYPSUM_POSTPONE_KEY] ?? null,
     scheduleReason,
+    recentWateringSkips: countRecentWateringSkips(userLogs, todayStr),
   });
 
   await syncLawnTasksToSupabase(
@@ -6168,7 +6331,7 @@ export async function runLawnCloudSync() {
       lastWateredDate,
       lastVerticutDate,
       mowingNextDueIso: maintenance.mowingNextDueIso,
-      wateringNextDueIso: maintenance.wateringNextDueIso,
+      wateringNextDueIso,
       verticutNextDueIso: maintenance.verticutNextDueIso,
       forecastedRainSum,
       forecastedRainSumNearTerm,
@@ -6191,6 +6354,7 @@ import {
   getSupabaseConfigError,
   formatSupabaseSyncError,
 } from '../lib/supabase';
+import { addDaysToDateString } from '../data/LawnPackData';
 import { LAWN_APP_SOURCE } from './lawnTasks';
 
 export const MOW_TASK_NAME = 'Mow lawn';
@@ -6204,9 +6368,52 @@ export const WATERING_SESSION_NAMES = [
 
 /** @type {boolean | null} */
 let lastCompletedColumnAvailable = null;
+/** @type {boolean | null} */
+let skippedOnColumnAvailable = null;
 
 export function resetLastCompletedColumnProbe() {
   lastCompletedColumnAvailable = null;
+}
+
+export function resetSkippedOnColumnProbe() {
+  skippedOnColumnAvailable = null;
+}
+
+/** @param {unknown} error */
+export function isMissingSkippedOnColumnError(error) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String(/** @type {{ message: unknown }} */ (error).message)
+        : String(error);
+  return /skipped_on|42703|PGRST204|schema cache/i.test(message);
+}
+
+/** @param {Record<string, unknown>} payload */
+export function withoutSkippedOn(payload) {
+  const next = { ...payload };
+  delete next.skipped_on;
+  return next;
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<boolean>}
+ */
+export async function probeSkippedOnColumn(supabase) {
+  if (skippedOnColumnAvailable !== null) {
+    return skippedOnColumnAvailable;
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .select('skipped_on')
+    .eq('app_source', LAWN_APP_SOURCE)
+    .limit(1);
+
+  skippedOnColumnAvailable = !error;
+  return skippedOnColumnAvailable;
 }
 
 /** @param {unknown} error */
@@ -6275,12 +6482,13 @@ export function pickLatestIsoDate(...dates) {
  * @property {string} due_date
  * @property {boolean} is_completed
  * @property {string | null} [last_completed_date]
+ * @property {string | null} [skipped_on]
  * @property {string | null} [updated_at]
  * @property {string | null} [created_at]
  */
 
 const MAINTENANCE_SELECT_FULL =
-  'task_name, due_date, is_completed, last_completed_date, created_at';
+  'task_name, due_date, is_completed, last_completed_date, skipped_on, created_at';
 const MAINTENANCE_SELECT_FALLBACK = 'task_name, due_date, is_completed, created_at';
 
 /**
@@ -6391,6 +6599,99 @@ export function inferMaintenanceDatesFromRows(rows, todayStr) {
 }
 
 /**
+ * Whether a session row is resolved for its current due cycle (done or skipped).
+ * @param {LawnMaintenanceRow} row
+ * @param {string} todayStr
+ */
+function isWateringSessionResolved(row, todayStr) {
+  const dueDate = row.due_date;
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return false;
+
+  if (row.skipped_on && row.skipped_on >= dueDate) {
+    return true;
+  }
+
+  const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+  return Boolean(inferred && inferred >= dueDate);
+}
+
+/**
+ * Progress for seed watering sessions sharing the oldest unresolved due date.
+ * @param {LawnMaintenanceRow[]} rows
+ * @param {string} todayStr
+ * @returns {{ dueDate: string, done: number, skipped: number, pending: number } | null}
+ */
+export function inferWateringDayProgress(rows, todayStr) {
+  const sessionRows = rows.filter((r) => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length === 0) return null;
+
+  const dueDates = [...new Set(sessionRows.map((r) => r.due_date).filter(Boolean))].sort();
+  for (const dueDate of dueDates) {
+    const forDay = sessionRows.filter((r) => r.due_date === dueDate);
+    if (forDay.length === 0) continue;
+
+    let done = 0;
+    let skipped = 0;
+    let pending = 0;
+
+    for (const row of forDay) {
+      if (row.skipped_on && row.skipped_on >= dueDate) {
+        skipped += 1;
+      } else if (isWateringSessionResolved(row, todayStr) && !row.skipped_on) {
+        done += 1;
+      } else {
+        const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+        if (inferred && inferred >= dueDate) {
+          done += 1;
+        } else {
+          pending += 1;
+        }
+      }
+    }
+
+    if (pending > 0) {
+      return { dueDate, done, skipped, pending };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Advance seed watering due date past fully resolved overdue days.
+ * @param {string | null} wateringNextDueIso
+ * @param {LawnMaintenanceRow[]} rows
+ * @param {string} todayStr
+ * @returns {string | null}
+ */
+export function resolveSeedWateringNextDueIso(wateringNextDueIso, rows, todayStr) {
+  const sessionRows = rows.filter((r) => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length === 0) {
+    return wateringNextDueIso;
+  }
+
+  let nextDue = wateringNextDueIso ?? todayStr;
+  const dueDates = [...new Set(sessionRows.map((r) => r.due_date).filter(Boolean))].sort();
+
+  for (const dueDate of dueDates) {
+    if (dueDate > todayStr) continue;
+
+    const forDay = sessionRows.filter((r) => r.due_date === dueDate);
+    if (forDay.length === 0) continue;
+
+    const allResolved = forDay.every((row) => isWateringSessionResolved(row, todayStr));
+    if (!allResolved) {
+      return pickLatestIsoDate(nextDue, dueDate) ?? dueDate;
+    }
+
+    const dayAfter = addDaysToDateString(dueDate, 1);
+    nextDue = pickLatestIsoDate(nextDue, dayAfter) ?? dayAfter;
+  }
+
+  return nextDue;
+}
+
+/**
  * @param {string | null} localDate
  * @param {string | null} remoteDate
  */
@@ -6495,14 +6796,18 @@ export function isVerticutHeatDroughtPaused(
 /**
  * @param {string} todayStr
  * @param {string | null} springSeedDate
+ * @param {number} [establishmentExtraDays]
  */
-export function getSeedState(todayStr, springSeedDate) {
+export function getSeedState(todayStr, springSeedDate, establishmentExtraDays = 0) {
   const daysSinceSeed = springSeedDate ? daysBetweenIso(todayStr, springSeedDate) : null;
+  const totalEstablishmentDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
   const seedEstablishmentActive =
-    springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed <= SEED_ESTABLISHMENT_DAYS;
+    springSeedDate !== null &&
+    daysSinceSeed !== null &&
+    daysSinceSeed <= totalEstablishmentDays;
   const mowingLockedUntilIso =
     seedEstablishmentActive && springSeedDate
-      ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS)
+      ? addDaysToDateString(springSeedDate, totalEstablishmentDays)
       : null;
   return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
 }
@@ -6686,6 +6991,7 @@ export function getScheduleReason(input) {
  * @param {string | null} input.lastMowedDate
  * @param {string | null} input.lastWateredDate
  * @param {string | null} input.lastVerticutDate
+ * @param {number} [input.establishmentExtraDays]
  */
 export function buildMaintenanceSchedule(input) {
   const {
@@ -6699,10 +7005,15 @@ export function buildMaintenanceSchedule(input) {
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate,
+    establishmentExtraDays = 0,
   } = input;
 
   const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
-  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(todayStr, springSeedDate);
+  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(
+    todayStr,
+    springSeedDate,
+    establishmentExtraDays
+  );
   const isDormantSeason = isDormantSeasonForDate(todayStr);
 
   const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
@@ -6833,6 +7144,7 @@ import {
 } from '../services/lawnTasks';
 import {
   applyInboundTaskCompletions,
+  applyInboundTaskSkips,
   GYPSUM_LOG_KEY,
   GYPSUM_POSTPONE_KEY,
 } from '../services/lawnTaskInboundSync';
@@ -7515,6 +7827,7 @@ export function useLawnCareApp() {
       nextVerticut = inbound.lastVerticutDate ?? nextVerticut;
       inboundPack = inbound.packStepsUpdated;
       inboundMaintenance = inbound.maintenanceUpdated;
+      nextUserLogs = applyInboundTaskSkips(rows, nextUserLogs);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn('[Lawn Care] Task inbound pull failed:', error);
@@ -8364,6 +8677,7 @@ export function compileLawnTasks({
   gypsumPostponedUntil = null,
   scheduleReason = null,
   dynamicMinutes = 0,
+  recentWateringSkips = 0,
 }) {
   /** @param {string} dueDateIso */
   const taskStatusFromDue = (dueDateIso) =>
@@ -8523,7 +8837,13 @@ export function compileLawnTasks({
       const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
       const perSessionText =
         mistingMins > 0 ? `Run for ${mistingMins} minutes` : 'divide daily duration by 3';
-      const mistingReason = `${baseReason}Light surface misting · ${perSessionText}`;
+      const missAdvisory =
+        recentWateringSkips > 0
+          ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? '' : 's'} this week — keep seed bed moist`
+          : null;
+      const mistingReason = [ `${baseReason}Light surface misting · ${perSessionText}`, missAdvisory]
+        .filter(Boolean)
+        .join(' · ');
 
       compiledTasks.push({
         id: 'lawn-water-morning',
@@ -8665,6 +8985,7 @@ export function compileAllLawnTasks(input) {
     gypsumPostponedUntil = null,
     scheduleReason = null,
     dynamicMinutes = 0,
+    recentWateringSkips = 0,
   } = input;
 
   return [
@@ -8691,6 +9012,7 @@ export function compileAllLawnTasks(input) {
       gypsumPostponedUntil,
       scheduleReason,
       dynamicMinutes,
+      recentWateringSkips,
     }),
   ];
 }
@@ -8703,9 +9025,13 @@ import {
   WATER_TASK_NAME,
   VERTICUT_TASK_NAME,
   isMissingLastCompletedColumnError,
+  isMissingSkippedOnColumnError,
   withoutLastCompletedDate,
+  withoutSkippedOn,
   probeLastCompletedColumn,
+  probeSkippedOnColumn,
   resetLastCompletedColumnProbe,
+  resetSkippedOnColumnProbe,
   pickLatestIsoDate,
   inferLastDoneFromMaintenanceRow,
 } from './lawnMaintenanceSync';
@@ -8769,9 +9095,34 @@ function isSyntheticMaintenanceComplete(task) {
 }
 
 /**
+ * @param {Array<{ due_date: string, last_completed_date?: string | null, skipped_on?: string | null }>} existingRows
+ * @param {string} taskDueDate
+ * @param {string} todayStr
+ * @returns {string | null}
+ */
+function getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr) {
+  let resolvedOn = null;
+
+  for (const existing of existingRows ?? []) {
+    if (existing.skipped_on && existing.skipped_on >= taskDueDate) {
+      resolvedOn = pickLatestIsoDate(resolvedOn, existing.skipped_on);
+    }
+    if (existing.last_completed_date && existing.last_completed_date >= taskDueDate) {
+      resolvedOn = pickLatestIsoDate(resolvedOn, existing.last_completed_date);
+    }
+  }
+
+  if (!resolvedOn) return null;
+
+  const nextDay = addDaysToDateString(resolvedOn, 1);
+  const tomorrowFromToday = addDaysToDateString(todayStr, 1);
+  return nextDay > tomorrowFromToday ? nextDay : tomorrowFromToday;
+}
+
+/**
  * @param {CompiledLawnTask} task
  * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
- * @param {Array<{ due_date: string, is_completed: boolean, last_completed_date?: string | null }>} [existingRows]
+ * @param {Array<{ due_date: string, is_completed: boolean, last_completed_date?: string | null, skipped_on?: string | null }>} [existingRows]
  * @param {string} todayStr
  */
 function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
@@ -8808,15 +9159,30 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     due_date: task.dueDate,
   };
 
-  // For individual watering sessions: if this session was already completed today,
-  // advance its due_date to tomorrow so it disappears from today's view while any
-  // sibling sessions that haven't been done yet remain visible.
+  const taskDueDate = task.dueDate;
+
   if (task.title.startsWith('Water lawn (')) {
-    const completedToday = (existingRows ?? []).some(
-      r => r.last_completed_date === todayStr
-    );
-    if (completedToday) {
-      row.due_date = addDaysToDateString(todayStr, 1);
+    const advancedDue = getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr);
+    if (advancedDue) {
+      row.due_date = advancedDue;
+    }
+  } else if ((existingRows ?? []).some((r) => r.skipped_on && r.skipped_on >= taskDueDate)) {
+    const advancedDue = getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr);
+    if (advancedDue) {
+      row.due_date = advancedDue;
+    }
+  }
+
+  if (getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr)) {
+    row.skipped_on = null;
+  } else {
+    const pendingSkip = (existingRows ?? [])
+      .map((r) => r.skipped_on ?? null)
+      .filter((d) => d && d >= taskDueDate)
+      .sort()
+      .at(-1);
+    if (pendingSkip) {
+      row.skipped_on = pendingSkip;
     }
   }
 
@@ -8835,10 +9201,11 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
  */
 /**
  * @param {CompiledLawnTask} task
- * @param {Array<{ is_completed?: boolean, last_completed_date?: string | null }>} [existingRows]
+ * @param {Array<{ is_completed?: boolean, last_completed_date?: string | null, skipped_on?: string | null, due_date?: string }>} [existingRows]
  * @param {boolean} canUseLastCompleted
+ * @param {string} todayStr
  */
-function buildPackSyncRow(task, existingRows, canUseLastCompleted) {
+function buildPackSyncRow(task, existingRows, canUseLastCompleted, todayStr) {
   const existing = existingRows?.[0];
   /** @type {Record<string, unknown>} */
   const row = {
@@ -8846,6 +9213,15 @@ function buildPackSyncRow(task, existingRows, canUseLastCompleted) {
     task_name: task.title,
     due_date: task.dueDate,
   };
+
+  const taskDueDate = task.dueDate;
+  const advancedDue = getSessionAdvancedDueDate(existingRows ?? [], taskDueDate, todayStr);
+  if (advancedDue && (existingRows ?? []).some((r) => r.skipped_on && r.skipped_on >= taskDueDate)) {
+    row.due_date = advancedDue;
+    row.skipped_on = null;
+  } else if (existing?.skipped_on && existing.skipped_on >= taskDueDate) {
+    row.skipped_on = existing.skipped_on;
+  }
 
   if (task.status === 'completed') {
     row.is_completed = true;
@@ -8935,10 +9311,28 @@ async function writeTaskPayload(supabase, task, maintenance, todayStr) {
     (typeof taskTitle === 'string' && taskTitle.startsWith('Water lawn ('));
   let existingResult = await supabase
     .from('tasks')
-    .select('id, due_date, is_completed, last_completed_date')
+    .select('id, due_date, is_completed, last_completed_date, skipped_on')
     .eq('app_source', LAWN_APP_SOURCE)
     .eq('task_name', taskTitle)
     .order('id', { ascending: true });
+
+  if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
+    existingResult = await supabase
+      .from('tasks')
+      .select('id, due_date, is_completed, skipped_on')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .eq('task_name', taskTitle)
+      .order('id', { ascending: true });
+  }
+
+  if (existingResult.error && isMissingSkippedOnColumnError(existingResult.error)) {
+    existingResult = await supabase
+      .from('tasks')
+      .select('id, due_date, is_completed, last_completed_date')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .eq('task_name', taskTitle)
+      .order('id', { ascending: true });
+  }
 
   if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
     existingResult = await supabase
@@ -8957,12 +9351,19 @@ async function writeTaskPayload(supabase, task, maintenance, todayStr) {
 
   const existing = existingResult.data;
   const canUseLastCompleted = await probeLastCompletedColumn(supabase);
+  const canUseSkippedOn = await probeSkippedOnColumn(supabase);
 
   let payload = isMaintenance
     ? buildMaintenanceSyncRow(task, maintenance, existing ?? [], todayStr)
-    : buildPackSyncRow(task, existing ?? [], canUseLastCompleted);
+    : buildPackSyncRow(task, existing ?? [], canUseLastCompleted, todayStr);
 
-  let body = canUseLastCompleted ? payload : withoutLastCompletedDate(payload);
+  let body = { ...payload };
+  if (!canUseLastCompleted) {
+    body = withoutLastCompletedDate(body);
+  }
+  if (!canUseSkippedOn) {
+    body = withoutSkippedOn(body);
+  }
 
   if (existing && existing.length > 0) {
     const [primary, ...duplicates] = existing;
@@ -8972,6 +9373,13 @@ async function writeTaskPayload(supabase, task, maintenance, todayStr) {
     if (error && isMissingLastCompletedColumnError(error)) {
       resetLastCompletedColumnProbe();
       body = withoutLastCompletedDate(payload);
+      if (!canUseSkippedOn) body = withoutSkippedOn(body);
+      ({ error } = await supabase.from('tasks').update(body).eq('id', primary.id));
+    }
+
+    if (error && isMissingSkippedOnColumnError(error)) {
+      resetSkippedOnColumnProbe();
+      body = withoutSkippedOn(body);
       ({ error } = await supabase.from('tasks').update(body).eq('id', primary.id));
     }
 
@@ -9045,9 +9453,25 @@ export async function fetchLawnTasksForInboundSync() {
 
   let result = await supabase
     .from('tasks')
-    .select('id, app_source, task_name, due_date, is_completed, last_completed_date')
+    .select('id, app_source, task_name, due_date, is_completed, last_completed_date, skipped_on')
     .eq('app_source', LAWN_APP_SOURCE)
     .order('due_date', { ascending: true });
+
+  if (result.error && isMissingLastCompletedColumnError(result.error)) {
+    result = await supabase
+      .from('tasks')
+      .select('id, app_source, task_name, due_date, is_completed, skipped_on')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .order('due_date', { ascending: true });
+  }
+
+  if (result.error && isMissingSkippedOnColumnError(result.error)) {
+    result = await supabase
+      .from('tasks')
+      .select('id, app_source, task_name, due_date, is_completed, last_completed_date')
+      .eq('app_source', LAWN_APP_SOURCE)
+      .order('due_date', { ascending: true });
+  }
 
   if (result.error && isMissingLastCompletedColumnError(result.error)) {
     result = await supabase
@@ -9071,11 +9495,15 @@ export async function fetchLawnTasksForInboundSync() {
 export async function clearLawnTaskCompletion(taskName) {
   const supabase = requireSupabase();
   const canUseLastCompleted = await probeLastCompletedColumn(supabase);
+  const canUseSkippedOn = await probeSkippedOnColumn(supabase);
 
   /** @type {Record<string, unknown>} */
   let body = { is_completed: false };
   if (canUseLastCompleted) {
     body.last_completed_date = null;
+  }
+  if (canUseSkippedOn) {
+    body.skipped_on = null;
   }
 
   let { error } = await supabase
@@ -9086,6 +9514,46 @@ export async function clearLawnTaskCompletion(taskName) {
 
   if (error && isMissingLastCompletedColumnError(error)) {
     body = { is_completed: false };
+    ({ error } = await supabase
+      .from('tasks')
+      .update(body)
+      .eq('app_source', LAWN_APP_SOURCE)
+      .eq('task_name', taskName));
+  }
+
+  if (error) {
+    throw new Error(formatSupabaseSyncError(error));
+  }
+}
+
+/**
+ * Record a skip for a lawn task by title (Tasks app parity from Lawn app UI).
+ * @param {string} taskName
+ * @param {string} skippedDate YYYY-MM-DD
+ */
+export async function skipLawnTaskByName(taskName, skippedDate) {
+  const supabase = requireSupabase();
+  const canUseLastCompleted = await probeLastCompletedColumn(supabase);
+  const canUseSkippedOn = await probeSkippedOnColumn(supabase);
+
+  /** @type {Record<string, unknown>} */
+  let body = { is_completed: false };
+  if (canUseLastCompleted) {
+    body.last_completed_date = null;
+  }
+  if (canUseSkippedOn) {
+    body.skipped_on = skippedDate;
+  }
+
+  let { error } = await supabase
+    .from('tasks')
+    .update(body)
+    .eq('app_source', LAWN_APP_SOURCE)
+    .eq('task_name', taskName);
+
+  if (error && isMissingSkippedOnColumnError(error)) {
+    resetSkippedOnColumnProbe();
+    body = withoutSkippedOn(body);
     ({ error } = await supabase
       .from('tasks')
       .update(body)
@@ -31587,6 +32055,7 @@ function formatSupabaseSyncError(error) {
 var GYPSUM_TASK_NAME = "Apply Liquid Gypsum";
 var GYPSUM_LOG_KEY = "lastGypsumDate";
 var GYPSUM_POSTPONE_KEY = "gypsumPostponedUntil";
+var TASK_SKIPS_LOG_KEY = "taskSkips";
 var taskNameToStepKey = null;
 function getTaskNameToStepKeyMap() {
   if (!taskNameToStepKey) {
@@ -31602,6 +32071,74 @@ function getTaskNameToStepKeyMap() {
     );
   }
   return taskNameToStepKey;
+}
+function parseTaskSkips(userLogs) {
+  const raw = userLogs[TASK_SKIPS_LOG_KEY];
+  if (!raw) return (
+    /** @type {TaskSkipEntry[]} */
+    []
+  );
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function applyInboundTaskSkips(rows, userLogs) {
+  const nextLogs = { ...userLogs };
+  const existing = parseTaskSkips(nextLogs);
+  const seen = new Set(existing.map((entry) => `${entry.taskName}:${entry.skippedOn}`));
+  let updated = false;
+  for (const row of rows) {
+    if (!row.skipped_on) continue;
+    const key = `${row.task_name}:${row.skipped_on}`;
+    if (seen.has(key)) continue;
+    existing.push({ taskName: row.task_name, skippedOn: row.skipped_on });
+    seen.add(key);
+    updated = true;
+  }
+  if (updated) {
+    nextLogs[TASK_SKIPS_LOG_KEY] = JSON.stringify(existing);
+  }
+  return nextLogs;
+}
+function daysBetweenIso(todayStr, fromIso) {
+  const start = /* @__PURE__ */ new Date(`${fromIso}T12:00:00`);
+  const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
+  return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
+}
+function countRecentWateringSkips(userLogs, todayStr, withinDays = 7) {
+  const skips = parseTaskSkips(userLogs);
+  let count = 0;
+  for (const skip of skips) {
+    if (skip.taskName !== WATER_TASK_NAME && !skip.taskName.startsWith("Water lawn (")) {
+      continue;
+    }
+    const days = daysBetweenIso(todayStr, skip.skippedOn);
+    if (days >= 0 && days <= withinDays) {
+      count += 1;
+    }
+  }
+  return count;
+}
+function countFullySkippedWateringDays(userLogs, todayStr, withinDays = 7) {
+  const skips = parseTaskSkips(userLogs);
+  const byDate = /* @__PURE__ */ new Map();
+  for (const skip of skips) {
+    if (!skip.taskName.startsWith("Water lawn (")) continue;
+    const days = daysBetweenIso(todayStr, skip.skippedOn);
+    if (days < 0 || days > withinDays) continue;
+    if (!byDate.has(skip.skippedOn)) byDate.set(skip.skippedOn, /* @__PURE__ */ new Set());
+    byDate.get(skip.skippedOn)?.add(skip.taskName);
+  }
+  let fullDays = 0;
+  for (const names of byDate.values()) {
+    if (WATERING_SESSION_NAMES.every((name) => names.has(name))) {
+      fullDays += 1;
+    }
+  }
+  return fullDays;
 }
 function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenance = {}) {
   const stepMap = getTaskNameToStepKeyMap();
@@ -31685,6 +32222,21 @@ function isSyntheticMaintenanceComplete(task) {
     task.reason
   );
 }
+function getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr) {
+  let resolvedOn = null;
+  for (const existing of existingRows ?? []) {
+    if (existing.skipped_on && existing.skipped_on >= taskDueDate) {
+      resolvedOn = pickLatestIsoDate(resolvedOn, existing.skipped_on);
+    }
+    if (existing.last_completed_date && existing.last_completed_date >= taskDueDate) {
+      resolvedOn = pickLatestIsoDate(resolvedOn, existing.last_completed_date);
+    }
+  }
+  if (!resolvedOn) return null;
+  const nextDay = addDaysToDateString(resolvedOn, 1);
+  const tomorrowFromToday = addDaysToDateString(todayStr, 1);
+  return nextDay > tomorrowFromToday ? nextDay : tomorrowFromToday;
+}
 function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
   const localLast = task.title === MOW_TASK_NAME ? maintenance.lastMowedDate : task.title === WATER_TASK_NAME || task.title.startsWith("Water lawn (") ? maintenance.lastWateredDate : task.title === VERTICUT_TASK_NAME ? maintenance.lastVerticutDate : null;
   let lastCompleted = localLast ?? null;
@@ -31708,12 +32260,24 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     task_name: task.title,
     due_date: task.dueDate
   };
+  const taskDueDate = task.dueDate;
   if (task.title.startsWith("Water lawn (")) {
-    const completedToday = (existingRows ?? []).some(
-      (r) => r.last_completed_date === todayStr
-    );
-    if (completedToday) {
-      row.due_date = addDaysToDateString(todayStr, 1);
+    const advancedDue = getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr);
+    if (advancedDue) {
+      row.due_date = advancedDue;
+    }
+  } else if ((existingRows ?? []).some((r) => r.skipped_on && r.skipped_on >= taskDueDate)) {
+    const advancedDue = getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr);
+    if (advancedDue) {
+      row.due_date = advancedDue;
+    }
+  }
+  if (getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr)) {
+    row.skipped_on = null;
+  } else {
+    const pendingSkip = (existingRows ?? []).map((r) => r.skipped_on ?? null).filter((d) => d && d >= taskDueDate).sort().at(-1);
+    if (pendingSkip) {
+      row.skipped_on = pendingSkip;
     }
   }
   if (lastCompleted) {
@@ -31722,13 +32286,21 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
   row.is_completed = isSyntheticMaintenanceComplete(task);
   return row;
 }
-function buildPackSyncRow(task, existingRows, canUseLastCompleted) {
+function buildPackSyncRow(task, existingRows, canUseLastCompleted, todayStr) {
   const existing = existingRows?.[0];
   const row = {
     app_source: LAWN_APP_SOURCE,
     task_name: task.title,
     due_date: task.dueDate
   };
+  const taskDueDate = task.dueDate;
+  const advancedDue = getSessionAdvancedDueDate(existingRows ?? [], taskDueDate, todayStr);
+  if (advancedDue && (existingRows ?? []).some((r) => r.skipped_on && r.skipped_on >= taskDueDate)) {
+    row.due_date = advancedDue;
+    row.skipped_on = null;
+  } else if (existing?.skipped_on && existing.skipped_on >= taskDueDate) {
+    row.skipped_on = existing.skipped_on;
+  }
   if (task.status === "completed") {
     row.is_completed = true;
     if (canUseLastCompleted) {
@@ -31760,7 +32332,13 @@ async function applyTaskWrite(supabase, body, taskTitle, fullPayload) {
 async function writeTaskPayload(supabase, task, maintenance, todayStr) {
   const taskTitle = task.title;
   const isMaintenance = MAINTENANCE_TASK_NAMES.has(taskTitle) || typeof taskTitle === "string" && taskTitle.startsWith("Water lawn (");
-  let existingResult = await supabase.from("tasks").select("id, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
+  let existingResult = await supabase.from("tasks").select("id, due_date, is_completed, last_completed_date, skipped_on").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
+  if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
+    existingResult = await supabase.from("tasks").select("id, due_date, is_completed, skipped_on").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
+  }
+  if (existingResult.error && isMissingSkippedOnColumnError(existingResult.error)) {
+    existingResult = await supabase.from("tasks").select("id, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
+  }
   if (existingResult.error && isMissingLastCompletedColumnError(existingResult.error)) {
     existingResult = await supabase.from("tasks").select("id, due_date, is_completed").eq("app_source", LAWN_APP_SOURCE).eq("task_name", taskTitle).order("id", { ascending: true });
   }
@@ -31771,14 +32349,27 @@ async function writeTaskPayload(supabase, task, maintenance, todayStr) {
   }
   const existing = existingResult.data;
   const canUseLastCompleted = await probeLastCompletedColumn(supabase);
-  let payload = isMaintenance ? buildMaintenanceSyncRow(task, maintenance, existing ?? [], todayStr) : buildPackSyncRow(task, existing ?? [], canUseLastCompleted);
-  let body = canUseLastCompleted ? payload : withoutLastCompletedDate(payload);
+  const canUseSkippedOn = await probeSkippedOnColumn(supabase);
+  let payload = isMaintenance ? buildMaintenanceSyncRow(task, maintenance, existing ?? [], todayStr) : buildPackSyncRow(task, existing ?? [], canUseLastCompleted, todayStr);
+  let body = { ...payload };
+  if (!canUseLastCompleted) {
+    body = withoutLastCompletedDate(body);
+  }
+  if (!canUseSkippedOn) {
+    body = withoutSkippedOn(body);
+  }
   if (existing && existing.length > 0) {
     const [primary, ...duplicates] = existing;
     let { error } = await supabase.from("tasks").update(body).eq("id", primary.id);
     if (error && isMissingLastCompletedColumnError(error)) {
       resetLastCompletedColumnProbe();
       body = withoutLastCompletedDate(payload);
+      if (!canUseSkippedOn) body = withoutSkippedOn(body);
+      ({ error } = await supabase.from("tasks").update(body).eq("id", primary.id));
+    }
+    if (error && isMissingSkippedOnColumnError(error)) {
+      resetSkippedOnColumnProbe();
+      body = withoutSkippedOn(body);
       ({ error } = await supabase.from("tasks").update(body).eq("id", primary.id));
     }
     if (error) {
@@ -31808,7 +32399,13 @@ async function syncLawnTasksToSupabase(compiledTasks, maintenance = {}, todayStr
 }
 async function fetchLawnTasksForInboundSync() {
   const supabase = requireSupabase();
-  let result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
+  let result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed, last_completed_date, skipped_on").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
+  if (result.error && isMissingLastCompletedColumnError(result.error)) {
+    result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed, skipped_on").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
+  }
+  if (result.error && isMissingSkippedOnColumnError(result.error)) {
+    result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed, last_completed_date").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
+  }
   if (result.error && isMissingLastCompletedColumnError(result.error)) {
     result = await supabase.from("tasks").select("id, app_source, task_name, due_date, is_completed").eq("app_source", LAWN_APP_SOURCE).order("due_date", { ascending: true });
   }
@@ -31848,8 +32445,32 @@ var WATERING_SESSION_NAMES = [
   "Water lawn (Evening)"
 ];
 var lastCompletedColumnAvailable = null;
+var skippedOnColumnAvailable = null;
 function resetLastCompletedColumnProbe() {
   lastCompletedColumnAvailable = null;
+}
+function resetSkippedOnColumnProbe() {
+  skippedOnColumnAvailable = null;
+}
+function isMissingSkippedOnColumnError(error) {
+  const message = error instanceof Error ? error.message : typeof error === "object" && error !== null && "message" in error ? String(
+    /** @type {{ message: unknown }} */
+    error.message
+  ) : String(error);
+  return /skipped_on|42703|PGRST204|schema cache/i.test(message);
+}
+function withoutSkippedOn(payload) {
+  const next = { ...payload };
+  delete next.skipped_on;
+  return next;
+}
+async function probeSkippedOnColumn(supabase) {
+  if (skippedOnColumnAvailable !== null) {
+    return skippedOnColumnAvailable;
+  }
+  const { error } = await supabase.from("tasks").select("skipped_on").eq("app_source", LAWN_APP_SOURCE).limit(1);
+  skippedOnColumnAvailable = !error;
+  return skippedOnColumnAvailable;
 }
 function isMissingLastCompletedColumnError(error) {
   const message = error instanceof Error ? error.message : typeof error === "object" && error !== null && "message" in error ? String(
@@ -31924,6 +32545,35 @@ function inferMaintenanceDatesFromRows(rows, todayStr) {
     }
   }
   return { lastMowedDate, lastWateredDate, lastVerticutDate };
+}
+function isWateringSessionResolved(row, todayStr) {
+  const dueDate = row.due_date;
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return false;
+  if (row.skipped_on && row.skipped_on >= dueDate) {
+    return true;
+  }
+  const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
+  return Boolean(inferred && inferred >= dueDate);
+}
+function resolveSeedWateringNextDueIso(wateringNextDueIso, rows, todayStr) {
+  const sessionRows = rows.filter((r) => WATERING_SESSION_NAMES.includes(r.task_name));
+  if (sessionRows.length === 0) {
+    return wateringNextDueIso;
+  }
+  let nextDue = wateringNextDueIso ?? todayStr;
+  const dueDates = [...new Set(sessionRows.map((r) => r.due_date).filter(Boolean))].sort();
+  for (const dueDate of dueDates) {
+    if (dueDate > todayStr) continue;
+    const forDay = sessionRows.filter((r) => r.due_date === dueDate);
+    if (forDay.length === 0) continue;
+    const allResolved = forDay.every((row) => isWateringSessionResolved(row, todayStr));
+    if (!allResolved) {
+      return pickLatestIsoDate(nextDue, dueDate) ?? dueDate;
+    }
+    const dayAfter = addDaysToDateString(dueDate, 1);
+    nextDue = pickLatestIsoDate(nextDue, dayAfter) ?? dayAfter;
+  }
+  return nextDue;
 }
 function mergeMaintenanceDate(localDate, remoteDate) {
   return pickLatestIsoDate(localDate, remoteDate);
@@ -32368,7 +33018,7 @@ function getVerticutRenovationState(todayStr, userLogs) {
       verticutLockedUntilIso: null
     };
   }
-  const daysSinceRenovation = daysBetweenIso(todayStr, renovationDate);
+  const daysSinceRenovation = daysBetweenIso2(todayStr, renovationDate);
   const renovationHoldActive = daysSinceRenovation < VERTICUT_RENOVATION_HOLD_DAYS;
   const verticutLockedUntilIso = renovationHoldActive ? addDaysToDateString(renovationDate, VERTICUT_RENOVATION_HOLD_DAYS) : null;
   return { renovationDate, renovationHoldActive, verticutLockedUntilIso };
@@ -32379,13 +33029,14 @@ function isVerticutHeatDroughtPaused(currentSoilTemp, forecastedRainSumNearTerm,
   }
   return currentSoilTemp !== null && currentSoilTemp >= 22 && forecastedRainSumNearTerm < 2 && recentPastRainSum < RECENT_RAIN_WET_SOIL_MM;
 }
-function getSeedState(todayStr, springSeedDate) {
-  const daysSinceSeed = springSeedDate ? daysBetweenIso(todayStr, springSeedDate) : null;
-  const seedEstablishmentActive = springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed <= SEED_ESTABLISHMENT_DAYS;
-  const mowingLockedUntilIso = seedEstablishmentActive && springSeedDate ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS) : null;
+function getSeedState(todayStr, springSeedDate, establishmentExtraDays = 0) {
+  const daysSinceSeed = springSeedDate ? daysBetweenIso2(todayStr, springSeedDate) : null;
+  const totalEstablishmentDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
+  const seedEstablishmentActive = springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed <= totalEstablishmentDays;
+  const mowingLockedUntilIso = seedEstablishmentActive && springSeedDate ? addDaysToDateString(springSeedDate, totalEstablishmentDays) : null;
   return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
 }
-function daysBetweenIso(todayStr, pastIso) {
+function daysBetweenIso2(todayStr, pastIso) {
   const start = /* @__PURE__ */ new Date(`${pastIso}T12:00:00`);
   const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
   return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
@@ -32393,7 +33044,7 @@ function daysBetweenIso(todayStr, pastIso) {
 function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
   const temp = currentSoilTemp;
   if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
+    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
     if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
   }
   if (temp !== null && temp < 8) return 14;
@@ -32406,7 +33057,7 @@ function getDynamicWateringDays(forecastedRainSumNearTerm, currentSoilTemp, spri
   const rain = forecastedRainSumNearTerm;
   if (seedEstablishmentActive) return 1;
   if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
+    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
     if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 2;
   }
   if (recentPastRainSum >= 8) return 5;
@@ -32434,7 +33085,7 @@ function getScheduleReason(input) {
   const waterReasons = [];
   const verticutReasons = [];
   if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
+    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
     if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) {
       mowReasons.push("gentle recovery schedule after seeding");
       waterReasons.push("enhanced watering during turf recovery");
@@ -32492,10 +33143,15 @@ function buildMaintenanceSchedule(input) {
     soilRecentlyWetToday = null,
     lastMowedDate,
     lastWateredDate,
-    lastVerticutDate
+    lastVerticutDate,
+    establishmentExtraDays = 0
   } = input;
   const springSeedDate = userLogs[makeStepKey("SPRING", "seed")] ?? null;
-  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(todayStr, springSeedDate);
+  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(
+    todayStr,
+    springSeedDate,
+    establishmentExtraDays
+  );
   const isDormantSeason = isDormantSeasonForDate(todayStr);
   const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
   const dynamicWateringDays = getDynamicWateringDays(
@@ -32525,7 +33181,7 @@ function buildMaintenanceSchedule(input) {
     recentPastRainSum
   );
   const verticutNaturalNextDueIso = lastVerticutDate ? addDaysToDateString(lastVerticutDate, VERTICUT_INTERVAL_DAYS) : mowingNextDueIso;
-  const verticutIntervalElapsed = lastVerticutDate === null || daysBetweenIso(todayStr, lastVerticutDate) >= VERTICUT_INTERVAL_DAYS;
+  const verticutIntervalElapsed = lastVerticutDate === null || daysBetweenIso2(todayStr, lastVerticutDate) >= VERTICUT_INTERVAL_DAYS;
   let verticutNextDueIso = null;
   let verticutPairedWithMow = false;
   if (isVerticutSeason && !renovationHoldActive && !verticutHeatDroughtPaused) {
@@ -32631,7 +33287,8 @@ function compileLawnTasks({
   lastGypsumDate,
   gypsumPostponedUntil = null,
   scheduleReason = null,
-  dynamicMinutes = 0
+  dynamicMinutes = 0,
+  recentWateringSkips = 0
 }) {
   const taskStatusFromDue = (dueDateIso) => daysBetween(dueDateIso, todayStr) >= 0 ? "urgent" : "pending";
   const compiledTasks = [];
@@ -32757,7 +33414,8 @@ function compileLawnTasks({
       const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
       const baseReason = scheduleReason?.water ? `${scheduleReason.water} \xB7 ` : "";
       const perSessionText = mistingMins > 0 ? `Run for ${mistingMins} minutes` : "divide daily duration by 3";
-      const mistingReason = `${baseReason}Light surface misting \xB7 ${perSessionText}`;
+      const missAdvisory = recentWateringSkips > 0 ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? "" : "s"} this week \u2014 keep seed bed moist` : null;
+      const mistingReason = [`${baseReason}Light surface misting \xB7 ${perSessionText}`, missAdvisory].filter(Boolean).join(" \xB7 ");
       compiledTasks.push({
         id: "lawn-water-morning",
         title: "Water lawn (Morning)",
@@ -32867,7 +33525,8 @@ function compileAllLawnTasks(input) {
     lastGypsumDate,
     gypsumPostponedUntil = null,
     scheduleReason = null,
-    dynamicMinutes = 0
+    dynamicMinutes = 0,
+    recentWateringSkips = 0
   } = input;
   return [
     ...compilePackStepTasks({ todayStr, userLogs, pendingDates }),
@@ -32892,7 +33551,8 @@ function compileAllLawnTasks(input) {
       lastGypsumDate,
       gypsumPostponedUntil,
       scheduleReason,
-      dynamicMinutes
+      dynamicMinutes,
+      recentWateringSkips
     })
   ];
 }
@@ -32928,6 +33588,7 @@ async function runLawnCloudSync() {
   lastMowedDate = inbound.lastMowedDate ?? lastMowedDate;
   lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
   lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
+  userLogs = applyInboundTaskSkips(inboundRows, userLogs);
   const maintenanceRows = inboundRows.filter(
     (row) => [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name) || typeof row.task_name === "string" && row.task_name.startsWith("Water lawn (")
   );
@@ -32935,6 +33596,10 @@ async function runLawnCloudSync() {
   lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
   lastWateredDate = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
   lastVerticutDate = mergeMaintenanceDate(lastVerticutDate, inferred.lastVerticutDate);
+  const establishmentExtraDays = Math.min(
+    7,
+    countFullySkippedWateringDays(userLogs, todayStr)
+  );
   await saveLawnUserLogsToSupabase(userLogs);
   const weatherLocation = resolveWeatherLocation(scheduleSnapshot.weatherLocation);
   let weather;
@@ -32993,8 +33658,17 @@ async function runLawnCloudSync() {
     soilRecentlyWetToday: soilRecentlyWet,
     lastMowedDate,
     lastWateredDate,
-    lastVerticutDate
+    lastVerticutDate,
+    establishmentExtraDays
   });
+  let wateringNextDueIso = maintenance.wateringNextDueIso;
+  if (maintenance.seedEstablishmentActive) {
+    wateringNextDueIso = resolveSeedWateringNextDueIso(
+      wateringNextDueIso,
+      maintenanceRows,
+      todayStr
+    );
+  }
   const scheduleReason = getScheduleReason({
     forecastedRainSumNearTerm,
     forecastedRainSumWeek: forecastedRainSum,
@@ -33018,7 +33692,7 @@ async function runLawnCloudSync() {
     seedEstablishmentActive: maintenance.seedEstablishmentActive,
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,
-    wateringNextDueIso: maintenance.wateringNextDueIso,
+    wateringNextDueIso,
     isVerticutSeason: maintenance.isVerticutSeason,
     renovationHoldActive: maintenance.renovationHoldActive,
     verticutLockedUntilIso: maintenance.verticutLockedUntilIso,
@@ -33027,7 +33701,8 @@ async function runLawnCloudSync() {
     verticutPairedWithMow: maintenance.verticutPairedWithMow,
     lastGypsumDate: userLogs.lastGypsumDate ?? null,
     gypsumPostponedUntil: userLogs[GYPSUM_POSTPONE_KEY] ?? null,
-    scheduleReason
+    scheduleReason,
+    recentWateringSkips: countRecentWateringSkips(userLogs, todayStr)
   });
   await syncLawnTasksToSupabase(
     compiledTasks,
@@ -33040,7 +33715,7 @@ async function runLawnCloudSync() {
       lastWateredDate,
       lastVerticutDate,
       mowingNextDueIso: maintenance.mowingNextDueIso,
-      wateringNextDueIso: maintenance.wateringNextDueIso,
+      wateringNextDueIso,
       verticutNextDueIso: maintenance.verticutNextDueIso,
       forecastedRainSum,
       forecastedRainSumNearTerm,

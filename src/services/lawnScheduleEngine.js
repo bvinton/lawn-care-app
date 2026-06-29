@@ -84,14 +84,18 @@ export function isVerticutHeatDroughtPaused(
 /**
  * @param {string} todayStr
  * @param {string | null} springSeedDate
+ * @param {number} [establishmentExtraDays]
  */
-export function getSeedState(todayStr, springSeedDate) {
+export function getSeedState(todayStr, springSeedDate, establishmentExtraDays = 0) {
   const daysSinceSeed = springSeedDate ? daysBetweenIso(todayStr, springSeedDate) : null;
+  const totalEstablishmentDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
   const seedEstablishmentActive =
-    springSeedDate !== null && daysSinceSeed !== null && daysSinceSeed <= SEED_ESTABLISHMENT_DAYS;
+    springSeedDate !== null &&
+    daysSinceSeed !== null &&
+    daysSinceSeed <= totalEstablishmentDays;
   const mowingLockedUntilIso =
     seedEstablishmentActive && springSeedDate
-      ? addDaysToDateString(springSeedDate, SEED_ESTABLISHMENT_DAYS)
+      ? addDaysToDateString(springSeedDate, totalEstablishmentDays)
       : null;
   return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
 }
@@ -275,6 +279,7 @@ export function getScheduleReason(input) {
  * @param {string | null} input.lastMowedDate
  * @param {string | null} input.lastWateredDate
  * @param {string | null} input.lastVerticutDate
+ * @param {number} [input.establishmentExtraDays]
  */
 export function buildMaintenanceSchedule(input) {
   const {
@@ -288,10 +293,15 @@ export function buildMaintenanceSchedule(input) {
     lastMowedDate,
     lastWateredDate,
     lastVerticutDate,
+    establishmentExtraDays = 0,
   } = input;
 
   const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
-  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(todayStr, springSeedDate);
+  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(
+    todayStr,
+    springSeedDate,
+    establishmentExtraDays
+  );
   const isDormantSeason = isDormantSeasonForDate(todayStr);
 
   const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);

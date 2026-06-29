@@ -1,6 +1,6 @@
 import React from 'react';
 import { addDaysToDateString } from '../../data/LawnPackData';
-import { LAWN_APP_SOURCE } from '../../services/lawnTasks';
+import { LAWN_APP_SOURCE, skipLawnTaskByName } from '../../services/lawnTasks';
 import {
   GYPSUM_LOG_KEY,
   GYPSUM_POSTPONE_KEY,
@@ -430,6 +430,31 @@ export default function MaintenancePanel({ app }) {
                 </p>
                 <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
                   🚰 3x Daily Misting: Each session should be ~{dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0} minutes (1/3 of your normal {dynamicMinutes} min soak) using your {activeSprinkler.name}.
+                </div>
+                <div className="mt-2 space-y-1">
+                  <p className="text-[10px] font-semibold text-gray-600">
+                    Skip a session (won&apos;t catch up):
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      'Water lawn (Morning)',
+                      'Water lawn (Midday)',
+                      'Water lawn (Evening)',
+                    ].map((taskName) => (
+                      <button
+                        key={taskName}
+                        type="button"
+                        className="text-[10px] font-bold py-1 px-2 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                        onClick={() => {
+                          void skipLawnTaskByName(taskName, todayStr).then(() =>
+                            pushLawnTasksToSupabase({}, { quiet: true })
+                          );
+                        }}
+                      >
+                        Skip {taskName.replace('Water lawn (', '').replace(')', '')}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </>
             ) : wateringDue ? (

@@ -136,6 +136,7 @@ export function compileLawnTasks({
   gypsumPostponedUntil = null,
   scheduleReason = null,
   dynamicMinutes = 0,
+  recentWateringSkips = 0,
 }) {
   /** @param {string} dueDateIso */
   const taskStatusFromDue = (dueDateIso) =>
@@ -295,7 +296,13 @@ export function compileLawnTasks({
       const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
       const perSessionText =
         mistingMins > 0 ? `Run for ${mistingMins} minutes` : 'divide daily duration by 3';
-      const mistingReason = `${baseReason}Light surface misting · ${perSessionText}`;
+      const missAdvisory =
+        recentWateringSkips > 0
+          ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? '' : 's'} this week — keep seed bed moist`
+          : null;
+      const mistingReason = [ `${baseReason}Light surface misting · ${perSessionText}`, missAdvisory]
+        .filter(Boolean)
+        .join(' · ');
 
       compiledTasks.push({
         id: 'lawn-water-morning',
@@ -437,6 +444,7 @@ export function compileAllLawnTasks(input) {
     gypsumPostponedUntil = null,
     scheduleReason = null,
     dynamicMinutes = 0,
+    recentWateringSkips = 0,
   } = input;
 
   return [
@@ -463,6 +471,7 @@ export function compileAllLawnTasks(input) {
       gypsumPostponedUntil,
       scheduleReason,
       dynamicMinutes,
+      recentWateringSkips,
     }),
   ];
 }
