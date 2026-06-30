@@ -23063,6 +23063,11 @@ var NEAR_TERM_RAIN_DAYS = 3;
 var PAST_RAIN_DAYS = 7;
 var RECENT_PAST_RAIN_DAYS = 3;
 var RECENT_RAIN_WET_SOIL_MM = 5;
+var SEED_MISTING_SESSION_WINDOWS = {
+  "Water lawn (Morning)": { startHour: 5, endHour: 11, label: "morning" },
+  "Water lawn (Midday)": { startHour: 11, endHour: 16, label: "midday" },
+  "Water lawn (Evening)": { startHour: 16, endHour: 22, label: "evening" }
+};
 function sumPrecipitation(precipitationTotals, days = 7) {
   if (!Array.isArray(precipitationTotals)) return 0;
   return precipitationTotals.slice(0, days).reduce((sum, mm) => sum + (mm ?? 0), 0);
@@ -23145,6 +23150,76 @@ function buildDailyForecastSeries(data) {
     date,
     mm: forecast[index] ?? 0
   }));
+}
+function getTodayHourlyPrecipMm(data) {
+  const hourlyPrecip = data?.hourly?.precipitation;
+  if (!Array.isArray(hourlyPrecip) || hourlyPrecip.length === 0) {
+    return [];
+  }
+  const start = PAST_RAIN_DAYS * 24;
+  const values = [];
+  for (let hour = 0; hour < 24; hour += 1) {
+    const index = start + hour;
+    values.push(index < hourlyPrecip.length ? hourlyPrecip[index] ?? 0 : 0);
+  }
+  return values;
+}
+function sumHourlyPrecipInWindow(todayHourlyPrecipMm, startHour, endHour) {
+  if (!Array.isArray(todayHourlyPrecipMm) || todayHourlyPrecipMm.length < 24) {
+    return 0;
+  }
+  let sum = 0;
+  for (let hour = startHour; hour < endHour && hour < 24; hour += 1) {
+    sum += todayHourlyPrecipMm[hour] ?? 0;
+  }
+  return sum;
+}
+function getSeedMistingRainSkipForSession(sessionTitle, dueDateIso, todayStr, todayHourlyPrecipMm, dailyForecastByDate, todayRainMm, todayRainObservedMm = 0) {
+  const daysUntilDue = Math.floor(
+    ((/* @__PURE__ */ new Date(`${dueDateIso}T12:00:00`)).getTime() - (/* @__PURE__ */ new Date(`${todayStr}T12:00:00`)).getTime()) / (1e3 * 60 * 60 * 24)
+  );
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+  if (daysUntilDue > 0) {
+    const rainMm = dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0;
+    if (rainMm >= SEED_MIST_TARGET_MM) {
+      return {
+        skip: true,
+        reason: `${rainMm.toFixed(1)}mm rain forecast \u2013 skip misting`,
+        fullSoak: false
+      };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+  const window2 = SEED_MISTING_SESSION_WINDOWS[sessionTitle];
+  if (window2 && Array.isArray(todayHourlyPrecipMm) && todayHourlyPrecipMm.length >= 24) {
+    const rainMm = sumHourlyPrecipInWindow(
+      todayHourlyPrecipMm,
+      window2.startHour,
+      window2.endHour
+    );
+    if (rainMm >= SEED_MIST_TARGET_MM) {
+      const label = window2.label === "evening" ? `${rainMm.toFixed(1)}mm rain forecast this evening \u2013 skip misting` : `${rainMm.toFixed(1)}mm rain in the ${window2.label} \u2013 skip misting`;
+      return { skip: true, reason: label, fullSoak: false };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+  if (sessionTitle === "Water lawn (Evening)" && todayRainMm >= SEED_MIST_TARGET_MM) {
+    return {
+      skip: true,
+      reason: "Rain keeping seed bed moist \u2013 skip evening misting",
+      fullSoak: false
+    };
+  }
+  if (todayRainObservedMm >= SEED_MIST_TARGET_MM) {
+    return {
+      skip: true,
+      reason: "Rain already fallen today \u2013 skip misting",
+      fullSoak: false
+    };
+  }
+  return { skip: false, reason: null, fullSoak: false };
 }
 function getSeedMistingRainSkipForDueDate(dueDateIso, todayStr, dailyForecastByDate, todayRainMm) {
   const daysUntilDue = Math.floor(
@@ -23258,6 +23333,7 @@ function buildWeatherSnapshotFromOpenMeteo(data) {
   const forecastedRainSumNearTerm = todayRainMm + forecastNearTermBeyondToday;
   const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
   const dailyForecastByDate = buildDailyForecastSeries(data);
+  const todayHourlyPrecipMm = getTodayHourlyPrecipMm(data);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
   const todayWatering = computeTodayWateringRainContext(
@@ -23271,6 +23347,8 @@ function buildWeatherSnapshotFromOpenMeteo(data) {
     recentPastRainBeforeToday,
     todayRainMm,
     dailyForecastByDate,
+    todayHourlyPrecipMm,
+    todayRainObservedMm,
     rainCreditMm: todayWatering.rainCreditMm,
     currentSoilTemp,
     currentSoilTempMin,
@@ -23606,6 +23684,8 @@ function compileLawnTasks({
   dailyForecastByDate = [],
   recentPastRainBeforeToday = 0,
   todayRainMm = 0,
+  todayHourlyPrecipMm = [],
+  todayRainObservedMm = 0,
   seedEstablishmentActive,
   mowingLockedUntilIso,
   mowingNextDueIso,
@@ -23723,64 +23803,71 @@ function compileLawnTasks({
     });
   } else {
     const waterDueDate = wateringNextDueIso ?? todayStr;
-    const rainSkip = dailyForecastByDate.length > 0 ? getWateringRainSkipForDueDate(
-      waterDueDate,
-      todayStr,
-      dailyForecastByDate,
-      recentPastRainBeforeToday,
-      todayRainMm,
-      { seedEstablishmentActive }
-    ) : {
-      skip: seedEstablishmentActive ? todayRainMm >= SEED_MIST_TARGET_MM : isNatureProvidingFullSoak || soilRecentlyWet,
-      reason: seedEstablishmentActive ? todayRainMm >= SEED_MIST_TARGET_MM ? "Rain keeping seed bed moist \u2013 skip misting today" : null : isNatureProvidingFullSoak ? "Heavy rain \u2013 nature providing full soak" : soilRecentlyWet ? "Recent rain \u2013 soil still damp, skip watering" : null
-    };
-    if (rainSkip.skip && rainSkip.reason) {
-      pushRainSkippedWaterTasks(
-        compiledTasks,
-        seedEstablishmentActive,
-        waterDueDate,
-        rainSkip.reason
-      );
-    } else if (seedEstablishmentActive) {
+    if (seedEstablishmentActive) {
       const waterStatus = taskStatusFromDue(waterDueDate);
       const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
       const baseReason = scheduleReason?.water ? `${scheduleReason.water} \xB7 ` : "";
       const perSessionText = mistingMins > 0 ? `Run for ${mistingMins} minutes` : "divide daily duration by 3";
       const missAdvisory = recentWateringSkips > 0 ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? "" : "s"} this week \u2014 keep seed bed moist` : null;
       const mistingReason = [`${baseReason}Light surface misting \xB7 ${perSessionText}`, missAdvisory].filter(Boolean).join(" \xB7 ");
-      compiledTasks.push({
-        id: "lawn-water-morning",
-        title: "Water lawn (Morning)",
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: "lawn",
-        reason: mistingReason
-      });
-      compiledTasks.push({
-        id: "lawn-water-midday",
-        title: "Water lawn (Midday)",
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: "lawn",
-        reason: mistingReason
-      });
-      compiledTasks.push({
-        id: "lawn-water-evening",
-        title: "Water lawn (Evening)",
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: "lawn",
-        reason: mistingReason
-      });
+      for (const session of [
+        { id: "lawn-water-morning", title: "Water lawn (Morning)" },
+        { id: "lawn-water-midday", title: "Water lawn (Midday)" },
+        { id: "lawn-water-evening", title: "Water lawn (Evening)" }
+      ]) {
+        const sessionRainSkip = getSeedMistingRainSkipForSession(
+          session.title,
+          waterDueDate,
+          todayStr,
+          todayHourlyPrecipMm,
+          dailyForecastByDate,
+          todayRainMm,
+          todayRainObservedMm
+        );
+        if (sessionRainSkip.skip && sessionRainSkip.reason) {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: "completed",
+            module: "lawn",
+            reason: sessionRainSkip.reason
+          });
+        } else {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: waterStatus,
+            module: "lawn",
+            reason: mistingReason
+          });
+        }
+      }
     } else {
-      compiledTasks.push({
-        id: "lawn-water",
-        title: "Water lawn",
-        dueDate: waterDueDate,
-        status: taskStatusFromDue(waterDueDate),
-        module: "lawn",
-        reason: scheduleReason?.water ?? null
-      });
+      const rainSkip = dailyForecastByDate.length > 0 ? getWateringRainSkipForDueDate(
+        waterDueDate,
+        todayStr,
+        dailyForecastByDate,
+        recentPastRainBeforeToday,
+        todayRainMm,
+        { seedEstablishmentActive: false }
+      ) : {
+        skip: isNatureProvidingFullSoak || soilRecentlyWet,
+        reason: isNatureProvidingFullSoak ? "Heavy rain \u2013 nature providing full soak" : soilRecentlyWet ? "Recent rain \u2013 soil still damp, skip watering" : null
+      };
+      if (rainSkip.skip && rainSkip.reason) {
+        pushRainSkippedWaterTasks(compiledTasks, false, waterDueDate, rainSkip.reason);
+      } else {
+        compiledTasks.push({
+          id: "lawn-water",
+          title: "Water lawn",
+          dueDate: waterDueDate,
+          status: taskStatusFromDue(waterDueDate),
+          module: "lawn",
+          reason: scheduleReason?.water ?? null
+        });
+      }
     }
   }
   const gypsum = getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr);
@@ -23844,6 +23931,8 @@ function compileAllLawnTasks(input) {
     dailyForecastByDate = [],
     recentPastRainBeforeToday = 0,
     todayRainMm = 0,
+    todayHourlyPrecipMm = [],
+    todayRainObservedMm = 0,
     seedEstablishmentActive,
     mowingLockedUntilIso,
     mowingNextDueIso,
@@ -23870,6 +23959,8 @@ function compileAllLawnTasks(input) {
       dailyForecastByDate,
       recentPastRainBeforeToday,
       todayRainMm,
+      todayHourlyPrecipMm,
+      todayRainObservedMm,
       seedEstablishmentActive,
       mowingLockedUntilIso,
       mowingNextDueIso,
@@ -23979,6 +24070,8 @@ async function runLawnCloudSync() {
   const dailyForecastByDate = weather.dailyForecastByDate ?? [];
   const recentPastRainBeforeToday = weather.recentPastRainBeforeToday ?? Math.max(0, recentPastRainSum - (weather.todayRainMm ?? 0));
   const todayRainMm = weather.todayRainMm ?? 0;
+  const todayHourlyPrecipMm = weather.todayHourlyPrecipMm ?? [];
+  const todayRainObservedMm = weather.todayRainObservedMm ?? 0;
   const pendingDates = scheduleSnapshot.pendingDates ?? createInitialPendingDates(null, userLogs);
   const maintenance = buildMaintenanceSchedule({
     todayStr,
@@ -24021,6 +24114,8 @@ async function runLawnCloudSync() {
     dailyForecastByDate,
     recentPastRainBeforeToday,
     todayRainMm,
+    todayHourlyPrecipMm,
+    todayRainObservedMm,
     seedEstablishmentActive: maintenance.seedEstablishmentActive,
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,

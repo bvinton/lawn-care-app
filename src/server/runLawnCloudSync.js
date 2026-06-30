@@ -145,6 +145,8 @@ export async function runLawnCloudSync() {
     weather.recentPastRainBeforeToday ??
     Math.max(0, recentPastRainSum - (weather.todayRainMm ?? 0));
   const todayRainMm = weather.todayRainMm ?? 0;
+  const todayHourlyPrecipMm = weather.todayHourlyPrecipMm ?? [];
+  const todayRainObservedMm = weather.todayRainObservedMm ?? 0;
 
   const pendingDates =
     scheduleSnapshot.pendingDates ??
@@ -194,6 +196,8 @@ export async function runLawnCloudSync() {
     dailyForecastByDate,
     recentPastRainBeforeToday,
     todayRainMm,
+    todayHourlyPrecipMm,
+    todayRainObservedMm,
     seedEstablishmentActive: maintenance.seedEstablishmentActive,
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,

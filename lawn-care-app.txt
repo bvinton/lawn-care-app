@@ -3167,6 +3167,1168 @@ export default function LawnWorkflow({ app }) {
 }
 </file>
 
+<file path="src/data/LawnPackData.js">
+// src/data/LawnPackData.js
+
+export const INITIAL_LAWN_CONFIG = {
+  defaultLength: 7,
+  defaultWidth: 4,
+  defaultSqm: 28,
+};
+
+export const WEEDOL_BARRIER_DAYS = 42;
+export const GRANULAR_REPEAT_DAYS = 56;
+
+export const SEASON_START_DATES = {
+  SPRING: '2026-03-01',
+  SUMMER: '2026-06-01',
+  AUTUMN: '2026-09-01',
+  WINTER: '2026-12-01',
+};
+
+/** @typedef {'SPRING' | 'SUMMER' | 'AUTUMN' | 'WINTER'} CalendarSeasonKey */
+
+/**
+ * Lawn pack season for a calendar date (UK boundaries aligned with SEASON_START_DATES).
+ * Spring Mar–May, Summer Jun–Aug, Autumn Sep–Nov, Winter Dec–Feb.
+ * @param {string} isoDate YYYY-MM-DD
+ * @returns {CalendarSeasonKey}
+ */
+export function getCalendarSeasonForDate(isoDate) {
+  const [, month, day] = isoDate.split('-').map(Number);
+  const monthDay = month * 100 + day;
+
+  if (monthDay >= 1201 || monthDay < 301) return 'WINTER';
+  if (monthDay < 601) return 'SPRING';
+  if (monthDay < 901) return 'SUMMER';
+  return 'AUTUMN';
+}
+
+/** @type {CalendarSeasonKey[]} */
+export const SEASON_ORDER = ['SPRING', 'SUMMER', 'AUTUMN', 'WINTER'];
+
+/** @param {{ type?: string }} step */
+export function stepTriggersPetLockout(step) {
+  return step?.type === 'chemical' || step?.type === 'liquid';
+}
+
+/**
+ * True only if a chemical/liquid pack step was logged on todayStr (YYYY-MM-DD).
+ * @param {Record<string, string>} userLogs
+ * @param {string} todayStr
+ */
+export function hasChemicalApplicationToday(userLogs, todayStr) {
+  for (const seasonKey of SEASON_ORDER) {
+    for (const step of SEASONS[seasonKey].steps) {
+      if (!stepTriggersPetLockout(step)) continue;
+      if (userLogs[makeStepKey(seasonKey, step.id)] === todayStr) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Remove stale 24h pet lockout when no chemical was applied today.
+ * @param {Record<string, string>} userLogs
+ * @param {string} todayStr
+ */
+export function stripStalePetLockout(userLogs, todayStr) {
+  if (!userLogs.petLockoutUntil) return userLogs;
+  if (hasChemicalApplicationToday(userLogs, todayStr)) return userLogs;
+  const next = { ...userLogs };
+  delete next.petLockoutUntil;
+  return next;
+}
+
+/**
+ * @param {CalendarSeasonKey} seasonKey
+ * @param {Record<string, string>} userLogs
+ */
+export function isSeasonPackComplete(seasonKey, userLogs) {
+  return SEASONS[seasonKey].steps
+    .filter((step) => !step.optional)
+    .every((step) => userLogs[makeStepKey(seasonKey, step.id)] != null);
+}
+
+/**
+ * Steps not yet logged for a season pack.
+ * @param {CalendarSeasonKey} seasonKey
+ * @param {Record<string, string>} userLogs
+ */
+export function getIncompleteSeasonSteps(seasonKey, userLogs) {
+  return SEASONS[seasonKey].steps.filter(
+    (step) => !step.optional && !userLogs[makeStepKey(seasonKey, step.id)]
+  );
+}
+
+/**
+ * Which season tab to open by default: earliest incomplete pack at or before
+ * today's calendar season (catch-up — don't skip Spring because June arrived).
+ * @param {string} isoDate YYYY-MM-DD
+ * @param {Record<string, string>} userLogs
+ * @returns {CalendarSeasonKey}
+ */
+export function getWorkflowSeasonForDate(isoDate, userLogs) {
+  const calendarSeason = getCalendarSeasonForDate(isoDate);
+  const calendarIndex = SEASON_ORDER.indexOf(calendarSeason);
+
+  for (let i = 0; i <= calendarIndex; i++) {
+    const seasonKey = SEASON_ORDER[i];
+    if (!isSeasonPackComplete(seasonKey, userLogs)) {
+      return seasonKey;
+    }
+  }
+
+  return calendarSeason;
+}
+
+export const WALLSEND_COORDS = {
+  latitude: 54.98,
+  longitude: -1.53,
+};
+
+export const EQUIPMENT_OPTIONS = {
+  BIRCHMEIER: {
+    id: 'BIRCHMEIER',
+    name: 'Birchmeier Aquamix 1.25',
+    instructionTemplate: (amount, setting) =>
+      `⚙️ Birchmeier Aquamix: Pour exactly ${amount}ml of neat product into the empty chamber. Set the red dial cleanly to ${setting}. Attach your hose and spray evenly until the bottle runs completely dry.`,
+  },
+  WATERING_CAN: {
+    id: 'WATERING_CAN',
+    name: 'Standard 9L Watering Can',
+    instructionTemplate: (amount) =>
+      `🪣 Watering Can Protocol: Mix your total ${amount}ml dose across multiple full 9-litre watering cans (approx. 40–50ml of product per full can with a fine rose head) and water evenly across the grass.`,
+  },
+  BACKPACK_SPRAYER: {
+    id: 'BACKPACK_SPRAYER',
+    name: 'Standard Knapsack / Compression Sprayer',
+    instructionTemplate: (amount) =>
+      `🎒 Compression Sprayer: Pour your ${amount}ml dose into the tank, fill with water up to the 5-litre mark, pump to pressurize, and spray evenly.`,
+  },
+};
+
+export const SPRINKLER_OPTIONS = {
+  OSCILLATING: {
+    id: 'OSCILLATING',
+    name: 'Oscillating Bar Sprinkler',
+    image: '/oscillating.jfif',
+    description: 'Waves back and forth. Gentle delivery, but slow to build depth.',
+    identification:
+      'Long bar with multiple nozzles. Typically waves in a wide arc. Commonly sits directly on the grass. User photos often show plastic or metal bars with multiple tiny water jets.',
+    ratePerHour: 12,
+  },
+  IMPACT: {
+    id: 'IMPACT',
+    name: 'Impact / Pulsating Sprinkler',
+    image: '/impact.jfif',
+    description: "The classic 'ts-ts-ts' rotating sprinkler. Good coverage, medium speed.",
+    identification:
+      'Single rotating head on a spike stake — brass or plastic. Pulses in a circle with a rhythmic click. Usually pushed into the lawn with the head sitting just above grass height.',
+    ratePerHour: 15,
+  },
+  STATIC: {
+    id: 'STATIC',
+    name: 'Static / Fixed Spray',
+    image: '/static.jfif',
+    description: 'Fires a constant fan of water. Extremely fast application.',
+    identification:
+      'Fixed dome, spike, or ring head that sprays one unmoving pattern. Low-profile green or black plastic at ground level — no rotation or oscillation.',
+    ratePerHour: 35,
+  },
+  HOSE: {
+    id: 'HOSE',
+    name: 'Manual Hosepipe (Spray Gun)',
+    image: '/hose.jfif',
+    description: 'Standing and spraying by hand. Fast, but coverage depends on your walking pattern.',
+    identification:
+      'Flexible hose with a pistol-grip spray gun or lance. You move across the lawn manually — trigger controls flow, nozzle switches from jet to shower.',
+    ratePerHour: 40,
+  },
+};
+
+export const SEASONS = {
+  SPRING: {
+    name: "Spring Pack",
+    focus: "Renovation & Aggressive Recovery Sequence",
+    generalGuidelines: {
+      overview: "The Spring Pack combines Greener Growth Fertiliser and Biostimulant Booster for rapid, vibrant green growth within days and sustained lushness for up to 12 weeks. It thickens and revitalises lawns while remaining safe for pets and children. Best applied March - May.",
+      bullets: [
+        { title: "🌿 Weed Control", text: "Apply selective herbicides such as Weedol for Lawns when weeds start growing (roughly end of March). Do NOT apply selective herbicides until 8 weeks after seeding, or from 6 weeks beforehand as they severely affect germination." },
+        { title: "✂️ Mowing", text: "Wait until your lawn is dry enough. Set the mower on its highest setting for the first cut of the year before bringing it down gradually. Do NOT cut off more than 1/3 of the grass blade at a time. By the end of spring when grass is growing fast, mow every 4-7 days to improve turf condition." },
+        { title: "🚜 Renovation", text: "Spring is the ideal time to get seeding. When seeding, use The Lawn Pack renovation kit which contains different fertilisers to this pack. The nitrogen content in the standard Greener Growth Fertiliser will cause existing grass to grow too fast and outcompete fresh seedlings." },
+        { title: "💀 Moss Control", text: "If you have moss that needs removing, apply Deeper Green Iron Sulphate across the lawn and rake out after 14 days once the moss has turned black. Fix poor drainage and compaction to stop moss returning." },
+        { title: "🌀 Scarification/Aeration", text: "Spring is a great window to scarify and aerate. Scarification removes dead material/thatch, while aeration (ideally with a hollow-tiner) improves drainage and relieves sub-soil compaction to help the flow of air, water, and nutrients." }
+      ]
+    },
+    steps: [
+      {
+        id: "weedol",
+        label: "Step 1: Apply Weedol Lawn Weedkiller",
+        type: "chemical",
+        ratePerSqm: 1.5,
+        unit: "ml",
+        toolType: "sprayer",
+        setting: "1.5%",
+        daysAfterFirstStep: 0,
+        note: "🎯 TARGET: Broadleaf weeds. Apply when weeds are small, actively growing, and leaf surface area is maximized. Avoid mowing for 3 days before and 3 days after application. 🚫 DRY TIME: Foliar absorption takes time. Do NOT apply any liquids, iron sprays, or water the lawn for a strict 48 hours post-application. Wait 6 weeks before seeding.",
+        dogSafety: "Lock your dog inside during spraying. Keep paws off the grass until every leaf blade is 100% dry."
+      },
+      {
+        id: "moss",
+        label: "Optional: Apply Iron Sulphate for moss control",
+        type: "chemical",
+        ratePerSqm: 5,
+        unit: "g",
+        toolType: "sprayer",
+        daysAfterFirstStep: 14,
+        optional: true,
+        note: "💀 MOSS ONLY: High dose (5g per SQM) blackens moss — rake out after 14 days once moss has turned black. Use shed stock (Winter Pack iron). Not shipped in the Spring Pack. Skip if no moss.",
+        dogSafety: "Lock your dog inside during spraying. Keep paws off the grass until every leaf blade is 100% dry."
+      },
+      {
+        id: "prep",
+        label: "Step 2: Relieve Compaction & Scarify (Mechanical & Auger Prep)",
+        type: "prep",
+        toolType: "manual",
+        lockedUntilStepClear: "weedol",
+        daysAfterFirstStep: 42,
+        note: "🚜 MECHANICAL PREP: Drop your mower to its lowest setting and scalp the turf. Run the scarifier in close parallel lines to rip out dead moss and thatch. 🌀 COMPACTION: Drill deep aeration channels every few inches across the lawn grid with your auger bit. This relieves sub-soil compression and opens chambers for new seed."
+      },
+      {
+        id: "seed",
+        label: "Step 3: Sow Stronger Roots Seed & Mycorrhizal Enhancer",
+        type: "seed",
+        ratePerSqm: 22,
+        unit: "g",
+        toolType: "manual",
+        lockedUntilStepClear: "weedol",
+        daysAfterFirstStep: 42,
+        note: "🌱 SEEDING METHOD: Divide your seed/enhancer mix into two equal halves. Walk top-to-bottom spreading the first half, then left-to-right with the second half for uniform density. Brush or rake seeds down into open auger holes for soil contact and bird/rain protection."
+      },
+      {
+        id: "fertiliser",
+        label: "Step 4: Spread Seeding Success Fertiliser",
+        type: "granular",
+        ratePerSqm: 30,
+        unit: "g",
+        toolType: "spreader",
+        daysAfterFirstStep: 42,
+        note: "⚡ STARTER NUTRITION: Spread evenly across the surface immediately after seed drop to accelerate cell development.",
+        dogSafety: "Water pellets heavily into the soil immediately after spreading until fully dissolved. Block dog access until granules are gone from the leaf surface."
+      },
+      {
+        id: "seaweed",
+        label: "Step 5: Apply Liquid Biostimulant Booster",
+        type: "liquid",
+        ratePerSqm: 5,
+        unit: "ml",
+        toolType: "sprayer",
+        setting: "2.0%",
+        daysAfterFirstStep: 45,
+        note: "🧪 ROOT RECOVERY: Wait 2 to 3 full days after seeding and heavy watering before spraying. This stops fresh seedbeds over-saturating. Cold-pressed seaweed compounds drive root elongation and stress recovery.",
+        dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
+      }
+    ]
+  },
+  SUMMER: {
+    name: "Summer Pack",
+    focus: "Heat Stress Defense & Drought Protection",
+    generalGuidelines: {
+      overview: "Summer Thriver Fertiliser is formulated for high temperatures and low rainfall without scorching risk. It delivers slow-release nitrogen plus stress-relieving compounds. Combined with Biostimulant Booster, it increases root mass, soil microbiology, and blade density.",
+      bullets: [
+        { title: "✂️ MOWING", text: "Cut every 4-7 days normally. During active drought spells, cut every 14 days or stop mowing entirely—leave the turf longer so it retains soil moisture and shields root crowns." },
+        { title: "🚰 WATERING", text: "In drought, irrigate heavily 2-3 times a week to keep your lawn greener for longer. Yellow grass is dormancy defence—it will recover when rain returns." },
+        { title: "💦 WETTING AGENTS", text: "Apply wetting agents during and in the lead up to summer to reduce total watering requirements and keep your lawn greener for longer." },
+        { title: "🌿 WEED CONTROL", text: "Weeds are common in summer. Apply a selective herbicide when your lawn is over 8 weeks old to kill them cleanly." },
+        { title: "🍂 FUTURE TRIGGER", text: "In 8-12 weeks, apply The Autumn Pack to harden the lawn for colder months." }
+      ]
+    },
+    steps: [
+      {
+        id: "fertiliser",
+        label: "Step 1: Spread Summer Thriver Fertiliser",
+        type: "granular",
+        ratePerSqm: 30,
+        unit: "g",
+        toolType: "spreader",
+        daysAfterFirstStep: 0,
+        granularRepeatDays: GRANULAR_REPEAT_DAYS,
+        note: "☀️ SCORCH DEFENCE: Slow-release, polymer-coated nitrogen feeds evenly over 8-10 weeks. This blocks volatile nitrogen surges that burn or scorch warm-weather turf. Apply only to dry foliage. 📅 SCHEDULE: Re-apply every 8-12 weeks, then switch to the Autumn Preparation sequence.",
+        dogSafety: "Irrigate immediately with 5-10mm of water to dissolve granules and wash them off leaf blades into the soil before allowing paw traffic."
+      },
+      {
+        id: "seaweed",
+        label: "Step 2: Apply Liquid Biostimulant Booster",
+        type: "liquid",
+        ratePerSqm: 5,
+        unit: "ml",
+        toolType: "sprayer",
+        setting: "2.0%",
+        daysAfterFirstStep: 3,
+        note: "🧪 ROOT MICROBIOLOGY: Spray 4-5ml of booster per SQM. This increases root network mass, soil microbiology, blade density, and nutrient absorption. Apply early morning or late evening during hot spells. Do NOT spray in direct midday sun.",
+        dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
+      },
+      {
+        id: "maintenance",
+        label: "Step 3: Continuous Summer Maintenance Protocol",
+        type: "info",
+        daysAfterFirstStep: 7,
+        note: "✂️ MOWING: Cut every 4-7 days normally. During drought, cut every 14 days or stop mowing—leave turf longer to retain moisture and shield root crowns. 🚰 WATERING: In severe drought, irrigate heavily 2-3 times a week. Yellow grass is dormancy defence—it recovers when rain returns. 💦 WETTING AGENTS: Apply wetting agents before hot weather to cut watering volume. 🍂 FUTURE TRIGGER: In 8-12 weeks, switch to the Autumn Pack for cold resistance."
+      }
+    ]
+  },
+  AUTUMN: {
+    name: "Autumn Pack",
+    focus: "Repairing Summer Wear & Root Conditioning",
+    generalGuidelines: {
+      overview: "Autumn Preparation Fertiliser and Biostimulant Booster repair summer wear, build winter hardiness, and consolidate root structure before frost cycles. Low nitrogen blocks weak leaf growth; high potassium and phosphorus build root-crown carbohydrates for rapid spring awakening. Best applied September - November.",
+      bullets: [
+        { title: "🍁 WINTER HARDINESS", text: "Low Nitrogen blocks weak leaf growth vulnerable to winter diseases like Fusarium patch. High Potassium and Phosphorus build carbohydrates inside the root crown for rapid spring awakening. Apply to dry turf and water in within 48 hours if no rainfall occurs." },
+        { title: "🍂 CELL CONSOLIDATION", text: "Biostimulant Booster thickens cellular membranes and boosts plant sap density before heavy frost cycles. Maintains deep root structure as daylight hours drop. Can be tank-mixed with liquid autumn iron treatments." },
+        { title: "🍁 LEAF CLEARING", text: "Rake or brush fallen leaves off the grass every 2-3 days. Wet leaves block sunlight and trap stagnant moisture, inducing lawn rot and patch disease." },
+        { title: "✂️ MOWING ADJUSTMENT", text: "Raise mower cutting height by 1-2 clicks for final autumn cuts to leave a taller, resilient solar panel for low winter sun." },
+        { title: "📅 SEASON TRIGGER", text: "Apply between September and November before hard freezing weather. Switch to the Winter Pack after autumn leaf fall and final cuts are complete." }
+      ]
+    },
+    steps: [
+      {
+        id: "fertiliser",
+        label: "Step 1: Spread Autumn Preparation Fertiliser",
+        type: "granular",
+        ratePerSqm: 30,
+        unit: "g",
+        toolType: "spreader",
+        daysAfterFirstStep: 0,
+        note: "🍁 WINTER HARDINESS: Low Nitrogen blocks weak leaf growth vulnerable to winter diseases like Fusarium patch. High Potassium and Phosphorus build carbohydrates inside the root crown for rapid spring awakening. Apply to dry turf. 📅 TRIGGER: Apply between September and November before hard freezing weather.",
+        dogSafety: "Water granules into the turf within 48 hours of spreading if no rainfall occurs. Block dog access until granules are fully dissolved into the soil."
+      },
+      {
+        id: "seaweed",
+        label: "Step 2: Apply Liquid Biostimulant Booster",
+        type: "liquid",
+        ratePerSqm: 5,
+        unit: "ml",
+        toolType: "sprayer",
+        setting: "2.0%",
+        daysAfterFirstStep: 3,
+        note: "🍂 CELL CONSOLIDATION: Thickens cellular membranes and boosts plant sap density before the first heavy frost cycles. Maintains deep root structure as daylight hours drop. Can be tank-mixed with liquid autumn iron treatments.",
+        dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
+      },
+      {
+        id: "maintenance",
+        label: "Step 3: Autumn Leaf & Cleansing Management",
+        type: "info",
+        daysAfterFirstStep: 7,
+        note: "🍁 LEAF CLEARING: Rake or brush fallen leaves off the grass every 2-3 days. Wet leaves block sunlight and trap stagnant moisture, inducing lawn rot and patch disease. ✂️ MOWING ADJUSTMENT: Raise mower cutting height by 1-2 clicks for final autumn cuts to leave a taller solar panel for low winter sun."
+      }
+    ]
+  },
+  WINTER: {
+    name: "Winter Pack",
+    focus: "Frost Defense & Hard Moss Treatment",
+    generalGuidelines: {
+      overview: "The Winter Pack combines zero-nitrogen Winter Protection Fertiliser, Deeper Green Iron Sulphate, and Biostimulant Booster to block frost damage, kill heavy moss, and protect soil microbial activity during dormancy. Apply during mild windows when the ground is not frozen or waterlogged.",
+      bullets: [
+        { title: "❄️ FROST GUARD", text: "Zero-nitrogen formulation builds structural hardiness and plant skeleton defence. Blocks cell sap freezing inside grass blades and delivers micro-nutrients that strengthen grass walls against foot traffic and frost weight. Apply to dry lawn and water in thoroughly or apply right before rain." },
+        { title: "💀 MOSS CONTROL", text: "Deeper Green Iron Sulphate targets heavy winter moss. Moss blackens, dehydrates, and dies within 24-48 hours of contact. For cosmetic greening only (no active moss), halve the dose to 2.5g per square metre to avoid tip scorch." },
+        { title: "🛡️ ROOT INSULATION", text: "Biostimulant Booster protects soil microbial activity throughout winter dormancy. Apply during a mild window when the ground is not frozen, waterlogged, or covered in deep frost." },
+        { title: "⚠️ HARD SURFACE PROTECTION", text: "Keep iron sulphate spray off hard stone, porcelain, patios, and pathways to prevent permanent orange rust staining." },
+        { title: "🐾 PET & TRAFFIC SAFETY", text: "Water all granular products into the turf and wait until all liquid sprays are 100% dry before allowing dogs or foot traffic on the treated lawn." }
+      ]
+    },
+    steps: [
+      {
+        id: "fertiliser",
+        label: "Step 1: Spread Winter Protection Fertiliser",
+        type: "granular",
+        ratePerSqm: 30,
+        unit: "g",
+        toolType: "spreader",
+        daysAfterFirstStep: 0,
+        note: "❄️ FROST GUARD: Zero-nitrogen formulation builds structural hardiness and plant skeleton defence. Blocks cell sap freezing inside grass blades and delivers micro-nutrients that strengthen grass walls against foot traffic and frost weight. Apply to dry lawn.",
+        dogSafety: "Water the mix in thoroughly or apply right before rain to clear the leaf surface. Block dog access until granules are fully dissolved into the soil."
+      },
+      {
+        id: "iron1",
+        label: "Step 2: Apply Deeper Green Iron Sulphate (1st dose)",
+        type: "chemical",
+        ratePerSqm: 2.5,
+        unit: "g",
+        toolType: "sprayer",
+        daysAfterFirstStep: 7,
+        note: "💀 1ST DOSE (Winter Pack double dose): Moss — 5g per SQM, rake 7–14 days later. No moss — 2.5g per SQM for green-up and hardening. Can tank-mix with biostimulant. ⚠️ Keep spray off patios and hard surfaces.",
+        dogSafety: "Lock dogs away during spraying. Keep paws off treated grass until completely dry to prevent skin irritation or paw staining."
+      },
+      {
+        id: "seaweed",
+        label: "Step 3: Apply Liquid Biostimulant Booster",
+        type: "liquid",
+        ratePerSqm: 5,
+        unit: "ml",
+        toolType: "sprayer",
+        setting: "2.0%",
+        daysAfterFirstStep: 10,
+        note: "🛡️ ROOT INSULATION: Protects soil microbial activity throughout winter dormancy. Can be tank-mixed with the 1st iron dose for quicker application. Apply during a mild window when the ground is not frozen, waterlogged, or covered in deep frost.",
+        dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
+      },
+      {
+        id: "iron2",
+        label: "Step 4: Apply Deeper Green Iron Sulphate (2nd dose)",
+        type: "chemical",
+        ratePerSqm: 2.5,
+        unit: "g",
+        toolType: "sprayer",
+        daysAfterFirstStep: 35,
+        note: "💀 2ND DOSE: Apply 4 weeks after the 1st dose (medium dose 2.5g per SQM, or 5g per SQM if moss). Completes the Winter Pack double dose.",
+        dogSafety: "Lock dogs away during spraying. Keep paws off treated grass until completely dry to prevent skin irritation or paw staining."
+      }
+    ]
+  }
+};
+
+export function makeStepKey(seasonKey, stepId) {
+  return `${seasonKey}:${stepId}`;
+}
+
+/**
+ * Migrate legacy log keys when pack step ids change.
+ * @param {Record<string, string>} userLogs
+ */
+export function migrateUserLogs(userLogs) {
+  const next = { ...userLogs };
+  if (next['WINTER:iron'] && !next['WINTER:iron1']) {
+    next['WINTER:iron1'] = next['WINTER:iron'];
+    delete next['WINTER:iron'];
+  }
+  return next;
+}
+
+/** @param {string} dateString @param {number} days */
+export function addDaysToDateString(dateString, days) {
+  const [year, month, day] = dateString.split('-').map(Number);
+  const result = new Date(year, month - 1, day);
+  result.setDate(result.getDate() + days);
+  const y = result.getFullYear();
+  const m = String(result.getMonth() + 1).padStart(2, '0');
+  const d = String(result.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Resolve the anchor date (Step 1) for a season — logged date wins, else season baseline.
+ * @param {string} seasonKey
+ * @param {Record<string, string>} userLogs
+ * @param {Record<string, Record<string, string>>} pendingDates
+ */
+export function getSeasonAnchorDate(seasonKey, userLogs, pendingDates) {
+  const firstStep = SEASONS[seasonKey].steps[0];
+  const logKey = makeStepKey(seasonKey, firstStep.id);
+  if (userLogs[logKey]) return userLogs[logKey];
+  return pendingDates[seasonKey]?.[firstStep.id] ?? SEASON_START_DATES[seasonKey];
+}
+
+/**
+ * Compute cascaded pending dates for all incomplete steps in a season.
+ * @param {string} seasonKey
+ * @param {string} anchorDate
+ * @param {Record<string, string>} userLogs
+ * @param {Record<string, Record<string, string>> | null | undefined} existingPending
+ */
+export function cascadeSeasonDates(seasonKey, anchorDate, userLogs, existingPending = null) {
+  const steps = SEASONS[seasonKey].steps;
+  const seasonPending = { ...(existingPending?.[seasonKey] ?? {}) };
+
+  steps.forEach((step, index) => {
+    const logKey = makeStepKey(seasonKey, step.id);
+    if (userLogs[logKey]) {
+      seasonPending[step.id] = userLogs[logKey];
+      return;
+    }
+
+    if (index === 0) {
+      seasonPending[step.id] = anchorDate;
+      return;
+    }
+
+    if (step.lockedUntilStepClear === 'weedol' && seasonKey === 'SPRING') {
+      const weedolKey = makeStepKey('SPRING', 'weedol');
+      const weedolDate = userLogs[weedolKey] ?? anchorDate;
+      seasonPending[step.id] = addDaysToDateString(weedolDate, WEEDOL_BARRIER_DAYS);
+      return;
+    }
+
+    seasonPending[step.id] = addDaysToDateString(anchorDate, step.daysAfterFirstStep ?? 0);
+  });
+
+  return seasonPending;
+}
+
+/** @param {Record<string, Record<string, string>> | null} [existingPending=null] @param {Record<string, string>} [userLogs] @returns {Record<string, Record<string, string>>} */
+export function createInitialPendingDates(existingPending = null, userLogs = /** @type {Record<string, string>} */ ({})) {
+  /** @type {Record<string, Record<string, string>>} */
+  const pending = {};
+
+  Object.keys(SEASONS).forEach((seasonKey) => {
+    const anchor = getSeasonAnchorDate(
+      seasonKey,
+      userLogs,
+      existingPending ?? buildBaselinePending()
+    );
+    pending[seasonKey] = cascadeSeasonDates(seasonKey, anchor, userLogs, existingPending);
+  });
+
+  return pending;
+}
+
+/** @returns {Record<string, Record<string, string>>} */
+function buildBaselinePending() {
+  /** @type {Record<string, Record<string, string>>} */
+  const baseline = {};
+  Object.keys(SEASONS).forEach((seasonKey) => {
+    baseline[seasonKey] = {};
+    SEASONS[seasonKey].steps.forEach((step, index) => {
+      baseline[seasonKey][step.id] =
+        index === 0
+          ? SEASON_START_DATES[seasonKey]
+          : addDaysToDateString(
+              SEASON_START_DATES[seasonKey],
+              step.daysAfterFirstStep ?? 0
+            );
+    });
+  });
+  return baseline;
+}
+
+/**
+ * @param {string} seasonKey
+ * @param {Record<string, string>} userLogs
+ */
+export function getGranularRepeatDate(seasonKey, userLogs) {
+  const firstStep = SEASONS[seasonKey].steps[0];
+  if (!firstStep.granularRepeatDays) return null;
+
+  const logKey = makeStepKey(seasonKey, firstStep.id);
+  const loggedDate = userLogs[logKey];
+  if (!loggedDate) return null;
+
+  return addDaysToDateString(loggedDate, firstStep.granularRepeatDays);
+}
+</file>
+
+<file path="src/services/lawnAppState.js">
+import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
+import { pickLatestIsoDate } from './lawnMaintenanceSync';
+
+export const LAWN_STATE_ID = 'default';
+
+/**
+ * @typedef {Object} LawnScheduleSnapshot
+ * @property {string | null} [lastMowedDate]
+ * @property {string | null} [lastWateredDate]
+ * @property {string | null} [mowingNextDueIso]
+ * @property {string | null} [wateringNextDueIso]
+ * @property {number} [forecastedRainSum]
+ * @property {number} [forecastedRainSumNearTerm]
+ * @property {import('./lawnLocation.js').LawnWeatherLocation} [weatherLocation]
+ * @property {number | null} [currentSoilTemp]
+ * @property {boolean} [isNatureProvidingFullSoak]
+ * @property {Record<string, Record<string, string>>} [pendingDates]
+ * @property {string} [savedAt]
+ */
+
+/**
+ * @returns {Promise<{ userLogs: Record<string, string>, scheduleSnapshot: LawnScheduleSnapshot | null } | null>}
+ */
+export async function fetchLawnAppStateFromSupabase() {
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase client could not be initialised.');
+  }
+
+  const { data, error } = await supabase
+    .from('lawn_app_state')
+    .select('user_logs, schedule_snapshot, weather_snapshot')
+    .eq('id', LAWN_STATE_ID)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === 'PGRST205' || /lawn_app_state|schema cache/i.test(error.message)) {
+      return null;
+    }
+    throw new Error(formatSupabaseSyncError(error));
+  }
+
+  /** @type {Record<string, string>} */
+  const userLogs = {};
+  if (data?.user_logs && typeof data.user_logs === 'object') {
+    for (const [key, value] of Object.entries(data.user_logs)) {
+      if (typeof value === 'string') {
+        userLogs[key] = value;
+      }
+    }
+  }
+
+  const scheduleSnapshot =
+    data?.schedule_snapshot && typeof data.schedule_snapshot === 'object'
+      ? /** @type {LawnScheduleSnapshot} */ (data.schedule_snapshot)
+      : null;
+
+  const weatherSnapshot =
+    data?.weather_snapshot && typeof data.weather_snapshot === 'object'
+      ? /** @type {import('./lawnWeather.js').LawnWeatherSnapshot} */ (data.weather_snapshot)
+      : null;
+
+  return { userLogs, scheduleSnapshot, weatherSnapshot };
+}
+
+/**
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function fetchLawnUserLogsFromSupabase() {
+  const state = await fetchLawnAppStateFromSupabase();
+  if (!state) return null;
+  return state.userLogs;
+}
+
+/**
+ * @param {Record<string, string>} userLogs
+ * @param {LawnScheduleSnapshot | null} [scheduleSnapshot]
+ * @returns {Promise<boolean>} false if table missing
+ */
+export async function saveLawnAppStateToSupabase(userLogs, scheduleSnapshot = null) {
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase client could not be initialised.');
+  }
+
+  /** @type {Record<string, unknown>} */
+  const payload = {
+    id: LAWN_STATE_ID,
+    user_logs: userLogs,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (scheduleSnapshot) {
+    payload.schedule_snapshot = {
+      ...scheduleSnapshot,
+      savedAt: new Date().toISOString(),
+    };
+  }
+
+  const { error } = await supabase.from('lawn_app_state').upsert(payload, { onConflict: 'id' });
+
+  if (error) {
+    if (error.code === 'PGRST205' || /lawn_app_state|schema cache/i.test(error.message)) {
+      return false;
+    }
+    if (/schedule_snapshot|42703|PGRST204/i.test(error.message)) {
+      const { error: fallbackError } = await supabase.from('lawn_app_state').upsert(
+        {
+          id: LAWN_STATE_ID,
+          user_logs: userLogs,
+          updated_at: payload.updated_at,
+        },
+        { onConflict: 'id' }
+      );
+      if (fallbackError) {
+        throw new Error(formatSupabaseSyncError(fallbackError));
+      }
+      return true;
+    }
+    throw new Error(formatSupabaseSyncError(error));
+  }
+
+  return true;
+}
+
+/**
+ * @param {Record<string, string>} userLogs
+ * @returns {Promise<boolean>}
+ */
+export async function saveLawnUserLogsToSupabase(userLogs) {
+  return saveLawnAppStateToSupabase(userLogs, null);
+}
+
+/**
+ * @param {LawnScheduleSnapshot} snapshot
+ * @param {Record<string, string>} userLogs
+ * @returns {Promise<boolean>}
+ */
+export async function saveLawnScheduleSnapshot(snapshot, userLogs) {
+  return saveLawnAppStateToSupabase(userLogs, snapshot);
+}
+
+/**
+ * Merge remote Supabase logs with this device's localStorage copy (latest dates win).
+ * @param {Record<string, string>} remote
+ * @param {Record<string, string>} local
+ */
+export function mergeLawnUserLogs(remote, local) {
+  /** @type {Record<string, string>} */
+  const merged = { ...remote };
+
+  for (const [key, localValue] of Object.entries(local)) {
+    const remoteValue = merged[key];
+    if (!remoteValue) {
+      merged[key] = localValue;
+      continue;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(localValue) && /^\d{4}-\d{2}-\d{2}$/.test(remoteValue)) {
+      merged[key] = pickLatestIsoDate(remoteValue, localValue) ?? localValue;
+      continue;
+    }
+
+    if (key === 'petLockoutUntil') {
+      const localMs = new Date(localValue).getTime();
+      const remoteMs = new Date(remoteValue).getTime();
+      merged[key] =
+        !Number.isNaN(localMs) && !Number.isNaN(remoteMs)
+          ? localMs > remoteMs
+            ? localValue
+            : remoteValue
+          : localValue;
+      continue;
+    }
+
+    merged[key] = localValue;
+  }
+
+  return merged;
+}
+
+export function getLawnAppStateSetupHint() {
+  return 'Run supabase/lawn_app_state.sql, lawn_schedule_snapshot.sql, and lawn_weather_snapshot.sql in the Supabase SQL Editor so lawn progress, weather, and schedules sync with the Tasks app.';
+}
+</file>
+
+<file path="vite.config.js">
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'The Lawn Pack Companion',
+        short_name: 'Lawn Pack',
+        description:
+          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
+        theme_color: '#14532d',
+        background_color: '#f3f4f6',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
+        lang: 'en-GB',
+        categories: ['lifestyle', 'utilities'],
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
+        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
+        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'open-meteo-forecast',
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
+            },
+          },
+          {
+            urlPattern: /\.(pdf|docx)$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'lawn-pack-guides',
+              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+          {
+            urlPattern: /\/guides\/masterclass\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'lawn-masterclass-images',
+              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+        ],
+      },
+    }),
+  ],
+});
+</file>
+
+<file path="src/components/lawn/LawnSettings.jsx">
+import React from 'react';
+import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
+import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
+
+/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
+export default function LawnSettings({ app }) {
+  const {
+    length,
+    setLength,
+    width,
+    setWidth,
+    sqm,
+    mowerModel,
+    setMowerModel,
+    lawnSurface,
+    setLawnSurface,
+    showLevellingGuide,
+    setShowLevellingGuide,
+    selectedEquipment,
+    setSelectedEquipment,
+    weatherLocation,
+    postcodeInput,
+    setPostcodeInput,
+    weatherLocationError,
+    weatherLocationSaving,
+    weatherLocationLabel,
+    selectedSprinkler,
+    setSelectedSprinkler,
+    setEnlargedSprinkler,
+    supabaseSyncError,
+    jsonCopied,
+    handleCopyTasksJson,
+    handleSaveWeatherPostcode,
+    handleUseMyLocationForWeather,
+    handleResetWeatherLocation,
+    setActiveScreen,
+    setWeatherLocationError,
+  } = app;
+
+  return (
+    <>
+      <div className="flex justify-between items-center mb-6 border-b pb-4">
+        <div>
+          <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
+          <p className="text-sm text-green-700 mt-1">
+            Configure your lawn size, equipment, and surface profile.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveScreen('main')}
+          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+        >
+          ← Back to Workflow
+        </button>
+      </div>
+
+      <div className="space-y-5">
+        <div>
+          <label className="block text-sm font-medium text-green-900 mb-1">
+            Lawn Length: <span className="font-bold text-green-700">{length}m</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            value={length}
+            onChange={(e) => setLength(parseInt(e.target.value, 10))}
+            className="w-full accent-green-600"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-green-900 mb-1">
+            Lawn Width: <span className="font-bold text-green-700">{width}m</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            value={width}
+            onChange={(e) => setWidth(parseInt(e.target.value, 10))}
+            className="w-full accent-green-600"
+          />
+        </div>
+        <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-sm text-green-800">
+          <span className="font-black">{sqm} SQM</span>
+          <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
+        </div>
+        <div>
+          <label htmlFor="mower-select" className="block text-sm font-medium text-green-900 mb-1">
+            Lawnmower Model
+          </label>
+          <select
+            id="mower-select"
+            value={mowerModel}
+            onChange={(e) => setMowerModel(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+          >
+            {Object.values(MOWER_OPTIONS).map((mower) => (
+              <option key={mower.id} value={mower.id}>
+                {mower.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mb-2">
+            <p className="text-sm font-medium text-green-900">Lawn Surface Condition</p>
+            <button
+              type="button"
+              onClick={() => setShowLevellingGuide((open) => !open)}
+              aria-expanded={showLevellingGuide}
+              className="ml-2 text-emerald-600 hover:text-emerald-800 text-xs underline font-medium"
+            >
+              ℹ️ How to fix a bumpy lawn
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {Object.values(LAWN_SURFACE_OPTIONS).map((option) => {
+              const isSelected = lawnSurface === option.id;
+
+              return (
+                <label
+                  key={option.id}
+                  className={`flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer text-sm font-medium transition-all ${
+                    isSelected
+                      ? 'border-green-600 bg-green-100/80 text-green-900 ring-1 ring-green-500/30'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="lawn-surface"
+                    value={option.id}
+                    checked={isSelected}
+                    onChange={(e) => setLawnSurface(e.target.value)}
+                    className="accent-green-600"
+                  />
+                  {option.label}
+                </label>
+              );
+            })}
+          </div>
+          <div
+            className={`grid transition-all duration-300 ease-in-out ${
+              showLevellingGuide
+                ? 'grid-rows-[1fr] opacity-100 mt-3'
+                : 'grid-rows-[0fr] opacity-0 mt-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-emerald-900">Lawn Levelling Guide</h4>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Choose the method that matches your dip depth. Once levelled, switch your
+                      surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut
+                      height recommendation.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLevellingGuide(false)}
+                    className="shrink-0 text-xs font-bold text-gray-400 hover:text-gray-600"
+                    aria-label="Close levelling guide"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {LEVELLING_GUIDE_METHODS.map((method) => (
+                    <div
+                      key={method.title}
+                      className="rounded-lg border border-green-100 bg-green-50/40 p-3.5"
+                    >
+                      <p className="text-xs font-bold text-green-900 mb-1.5">{method.title}</p>
+                      <p className="text-xs text-gray-600 leading-relaxed">{method.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label htmlFor="equipment-select" className="block text-sm font-bold text-gray-700 mb-1.5">
+            Application Tool Profile:
+          </label>
+          <select
+            id="equipment-select"
+            value={selectedEquipment}
+            onChange={(e) => setSelectedEquipment(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+          >
+            {Object.values(EQUIPMENT_OPTIONS).map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
+          <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
+          <p className="text-[11px] text-sky-900/80 mb-3 leading-snug">
+            Rain and soil temperature forecasts use this postcode. Defaults to the Wallsend area
+            until you set your own.
+          </p>
+          <label htmlFor="weather-postcode" className="block text-xs font-semibold text-sky-950 mb-1">
+            UK postcode
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="weather-postcode"
+              type="text"
+              value={postcodeInput}
+              onChange={(event) => {
+                setPostcodeInput(event.target.value.toUpperCase());
+                setWeatherLocationError(null);
+              }}
+              placeholder="NE28 9AB"
+              autoComplete="postal-code"
+              className="flex-1 min-w-0 bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm text-gray-800 font-medium focus:ring-2 focus:ring-sky-400"
+            />
+            <button
+              type="button"
+              onClick={() => void handleSaveWeatherPostcode()}
+              disabled={weatherLocationSaving || !postcodeInput.trim()}
+              className="shrink-0 text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+            >
+              {weatherLocationSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => void handleUseMyLocationForWeather()}
+              disabled={weatherLocationSaving}
+              className="text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+            >
+              📍 Use my location
+            </button>
+            {weatherLocation.source !== 'default' && (
+              <button
+                type="button"
+                onClick={() => void handleResetWeatherLocation()}
+                disabled={weatherLocationSaving}
+                className="text-xs font-semibold py-2 px-3 rounded-lg text-sky-800 hover:bg-sky-100/80 disabled:opacity-50"
+              >
+                Reset to default
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-xs font-medium text-sky-900">
+            Forecast for: {weatherLocationLabel}
+          </p>
+          {weatherLocationError && (
+            <p className="mt-2 text-xs font-semibold text-red-700">{weatherLocationError}</p>
+          )}
+        </div>
+
+        <div>
+          <p className="block text-sm font-bold text-gray-700 mb-1">
+            Irrigation Profile — Select Your Primary Sprinkler:
+          </p>
+          <p className="text-[11px] text-gray-500 mb-2 leading-snug">
+            Match the photo and description to the sprinkler you own. Tap a photo to enlarge it.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {Object.values(SPRINKLER_OPTIONS).map((sprinkler) => {
+              const isSelected = selectedSprinkler === sprinkler.id;
+
+              return (
+                <button
+                  key={sprinkler.id}
+                  type="button"
+                  onClick={() => setSelectedSprinkler(sprinkler.id)}
+                  className={`text-left rounded-lg border p-3 transition-all ${
+                    isSelected
+                      ? 'border-green-600 bg-green-100/80 shadow-sm ring-1 ring-green-500/30'
+                      : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
+                  }`}
+                >
+                  <img
+                    src={sprinkler.image}
+                    alt={sprinkler.name}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setEnlargedSprinkler({
+                        image: sprinkler.image,
+                        name: sprinkler.name,
+                      });
+                    }}
+                    className="w-16 h-16 object-cover rounded-md mb-2 mx-auto border border-gray-200 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
+                  />
+                  <span className="text-xs font-bold text-gray-900 leading-snug block">
+                    {sprinkler.name}
+                  </span>
+                  <span className="text-[10px] font-semibold text-green-700 block mb-1.5">
+                    ~{sprinkler.ratePerHour}mm / hour
+                  </span>
+                  <p className="text-[10px] text-gray-700 leading-snug mb-1">
+                    {sprinkler.description}
+                  </p>
+                  <p className="text-[10px] text-gray-500 leading-snug italic">
+                    {sprinkler.identification}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="border-t border-green-200 pt-4 mt-2">
+          <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
+          {supabaseSyncError && (
+            <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
+          )}
+          <button
+            type="button"
+            onClick={handleCopyTasksJson}
+            className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+          >
+            {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+</file>
+
 <file path="src/components/lawn/MaintenancePanel.jsx">
 import React from 'react';
 import { addDaysToDateString } from '../../data/LawnPackData';
@@ -4073,751 +5235,112 @@ export default function MaintenancePanel({ app }) {
 }
 </file>
 
-<file path="src/data/LawnPackData.js">
-// src/data/LawnPackData.js
-
-export const INITIAL_LAWN_CONFIG = {
-  defaultLength: 7,
-  defaultWidth: 4,
-  defaultSqm: 28,
-};
-
-export const WEEDOL_BARRIER_DAYS = 42;
-export const GRANULAR_REPEAT_DAYS = 56;
-
-export const SEASON_START_DATES = {
-  SPRING: '2026-03-01',
-  SUMMER: '2026-06-01',
-  AUTUMN: '2026-09-01',
-  WINTER: '2026-12-01',
-};
-
-/** @typedef {'SPRING' | 'SUMMER' | 'AUTUMN' | 'WINTER'} CalendarSeasonKey */
+<file path="src/data/lawnGuidesData.js">
+import masterclassManifest from './masterclassManifest.json';
 
 /**
- * Lawn pack season for a calendar date (UK boundaries aligned with SEASON_START_DATES).
- * Spring Mar–May, Summer Jun–Aug, Autumn Sep–Nov, Winter Dec–Feb.
- * @param {string} isoDate YYYY-MM-DD
- * @returns {CalendarSeasonKey}
+ * Lawn Pack literature served from /public.
+ * @typedef {'pdf' | 'docx' | 'image' | 'gallery'} GuideKind
+ * @typedef {{ title: string, file?: string, kind: GuideKind, description?: string, images?: string[] }} LawnGuide
+ * @typedef {{ title: string, description?: string, guides: LawnGuide[] }} GuideSection
  */
-export function getCalendarSeasonForDate(isoDate) {
-  const [, month, day] = isoDate.split('-').map(Number);
-  const monthDay = month * 100 + day;
 
-  if (monthDay >= 1201 || monthDay < 301) return 'WINTER';
-  if (monthDay < 601) return 'SPRING';
-  if (monthDay < 901) return 'SUMMER';
-  return 'AUTUMN';
-}
-
-/** @type {CalendarSeasonKey[]} */
-export const SEASON_ORDER = ['SPRING', 'SUMMER', 'AUTUMN', 'WINTER'];
-
-/** @param {{ type?: string }} step */
-export function stepTriggersPetLockout(step) {
-  return step?.type === 'chemical' || step?.type === 'liquid';
-}
-
-/**
- * True only if a chemical/liquid pack step was logged on todayStr (YYYY-MM-DD).
- * @param {Record<string, string>} userLogs
- * @param {string} todayStr
- */
-export function hasChemicalApplicationToday(userLogs, todayStr) {
-  for (const seasonKey of SEASON_ORDER) {
-    for (const step of SEASONS[seasonKey].steps) {
-      if (!stepTriggersPetLockout(step)) continue;
-      if (userLogs[makeStepKey(seasonKey, step.id)] === todayStr) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-/**
- * Remove stale 24h pet lockout when no chemical was applied today.
- * @param {Record<string, string>} userLogs
- * @param {string} todayStr
- */
-export function stripStalePetLockout(userLogs, todayStr) {
-  if (!userLogs.petLockoutUntil) return userLogs;
-  if (hasChemicalApplicationToday(userLogs, todayStr)) return userLogs;
-  const next = { ...userLogs };
-  delete next.petLockoutUntil;
-  return next;
-}
-
-/**
- * @param {CalendarSeasonKey} seasonKey
- * @param {Record<string, string>} userLogs
- */
-export function isSeasonPackComplete(seasonKey, userLogs) {
-  return SEASONS[seasonKey].steps
-    .filter((step) => !step.optional)
-    .every((step) => userLogs[makeStepKey(seasonKey, step.id)] != null);
-}
-
-/**
- * Steps not yet logged for a season pack.
- * @param {CalendarSeasonKey} seasonKey
- * @param {Record<string, string>} userLogs
- */
-export function getIncompleteSeasonSteps(seasonKey, userLogs) {
-  return SEASONS[seasonKey].steps.filter(
-    (step) => !step.optional && !userLogs[makeStepKey(seasonKey, step.id)]
-  );
-}
-
-/**
- * Which season tab to open by default: earliest incomplete pack at or before
- * today's calendar season (catch-up — don't skip Spring because June arrived).
- * @param {string} isoDate YYYY-MM-DD
- * @param {Record<string, string>} userLogs
- * @returns {CalendarSeasonKey}
- */
-export function getWorkflowSeasonForDate(isoDate, userLogs) {
-  const calendarSeason = getCalendarSeasonForDate(isoDate);
-  const calendarIndex = SEASON_ORDER.indexOf(calendarSeason);
-
-  for (let i = 0; i <= calendarIndex; i++) {
-    const seasonKey = SEASON_ORDER[i];
-    if (!isSeasonPackComplete(seasonKey, userLogs)) {
-      return seasonKey;
-    }
-  }
-
-  return calendarSeason;
-}
-
-export const WALLSEND_COORDS = {
-  latitude: 54.98,
-  longitude: -1.53,
-};
-
-export const EQUIPMENT_OPTIONS = {
-  BIRCHMEIER: {
-    id: 'BIRCHMEIER',
-    name: 'Birchmeier Aquamix 1.25',
-    instructionTemplate: (amount, setting) =>
-      `⚙️ Birchmeier Aquamix: Pour exactly ${amount}ml of neat product into the empty chamber. Set the red dial cleanly to ${setting}. Attach your hose and spray evenly until the bottle runs completely dry.`,
+/** @type {GuideSection[]} */
+export const LAWN_GUIDE_SECTIONS = [
+  {
+    title: 'Seasonal pack guides',
+    description: 'Application guides for each seasonal delivery.',
+    guides: [
+      {
+        title: 'Spring Pack',
+        file: '/The Spring Pack.docx',
+        kind: 'docx',
+        description: 'March – May · Greener Growth + Biostimulant',
+      },
+      {
+        title: 'Summer Pack',
+        file: '/The Summer Pack.docx',
+        kind: 'docx',
+        description: 'June – August · Summer Thriver + Biostimulant',
+      },
+      {
+        title: 'Autumn Pack',
+        file: '/The Autumn Pack.docx',
+        kind: 'docx',
+        description: 'September – November · Autumn Preparation + Biostimulant',
+      },
+      {
+        title: 'Winter Pack',
+        file: '/The Winter Pack.docx',
+        kind: 'docx',
+        description: 'December – February · Winter Protection + Iron + Biostimulant',
+      },
+    ],
   },
-  WATERING_CAN: {
-    id: 'WATERING_CAN',
-    name: 'Standard 9L Watering Can',
-    instructionTemplate: (amount) =>
-      `🪣 Watering Can Protocol: Mix your total ${amount}ml dose across multiple full 9-litre watering cans (approx. 40–50ml of product per full can with a fine rose head) and water evenly across the grass.`,
+  {
+    title: 'Masterclass series',
+    description:
+      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
+    guides: [
+      {
+        title: 'Part 2: Scarification & Aeration',
+        kind: 'gallery',
+        images: masterclassManifest['part-2'],
+      },
+      {
+        title: 'Part 3: Soil, Feed & Seed',
+        kind: 'gallery',
+        images: masterclassManifest['part-3'],
+      },
+      {
+        title: 'Part 4: Aftercare',
+        kind: 'gallery',
+        images: masterclassManifest['part-4'],
+      },
+      {
+        title: 'Part 5: Ongoing Care',
+        kind: 'gallery',
+        images: masterclassManifest['part-5'],
+      },
+    ],
   },
-  BACKPACK_SPRAYER: {
-    id: 'BACKPACK_SPRAYER',
-    name: 'Standard Knapsack / Compression Sprayer',
-    instructionTemplate: (amount) =>
-      `🎒 Compression Sprayer: Pour your ${amount}ml dose into the tank, fill with water up to the 5-litre mark, pump to pressurize, and spray evenly.`,
+  {
+    title: 'Individual guides',
+    description: 'Product-specific and year-round maintenance references.',
+    guides: [
+      {
+        title: 'Iron Sulphate Guide',
+        file: '/Iron Sulphate Guide.docx',
+        kind: 'docx',
+        description: 'Dosing, dilution, and repeat intervals',
+      },
+      {
+        title: 'Starting your lawn from scratch',
+        file: '/Starting your lawn from scratch guide.docx',
+        kind: 'docx',
+      },
+      {
+        title: 'Maintain your lawn',
+        file: '/Lawn Pack, Maintain your lawn Guide.pdf',
+        kind: 'pdf',
+        description: 'Year-round care and subscription overview',
+      },
+    ],
   },
-};
+];
 
-export const SPRINKLER_OPTIONS = {
-  OSCILLATING: {
-    id: 'OSCILLATING',
-    name: 'Oscillating Bar Sprinkler',
-    image: '/oscillating.jfif',
-    description: 'Waves back and forth. Gentle delivery, but slow to build depth.',
-    identification:
-      'Long bar with multiple nozzles. Typically waves in a wide arc. Commonly sits directly on the grass. User photos often show plastic or metal bars with multiple tiny water jets.',
-    ratePerHour: 12,
-  },
-  IMPACT: {
-    id: 'IMPACT',
-    name: 'Impact / Pulsating Sprinkler',
-    image: '/impact.jfif',
-    description: "The classic 'ts-ts-ts' rotating sprinkler. Good coverage, medium speed.",
-    identification:
-      'Single rotating head on a spike stake — brass or plastic. Pulses in a circle with a rhythmic click. Usually pushed into the lawn with the head sitting just above grass height.',
-    ratePerHour: 15,
-  },
-  STATIC: {
-    id: 'STATIC',
-    name: 'Static / Fixed Spray',
-    image: '/static.jfif',
-    description: 'Fires a constant fan of water. Extremely fast application.',
-    identification:
-      'Fixed dome, spike, or ring head that sprays one unmoving pattern. Low-profile green or black plastic at ground level — no rotation or oscillation.',
-    ratePerHour: 35,
-  },
-  HOSE: {
-    id: 'HOSE',
-    name: 'Manual Hosepipe (Spray Gun)',
-    image: '/hose.jfif',
-    description: 'Standing and spraying by hand. Fast, but coverage depends on your walking pattern.',
-    identification:
-      'Flexible hose with a pistol-grip spray gun or lance. You move across the lawn manually — trigger controls flow, nozzle switches from jet to shower.',
-    ratePerHour: 40,
-  },
-};
-
-export const SEASONS = {
-  SPRING: {
-    name: "Spring Pack",
-    focus: "Renovation & Aggressive Recovery Sequence",
-    generalGuidelines: {
-      overview: "The Spring Pack combines Greener Growth Fertiliser and Biostimulant Booster for rapid, vibrant green growth within days and sustained lushness for up to 12 weeks. It thickens and revitalises lawns while remaining safe for pets and children. Best applied March - May.",
-      bullets: [
-        { title: "🌿 Weed Control", text: "Apply selective herbicides such as Weedol for Lawns when weeds start growing (roughly end of March). Do NOT apply selective herbicides until 8 weeks after seeding, or from 6 weeks beforehand as they severely affect germination." },
-        { title: "✂️ Mowing", text: "Wait until your lawn is dry enough. Set the mower on its highest setting for the first cut of the year before bringing it down gradually. Do NOT cut off more than 1/3 of the grass blade at a time. By the end of spring when grass is growing fast, mow every 4-7 days to improve turf condition." },
-        { title: "🚜 Renovation", text: "Spring is the ideal time to get seeding. When seeding, use The Lawn Pack renovation kit which contains different fertilisers to this pack. The nitrogen content in the standard Greener Growth Fertiliser will cause existing grass to grow too fast and outcompete fresh seedlings." },
-        { title: "💀 Moss Control", text: "If you have moss that needs removing, apply Deeper Green Iron Sulphate across the lawn and rake out after 14 days once the moss has turned black. Fix poor drainage and compaction to stop moss returning." },
-        { title: "🌀 Scarification/Aeration", text: "Spring is a great window to scarify and aerate. Scarification removes dead material/thatch, while aeration (ideally with a hollow-tiner) improves drainage and relieves sub-soil compaction to help the flow of air, water, and nutrients." }
-      ]
-    },
-    steps: [
-      {
-        id: "weedol",
-        label: "Step 1: Apply Weedol Lawn Weedkiller",
-        type: "chemical",
-        ratePerSqm: 1.5,
-        unit: "ml",
-        toolType: "sprayer",
-        setting: "1.5%",
-        daysAfterFirstStep: 0,
-        note: "🎯 TARGET: Broadleaf weeds. Apply when weeds are small, actively growing, and leaf surface area is maximized. Avoid mowing for 3 days before and 3 days after application. 🚫 DRY TIME: Foliar absorption takes time. Do NOT apply any liquids, iron sprays, or water the lawn for a strict 48 hours post-application. Wait 6 weeks before seeding.",
-        dogSafety: "Lock your dog inside during spraying. Keep paws off the grass until every leaf blade is 100% dry."
-      },
-      {
-        id: "moss",
-        label: "Optional: Apply Iron Sulphate for moss control",
-        type: "chemical",
-        ratePerSqm: 5,
-        unit: "g",
-        toolType: "sprayer",
-        daysAfterFirstStep: 14,
-        optional: true,
-        note: "💀 MOSS ONLY: High dose (5g per SQM) blackens moss — rake out after 14 days once moss has turned black. Use shed stock (Winter Pack iron). Not shipped in the Spring Pack. Skip if no moss.",
-        dogSafety: "Lock your dog inside during spraying. Keep paws off the grass until every leaf blade is 100% dry."
-      },
-      {
-        id: "prep",
-        label: "Step 2: Relieve Compaction & Scarify (Mechanical & Auger Prep)",
-        type: "prep",
-        toolType: "manual",
-        lockedUntilStepClear: "weedol",
-        daysAfterFirstStep: 42,
-        note: "🚜 MECHANICAL PREP: Drop your mower to its lowest setting and scalp the turf. Run the scarifier in close parallel lines to rip out dead moss and thatch. 🌀 COMPACTION: Drill deep aeration channels every few inches across the lawn grid with your auger bit. This relieves sub-soil compression and opens chambers for new seed."
-      },
-      {
-        id: "seed",
-        label: "Step 3: Sow Stronger Roots Seed & Mycorrhizal Enhancer",
-        type: "seed",
-        ratePerSqm: 22,
-        unit: "g",
-        toolType: "manual",
-        lockedUntilStepClear: "weedol",
-        daysAfterFirstStep: 42,
-        note: "🌱 SEEDING METHOD: Divide your seed/enhancer mix into two equal halves. Walk top-to-bottom spreading the first half, then left-to-right with the second half for uniform density. Brush or rake seeds down into open auger holes for soil contact and bird/rain protection."
-      },
-      {
-        id: "fertiliser",
-        label: "Step 4: Spread Seeding Success Fertiliser",
-        type: "granular",
-        ratePerSqm: 30,
-        unit: "g",
-        toolType: "spreader",
-        daysAfterFirstStep: 42,
-        note: "⚡ STARTER NUTRITION: Spread evenly across the surface immediately after seed drop to accelerate cell development.",
-        dogSafety: "Water pellets heavily into the soil immediately after spreading until fully dissolved. Block dog access until granules are gone from the leaf surface."
-      },
-      {
-        id: "seaweed",
-        label: "Step 5: Apply Liquid Biostimulant Booster",
-        type: "liquid",
-        ratePerSqm: 5,
-        unit: "ml",
-        toolType: "sprayer",
-        setting: "2.0%",
-        daysAfterFirstStep: 45,
-        note: "🧪 ROOT RECOVERY: Wait 2 to 3 full days after seeding and heavy watering before spraying. This stops fresh seedbeds over-saturating. Cold-pressed seaweed compounds drive root elongation and stress recovery.",
-        dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
-      }
-    ]
-  },
-  SUMMER: {
-    name: "Summer Pack",
-    focus: "Heat Stress Defense & Drought Protection",
-    generalGuidelines: {
-      overview: "Summer Thriver Fertiliser is formulated for high temperatures and low rainfall without scorching risk. It delivers slow-release nitrogen plus stress-relieving compounds. Combined with Biostimulant Booster, it increases root mass, soil microbiology, and blade density.",
-      bullets: [
-        { title: "✂️ MOWING", text: "Cut every 4-7 days normally. During active drought spells, cut every 14 days or stop mowing entirely—leave the turf longer so it retains soil moisture and shields root crowns." },
-        { title: "🚰 WATERING", text: "In drought, irrigate heavily 2-3 times a week to keep your lawn greener for longer. Yellow grass is dormancy defence—it will recover when rain returns." },
-        { title: "💦 WETTING AGENTS", text: "Apply wetting agents during and in the lead up to summer to reduce total watering requirements and keep your lawn greener for longer." },
-        { title: "🌿 WEED CONTROL", text: "Weeds are common in summer. Apply a selective herbicide when your lawn is over 8 weeks old to kill them cleanly." },
-        { title: "🍂 FUTURE TRIGGER", text: "In 8-12 weeks, apply The Autumn Pack to harden the lawn for colder months." }
-      ]
-    },
-    steps: [
-      {
-        id: "fertiliser",
-        label: "Step 1: Spread Summer Thriver Fertiliser",
-        type: "granular",
-        ratePerSqm: 30,
-        unit: "g",
-        toolType: "spreader",
-        daysAfterFirstStep: 0,
-        granularRepeatDays: GRANULAR_REPEAT_DAYS,
-        note: "☀️ SCORCH DEFENCE: Slow-release, polymer-coated nitrogen feeds evenly over 8-10 weeks. This blocks volatile nitrogen surges that burn or scorch warm-weather turf. Apply only to dry foliage. 📅 SCHEDULE: Re-apply every 8-12 weeks, then switch to the Autumn Preparation sequence.",
-        dogSafety: "Irrigate immediately with 5-10mm of water to dissolve granules and wash them off leaf blades into the soil before allowing paw traffic."
-      },
-      {
-        id: "seaweed",
-        label: "Step 2: Apply Liquid Biostimulant Booster",
-        type: "liquid",
-        ratePerSqm: 5,
-        unit: "ml",
-        toolType: "sprayer",
-        setting: "2.0%",
-        daysAfterFirstStep: 3,
-        note: "🧪 ROOT MICROBIOLOGY: Spray 4-5ml of booster per SQM. This increases root network mass, soil microbiology, blade density, and nutrient absorption. Apply early morning or late evening during hot spells. Do NOT spray in direct midday sun.",
-        dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
-      },
-      {
-        id: "maintenance",
-        label: "Step 3: Continuous Summer Maintenance Protocol",
-        type: "info",
-        daysAfterFirstStep: 7,
-        note: "✂️ MOWING: Cut every 4-7 days normally. During drought, cut every 14 days or stop mowing—leave turf longer to retain moisture and shield root crowns. 🚰 WATERING: In severe drought, irrigate heavily 2-3 times a week. Yellow grass is dormancy defence—it recovers when rain returns. 💦 WETTING AGENTS: Apply wetting agents before hot weather to cut watering volume. 🍂 FUTURE TRIGGER: In 8-12 weeks, switch to the Autumn Pack for cold resistance."
-      }
-    ]
-  },
-  AUTUMN: {
-    name: "Autumn Pack",
-    focus: "Repairing Summer Wear & Root Conditioning",
-    generalGuidelines: {
-      overview: "Autumn Preparation Fertiliser and Biostimulant Booster repair summer wear, build winter hardiness, and consolidate root structure before frost cycles. Low nitrogen blocks weak leaf growth; high potassium and phosphorus build root-crown carbohydrates for rapid spring awakening. Best applied September - November.",
-      bullets: [
-        { title: "🍁 WINTER HARDINESS", text: "Low Nitrogen blocks weak leaf growth vulnerable to winter diseases like Fusarium patch. High Potassium and Phosphorus build carbohydrates inside the root crown for rapid spring awakening. Apply to dry turf and water in within 48 hours if no rainfall occurs." },
-        { title: "🍂 CELL CONSOLIDATION", text: "Biostimulant Booster thickens cellular membranes and boosts plant sap density before heavy frost cycles. Maintains deep root structure as daylight hours drop. Can be tank-mixed with liquid autumn iron treatments." },
-        { title: "🍁 LEAF CLEARING", text: "Rake or brush fallen leaves off the grass every 2-3 days. Wet leaves block sunlight and trap stagnant moisture, inducing lawn rot and patch disease." },
-        { title: "✂️ MOWING ADJUSTMENT", text: "Raise mower cutting height by 1-2 clicks for final autumn cuts to leave a taller, resilient solar panel for low winter sun." },
-        { title: "📅 SEASON TRIGGER", text: "Apply between September and November before hard freezing weather. Switch to the Winter Pack after autumn leaf fall and final cuts are complete." }
-      ]
-    },
-    steps: [
-      {
-        id: "fertiliser",
-        label: "Step 1: Spread Autumn Preparation Fertiliser",
-        type: "granular",
-        ratePerSqm: 30,
-        unit: "g",
-        toolType: "spreader",
-        daysAfterFirstStep: 0,
-        note: "🍁 WINTER HARDINESS: Low Nitrogen blocks weak leaf growth vulnerable to winter diseases like Fusarium patch. High Potassium and Phosphorus build carbohydrates inside the root crown for rapid spring awakening. Apply to dry turf. 📅 TRIGGER: Apply between September and November before hard freezing weather.",
-        dogSafety: "Water granules into the turf within 48 hours of spreading if no rainfall occurs. Block dog access until granules are fully dissolved into the soil."
-      },
-      {
-        id: "seaweed",
-        label: "Step 2: Apply Liquid Biostimulant Booster",
-        type: "liquid",
-        ratePerSqm: 5,
-        unit: "ml",
-        toolType: "sprayer",
-        setting: "2.0%",
-        daysAfterFirstStep: 3,
-        note: "🍂 CELL CONSOLIDATION: Thickens cellular membranes and boosts plant sap density before the first heavy frost cycles. Maintains deep root structure as daylight hours drop. Can be tank-mixed with liquid autumn iron treatments.",
-        dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
-      },
-      {
-        id: "maintenance",
-        label: "Step 3: Autumn Leaf & Cleansing Management",
-        type: "info",
-        daysAfterFirstStep: 7,
-        note: "🍁 LEAF CLEARING: Rake or brush fallen leaves off the grass every 2-3 days. Wet leaves block sunlight and trap stagnant moisture, inducing lawn rot and patch disease. ✂️ MOWING ADJUSTMENT: Raise mower cutting height by 1-2 clicks for final autumn cuts to leave a taller solar panel for low winter sun."
-      }
-    ]
-  },
-  WINTER: {
-    name: "Winter Pack",
-    focus: "Frost Defense & Hard Moss Treatment",
-    generalGuidelines: {
-      overview: "The Winter Pack combines zero-nitrogen Winter Protection Fertiliser, Deeper Green Iron Sulphate, and Biostimulant Booster to block frost damage, kill heavy moss, and protect soil microbial activity during dormancy. Apply during mild windows when the ground is not frozen or waterlogged.",
-      bullets: [
-        { title: "❄️ FROST GUARD", text: "Zero-nitrogen formulation builds structural hardiness and plant skeleton defence. Blocks cell sap freezing inside grass blades and delivers micro-nutrients that strengthen grass walls against foot traffic and frost weight. Apply to dry lawn and water in thoroughly or apply right before rain." },
-        { title: "💀 MOSS CONTROL", text: "Deeper Green Iron Sulphate targets heavy winter moss. Moss blackens, dehydrates, and dies within 24-48 hours of contact. For cosmetic greening only (no active moss), halve the dose to 2.5g per square metre to avoid tip scorch." },
-        { title: "🛡️ ROOT INSULATION", text: "Biostimulant Booster protects soil microbial activity throughout winter dormancy. Apply during a mild window when the ground is not frozen, waterlogged, or covered in deep frost." },
-        { title: "⚠️ HARD SURFACE PROTECTION", text: "Keep iron sulphate spray off hard stone, porcelain, patios, and pathways to prevent permanent orange rust staining." },
-        { title: "🐾 PET & TRAFFIC SAFETY", text: "Water all granular products into the turf and wait until all liquid sprays are 100% dry before allowing dogs or foot traffic on the treated lawn." }
-      ]
-    },
-    steps: [
-      {
-        id: "fertiliser",
-        label: "Step 1: Spread Winter Protection Fertiliser",
-        type: "granular",
-        ratePerSqm: 30,
-        unit: "g",
-        toolType: "spreader",
-        daysAfterFirstStep: 0,
-        note: "❄️ FROST GUARD: Zero-nitrogen formulation builds structural hardiness and plant skeleton defence. Blocks cell sap freezing inside grass blades and delivers micro-nutrients that strengthen grass walls against foot traffic and frost weight. Apply to dry lawn.",
-        dogSafety: "Water the mix in thoroughly or apply right before rain to clear the leaf surface. Block dog access until granules are fully dissolved into the soil."
-      },
-      {
-        id: "iron1",
-        label: "Step 2: Apply Deeper Green Iron Sulphate (1st dose)",
-        type: "chemical",
-        ratePerSqm: 2.5,
-        unit: "g",
-        toolType: "sprayer",
-        daysAfterFirstStep: 7,
-        note: "💀 1ST DOSE (Winter Pack double dose): Moss — 5g per SQM, rake 7–14 days later. No moss — 2.5g per SQM for green-up and hardening. Can tank-mix with biostimulant. ⚠️ Keep spray off patios and hard surfaces.",
-        dogSafety: "Lock dogs away during spraying. Keep paws off treated grass until completely dry to prevent skin irritation or paw staining."
-      },
-      {
-        id: "seaweed",
-        label: "Step 3: Apply Liquid Biostimulant Booster",
-        type: "liquid",
-        ratePerSqm: 5,
-        unit: "ml",
-        toolType: "sprayer",
-        setting: "2.0%",
-        daysAfterFirstStep: 10,
-        note: "🛡️ ROOT INSULATION: Protects soil microbial activity throughout winter dormancy. Can be tank-mixed with the 1st iron dose for quicker application. Apply during a mild window when the ground is not frozen, waterlogged, or covered in deep frost.",
-        dogSafety: "Keep your dog off the lawn during spraying and until the liquid extract is 100% dry on every leaf surface."
-      },
-      {
-        id: "iron2",
-        label: "Step 4: Apply Deeper Green Iron Sulphate (2nd dose)",
-        type: "chemical",
-        ratePerSqm: 2.5,
-        unit: "g",
-        toolType: "sprayer",
-        daysAfterFirstStep: 35,
-        note: "💀 2ND DOSE: Apply 4 weeks after the 1st dose (medium dose 2.5g per SQM, or 5g per SQM if moss). Completes the Winter Pack double dose.",
-        dogSafety: "Lock dogs away during spraying. Keep paws off treated grass until completely dry to prevent skin irritation or paw staining."
-      }
-    ]
+/** @param {LawnGuide} guide */
+export function guideActionLabel(guide) {
+  switch (guide.kind) {
+    case 'pdf':
+    case 'docx':
+    case 'gallery':
+      return 'Read guide';
+    case 'image':
+      return 'View image';
+    default:
+      return 'Open';
   }
-};
-
-export function makeStepKey(seasonKey, stepId) {
-  return `${seasonKey}:${stepId}`;
-}
-
-/**
- * Migrate legacy log keys when pack step ids change.
- * @param {Record<string, string>} userLogs
- */
-export function migrateUserLogs(userLogs) {
-  const next = { ...userLogs };
-  if (next['WINTER:iron'] && !next['WINTER:iron1']) {
-    next['WINTER:iron1'] = next['WINTER:iron'];
-    delete next['WINTER:iron'];
-  }
-  return next;
-}
-
-/** @param {string} dateString @param {number} days */
-export function addDaysToDateString(dateString, days) {
-  const [year, month, day] = dateString.split('-').map(Number);
-  const result = new Date(year, month - 1, day);
-  result.setDate(result.getDate() + days);
-  const y = result.getFullYear();
-  const m = String(result.getMonth() + 1).padStart(2, '0');
-  const d = String(result.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-/**
- * Resolve the anchor date (Step 1) for a season — logged date wins, else season baseline.
- * @param {string} seasonKey
- * @param {Record<string, string>} userLogs
- * @param {Record<string, Record<string, string>>} pendingDates
- */
-export function getSeasonAnchorDate(seasonKey, userLogs, pendingDates) {
-  const firstStep = SEASONS[seasonKey].steps[0];
-  const logKey = makeStepKey(seasonKey, firstStep.id);
-  if (userLogs[logKey]) return userLogs[logKey];
-  return pendingDates[seasonKey]?.[firstStep.id] ?? SEASON_START_DATES[seasonKey];
-}
-
-/**
- * Compute cascaded pending dates for all incomplete steps in a season.
- * @param {string} seasonKey
- * @param {string} anchorDate
- * @param {Record<string, string>} userLogs
- * @param {Record<string, Record<string, string>> | null | undefined} existingPending
- */
-export function cascadeSeasonDates(seasonKey, anchorDate, userLogs, existingPending = null) {
-  const steps = SEASONS[seasonKey].steps;
-  const seasonPending = { ...(existingPending?.[seasonKey] ?? {}) };
-
-  steps.forEach((step, index) => {
-    const logKey = makeStepKey(seasonKey, step.id);
-    if (userLogs[logKey]) {
-      seasonPending[step.id] = userLogs[logKey];
-      return;
-    }
-
-    if (index === 0) {
-      seasonPending[step.id] = anchorDate;
-      return;
-    }
-
-    if (step.lockedUntilStepClear === 'weedol' && seasonKey === 'SPRING') {
-      const weedolKey = makeStepKey('SPRING', 'weedol');
-      const weedolDate = userLogs[weedolKey] ?? anchorDate;
-      seasonPending[step.id] = addDaysToDateString(weedolDate, WEEDOL_BARRIER_DAYS);
-      return;
-    }
-
-    seasonPending[step.id] = addDaysToDateString(anchorDate, step.daysAfterFirstStep ?? 0);
-  });
-
-  return seasonPending;
-}
-
-/** @param {Record<string, Record<string, string>> | null} [existingPending=null] @param {Record<string, string>} [userLogs] @returns {Record<string, Record<string, string>>} */
-export function createInitialPendingDates(existingPending = null, userLogs = /** @type {Record<string, string>} */ ({})) {
-  /** @type {Record<string, Record<string, string>>} */
-  const pending = {};
-
-  Object.keys(SEASONS).forEach((seasonKey) => {
-    const anchor = getSeasonAnchorDate(
-      seasonKey,
-      userLogs,
-      existingPending ?? buildBaselinePending()
-    );
-    pending[seasonKey] = cascadeSeasonDates(seasonKey, anchor, userLogs, existingPending);
-  });
-
-  return pending;
-}
-
-/** @returns {Record<string, Record<string, string>>} */
-function buildBaselinePending() {
-  /** @type {Record<string, Record<string, string>>} */
-  const baseline = {};
-  Object.keys(SEASONS).forEach((seasonKey) => {
-    baseline[seasonKey] = {};
-    SEASONS[seasonKey].steps.forEach((step, index) => {
-      baseline[seasonKey][step.id] =
-        index === 0
-          ? SEASON_START_DATES[seasonKey]
-          : addDaysToDateString(
-              SEASON_START_DATES[seasonKey],
-              step.daysAfterFirstStep ?? 0
-            );
-    });
-  });
-  return baseline;
-}
-
-/**
- * @param {string} seasonKey
- * @param {Record<string, string>} userLogs
- */
-export function getGranularRepeatDate(seasonKey, userLogs) {
-  const firstStep = SEASONS[seasonKey].steps[0];
-  if (!firstStep.granularRepeatDays) return null;
-
-  const logKey = makeStepKey(seasonKey, firstStep.id);
-  const loggedDate = userLogs[logKey];
-  if (!loggedDate) return null;
-
-  return addDaysToDateString(loggedDate, firstStep.granularRepeatDays);
-}
-</file>
-
-<file path="src/services/lawnAppState.js">
-import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
-import { pickLatestIsoDate } from './lawnMaintenanceSync';
-
-export const LAWN_STATE_ID = 'default';
-
-/**
- * @typedef {Object} LawnScheduleSnapshot
- * @property {string | null} [lastMowedDate]
- * @property {string | null} [lastWateredDate]
- * @property {string | null} [mowingNextDueIso]
- * @property {string | null} [wateringNextDueIso]
- * @property {number} [forecastedRainSum]
- * @property {number} [forecastedRainSumNearTerm]
- * @property {import('./lawnLocation.js').LawnWeatherLocation} [weatherLocation]
- * @property {number | null} [currentSoilTemp]
- * @property {boolean} [isNatureProvidingFullSoak]
- * @property {Record<string, Record<string, string>>} [pendingDates]
- * @property {string} [savedAt]
- */
-
-/**
- * @returns {Promise<{ userLogs: Record<string, string>, scheduleSnapshot: LawnScheduleSnapshot | null } | null>}
- */
-export async function fetchLawnAppStateFromSupabase() {
-  const configError = getSupabaseConfigError();
-  if (configError) {
-    throw new Error(configError);
-  }
-
-  const supabase = getSupabase();
-  if (!supabase) {
-    throw new Error('Supabase client could not be initialised.');
-  }
-
-  const { data, error } = await supabase
-    .from('lawn_app_state')
-    .select('user_logs, schedule_snapshot, weather_snapshot')
-    .eq('id', LAWN_STATE_ID)
-    .maybeSingle();
-
-  if (error) {
-    if (error.code === 'PGRST205' || /lawn_app_state|schema cache/i.test(error.message)) {
-      return null;
-    }
-    throw new Error(formatSupabaseSyncError(error));
-  }
-
-  /** @type {Record<string, string>} */
-  const userLogs = {};
-  if (data?.user_logs && typeof data.user_logs === 'object') {
-    for (const [key, value] of Object.entries(data.user_logs)) {
-      if (typeof value === 'string') {
-        userLogs[key] = value;
-      }
-    }
-  }
-
-  const scheduleSnapshot =
-    data?.schedule_snapshot && typeof data.schedule_snapshot === 'object'
-      ? /** @type {LawnScheduleSnapshot} */ (data.schedule_snapshot)
-      : null;
-
-  const weatherSnapshot =
-    data?.weather_snapshot && typeof data.weather_snapshot === 'object'
-      ? /** @type {import('./lawnWeather.js').LawnWeatherSnapshot} */ (data.weather_snapshot)
-      : null;
-
-  return { userLogs, scheduleSnapshot, weatherSnapshot };
-}
-
-/**
- * @returns {Promise<Record<string, string>>}
- */
-export async function fetchLawnUserLogsFromSupabase() {
-  const state = await fetchLawnAppStateFromSupabase();
-  if (!state) return null;
-  return state.userLogs;
-}
-
-/**
- * @param {Record<string, string>} userLogs
- * @param {LawnScheduleSnapshot | null} [scheduleSnapshot]
- * @returns {Promise<boolean>} false if table missing
- */
-export async function saveLawnAppStateToSupabase(userLogs, scheduleSnapshot = null) {
-  const configError = getSupabaseConfigError();
-  if (configError) {
-    throw new Error(configError);
-  }
-
-  const supabase = getSupabase();
-  if (!supabase) {
-    throw new Error('Supabase client could not be initialised.');
-  }
-
-  /** @type {Record<string, unknown>} */
-  const payload = {
-    id: LAWN_STATE_ID,
-    user_logs: userLogs,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (scheduleSnapshot) {
-    payload.schedule_snapshot = {
-      ...scheduleSnapshot,
-      savedAt: new Date().toISOString(),
-    };
-  }
-
-  const { error } = await supabase.from('lawn_app_state').upsert(payload, { onConflict: 'id' });
-
-  if (error) {
-    if (error.code === 'PGRST205' || /lawn_app_state|schema cache/i.test(error.message)) {
-      return false;
-    }
-    if (/schedule_snapshot|42703|PGRST204/i.test(error.message)) {
-      const { error: fallbackError } = await supabase.from('lawn_app_state').upsert(
-        {
-          id: LAWN_STATE_ID,
-          user_logs: userLogs,
-          updated_at: payload.updated_at,
-        },
-        { onConflict: 'id' }
-      );
-      if (fallbackError) {
-        throw new Error(formatSupabaseSyncError(fallbackError));
-      }
-      return true;
-    }
-    throw new Error(formatSupabaseSyncError(error));
-  }
-
-  return true;
-}
-
-/**
- * @param {Record<string, string>} userLogs
- * @returns {Promise<boolean>}
- */
-export async function saveLawnUserLogsToSupabase(userLogs) {
-  return saveLawnAppStateToSupabase(userLogs, null);
-}
-
-/**
- * @param {LawnScheduleSnapshot} snapshot
- * @param {Record<string, string>} userLogs
- * @returns {Promise<boolean>}
- */
-export async function saveLawnScheduleSnapshot(snapshot, userLogs) {
-  return saveLawnAppStateToSupabase(userLogs, snapshot);
-}
-
-/**
- * Merge remote Supabase logs with this device's localStorage copy (latest dates win).
- * @param {Record<string, string>} remote
- * @param {Record<string, string>} local
- */
-export function mergeLawnUserLogs(remote, local) {
-  /** @type {Record<string, string>} */
-  const merged = { ...remote };
-
-  for (const [key, localValue] of Object.entries(local)) {
-    const remoteValue = merged[key];
-    if (!remoteValue) {
-      merged[key] = localValue;
-      continue;
-    }
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(localValue) && /^\d{4}-\d{2}-\d{2}$/.test(remoteValue)) {
-      merged[key] = pickLatestIsoDate(remoteValue, localValue) ?? localValue;
-      continue;
-    }
-
-    if (key === 'petLockoutUntil') {
-      const localMs = new Date(localValue).getTime();
-      const remoteMs = new Date(remoteValue).getTime();
-      merged[key] =
-        !Number.isNaN(localMs) && !Number.isNaN(remoteMs)
-          ? localMs > remoteMs
-            ? localValue
-            : remoteValue
-          : localValue;
-      continue;
-    }
-
-    merged[key] = localValue;
-  }
-
-  return merged;
-}
-
-export function getLawnAppStateSetupHint() {
-  return 'Run supabase/lawn_app_state.sql, lawn_schedule_snapshot.sql, and lawn_weather_snapshot.sql in the Supabase SQL Editor so lawn progress, weather, and schedules sync with the Tasks app.';
 }
 </file>
 
@@ -5059,529 +5582,6 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
 }
 </file>
 
-<file path="vite.config.js">
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
-
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'The Lawn Pack Companion',
-        short_name: 'Lawn Pack',
-        description:
-          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
-        theme_color: '#14532d',
-        background_color: '#f3f4f6',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
-        lang: 'en-GB',
-        categories: ['lifestyle', 'utilities'],
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
-        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
-        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'open-meteo-forecast',
-              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
-            },
-          },
-          {
-            urlPattern: /\.(pdf|docx)$/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'lawn-pack-guides',
-              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-          {
-            urlPattern: /\/guides\/masterclass\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'lawn-masterclass-images',
-              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-        ],
-      },
-    }),
-  ],
-});
-</file>
-
-<file path="src/components/lawn/LawnSettings.jsx">
-import React from 'react';
-import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
-import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
-
-/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
-export default function LawnSettings({ app }) {
-  const {
-    length,
-    setLength,
-    width,
-    setWidth,
-    sqm,
-    mowerModel,
-    setMowerModel,
-    lawnSurface,
-    setLawnSurface,
-    showLevellingGuide,
-    setShowLevellingGuide,
-    selectedEquipment,
-    setSelectedEquipment,
-    weatherLocation,
-    postcodeInput,
-    setPostcodeInput,
-    weatherLocationError,
-    weatherLocationSaving,
-    weatherLocationLabel,
-    selectedSprinkler,
-    setSelectedSprinkler,
-    setEnlargedSprinkler,
-    supabaseSyncError,
-    jsonCopied,
-    handleCopyTasksJson,
-    handleSaveWeatherPostcode,
-    handleUseMyLocationForWeather,
-    handleResetWeatherLocation,
-    setActiveScreen,
-    setWeatherLocationError,
-  } = app;
-
-  return (
-    <>
-      <div className="flex justify-between items-center mb-6 border-b pb-4">
-        <div>
-          <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
-          <p className="text-sm text-green-700 mt-1">
-            Configure your lawn size, equipment, and surface profile.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setActiveScreen('main')}
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
-        >
-          ← Back to Workflow
-        </button>
-      </div>
-
-      <div className="space-y-5">
-        <div>
-          <label className="block text-sm font-medium text-green-900 mb-1">
-            Lawn Length: <span className="font-bold text-green-700">{length}m</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            value={length}
-            onChange={(e) => setLength(parseInt(e.target.value, 10))}
-            className="w-full accent-green-600"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-green-900 mb-1">
-            Lawn Width: <span className="font-bold text-green-700">{width}m</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            value={width}
-            onChange={(e) => setWidth(parseInt(e.target.value, 10))}
-            className="w-full accent-green-600"
-          />
-        </div>
-        <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-sm text-green-800">
-          <span className="font-black">{sqm} SQM</span>
-          <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
-        </div>
-        <div>
-          <label htmlFor="mower-select" className="block text-sm font-medium text-green-900 mb-1">
-            Lawnmower Model
-          </label>
-          <select
-            id="mower-select"
-            value={mowerModel}
-            onChange={(e) => setMowerModel(e.target.value)}
-            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
-          >
-            {Object.values(MOWER_OPTIONS).map((mower) => (
-              <option key={mower.id} value={mower.id}>
-                {mower.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mb-2">
-            <p className="text-sm font-medium text-green-900">Lawn Surface Condition</p>
-            <button
-              type="button"
-              onClick={() => setShowLevellingGuide((open) => !open)}
-              aria-expanded={showLevellingGuide}
-              className="ml-2 text-emerald-600 hover:text-emerald-800 text-xs underline font-medium"
-            >
-              ℹ️ How to fix a bumpy lawn
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {Object.values(LAWN_SURFACE_OPTIONS).map((option) => {
-              const isSelected = lawnSurface === option.id;
-
-              return (
-                <label
-                  key={option.id}
-                  className={`flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer text-sm font-medium transition-all ${
-                    isSelected
-                      ? 'border-green-600 bg-green-100/80 text-green-900 ring-1 ring-green-500/30'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="lawn-surface"
-                    value={option.id}
-                    checked={isSelected}
-                    onChange={(e) => setLawnSurface(e.target.value)}
-                    className="accent-green-600"
-                  />
-                  {option.label}
-                </label>
-              );
-            })}
-          </div>
-          <div
-            className={`grid transition-all duration-300 ease-in-out ${
-              showLevellingGuide
-                ? 'grid-rows-[1fr] opacity-100 mt-3'
-                : 'grid-rows-[0fr] opacity-0 mt-0'
-            }`}
-          >
-            <div className="overflow-hidden">
-              <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-emerald-900">Lawn Levelling Guide</h4>
-                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                      Choose the method that matches your dip depth. Once levelled, switch your
-                      surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut
-                      height recommendation.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowLevellingGuide(false)}
-                    className="shrink-0 text-xs font-bold text-gray-400 hover:text-gray-600"
-                    aria-label="Close levelling guide"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {LEVELLING_GUIDE_METHODS.map((method) => (
-                    <div
-                      key={method.title}
-                      className="rounded-lg border border-green-100 bg-green-50/40 p-3.5"
-                    >
-                      <p className="text-xs font-bold text-green-900 mb-1.5">{method.title}</p>
-                      <p className="text-xs text-gray-600 leading-relaxed">{method.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div>
-          <label htmlFor="equipment-select" className="block text-sm font-bold text-gray-700 mb-1.5">
-            Application Tool Profile:
-          </label>
-          <select
-            id="equipment-select"
-            value={selectedEquipment}
-            onChange={(e) => setSelectedEquipment(e.target.value)}
-            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
-          >
-            {Object.values(EQUIPMENT_OPTIONS).map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
-          <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
-          <p className="text-[11px] text-sky-900/80 mb-3 leading-snug">
-            Rain and soil temperature forecasts use this postcode. Defaults to the Wallsend area
-            until you set your own.
-          </p>
-          <label htmlFor="weather-postcode" className="block text-xs font-semibold text-sky-950 mb-1">
-            UK postcode
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="weather-postcode"
-              type="text"
-              value={postcodeInput}
-              onChange={(event) => {
-                setPostcodeInput(event.target.value.toUpperCase());
-                setWeatherLocationError(null);
-              }}
-              placeholder="NE28 9AB"
-              autoComplete="postal-code"
-              className="flex-1 min-w-0 bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm text-gray-800 font-medium focus:ring-2 focus:ring-sky-400"
-            />
-            <button
-              type="button"
-              onClick={() => void handleSaveWeatherPostcode()}
-              disabled={weatherLocationSaving || !postcodeInput.trim()}
-              className="shrink-0 text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
-            >
-              {weatherLocationSaving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-2">
-            <button
-              type="button"
-              onClick={() => void handleUseMyLocationForWeather()}
-              disabled={weatherLocationSaving}
-              className="text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
-            >
-              📍 Use my location
-            </button>
-            {weatherLocation.source !== 'default' && (
-              <button
-                type="button"
-                onClick={() => void handleResetWeatherLocation()}
-                disabled={weatherLocationSaving}
-                className="text-xs font-semibold py-2 px-3 rounded-lg text-sky-800 hover:bg-sky-100/80 disabled:opacity-50"
-              >
-                Reset to default
-              </button>
-            )}
-          </div>
-          <p className="mt-2 text-xs font-medium text-sky-900">
-            Forecast for: {weatherLocationLabel}
-          </p>
-          {weatherLocationError && (
-            <p className="mt-2 text-xs font-semibold text-red-700">{weatherLocationError}</p>
-          )}
-        </div>
-
-        <div>
-          <p className="block text-sm font-bold text-gray-700 mb-1">
-            Irrigation Profile — Select Your Primary Sprinkler:
-          </p>
-          <p className="text-[11px] text-gray-500 mb-2 leading-snug">
-            Match the photo and description to the sprinkler you own. Tap a photo to enlarge it.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {Object.values(SPRINKLER_OPTIONS).map((sprinkler) => {
-              const isSelected = selectedSprinkler === sprinkler.id;
-
-              return (
-                <button
-                  key={sprinkler.id}
-                  type="button"
-                  onClick={() => setSelectedSprinkler(sprinkler.id)}
-                  className={`text-left rounded-lg border p-3 transition-all ${
-                    isSelected
-                      ? 'border-green-600 bg-green-100/80 shadow-sm ring-1 ring-green-500/30'
-                      : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
-                  }`}
-                >
-                  <img
-                    src={sprinkler.image}
-                    alt={sprinkler.name}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setEnlargedSprinkler({
-                        image: sprinkler.image,
-                        name: sprinkler.name,
-                      });
-                    }}
-                    className="w-16 h-16 object-cover rounded-md mb-2 mx-auto border border-gray-200 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
-                  />
-                  <span className="text-xs font-bold text-gray-900 leading-snug block">
-                    {sprinkler.name}
-                  </span>
-                  <span className="text-[10px] font-semibold text-green-700 block mb-1.5">
-                    ~{sprinkler.ratePerHour}mm / hour
-                  </span>
-                  <p className="text-[10px] text-gray-700 leading-snug mb-1">
-                    {sprinkler.description}
-                  </p>
-                  <p className="text-[10px] text-gray-500 leading-snug italic">
-                    {sprinkler.identification}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="border-t border-green-200 pt-4 mt-2">
-          <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
-          {supabaseSyncError && (
-            <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
-          )}
-          <button
-            type="button"
-            onClick={handleCopyTasksJson}
-            className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
-          >
-            {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-</file>
-
-<file path="src/data/lawnGuidesData.js">
-import masterclassManifest from './masterclassManifest.json';
-
-/**
- * Lawn Pack literature served from /public.
- * @typedef {'pdf' | 'docx' | 'image' | 'gallery'} GuideKind
- * @typedef {{ title: string, file?: string, kind: GuideKind, description?: string, images?: string[] }} LawnGuide
- * @typedef {{ title: string, description?: string, guides: LawnGuide[] }} GuideSection
- */
-
-/** @type {GuideSection[]} */
-export const LAWN_GUIDE_SECTIONS = [
-  {
-    title: 'Seasonal pack guides',
-    description: 'Application guides for each seasonal delivery.',
-    guides: [
-      {
-        title: 'Spring Pack',
-        file: '/The Spring Pack.docx',
-        kind: 'docx',
-        description: 'March – May · Greener Growth + Biostimulant',
-      },
-      {
-        title: 'Summer Pack',
-        file: '/The Summer Pack.docx',
-        kind: 'docx',
-        description: 'June – August · Summer Thriver + Biostimulant',
-      },
-      {
-        title: 'Autumn Pack',
-        file: '/The Autumn Pack.docx',
-        kind: 'docx',
-        description: 'September – November · Autumn Preparation + Biostimulant',
-      },
-      {
-        title: 'Winter Pack',
-        file: '/The Winter Pack.docx',
-        kind: 'docx',
-        description: 'December – February · Winter Protection + Iron + Biostimulant',
-      },
-    ],
-  },
-  {
-    title: 'Masterclass series',
-    description:
-      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
-    guides: [
-      {
-        title: 'Part 2: Scarification & Aeration',
-        kind: 'gallery',
-        images: masterclassManifest['part-2'],
-      },
-      {
-        title: 'Part 3: Soil, Feed & Seed',
-        kind: 'gallery',
-        images: masterclassManifest['part-3'],
-      },
-      {
-        title: 'Part 4: Aftercare',
-        kind: 'gallery',
-        images: masterclassManifest['part-4'],
-      },
-      {
-        title: 'Part 5: Ongoing Care',
-        kind: 'gallery',
-        images: masterclassManifest['part-5'],
-      },
-    ],
-  },
-  {
-    title: 'Individual guides',
-    description: 'Product-specific and year-round maintenance references.',
-    guides: [
-      {
-        title: 'Iron Sulphate Guide',
-        file: '/Iron Sulphate Guide.docx',
-        kind: 'docx',
-        description: 'Dosing, dilution, and repeat intervals',
-      },
-      {
-        title: 'Starting your lawn from scratch',
-        file: '/Starting your lawn from scratch guide.docx',
-        kind: 'docx',
-      },
-      {
-        title: 'Maintain your lawn',
-        file: '/Lawn Pack, Maintain your lawn Guide.pdf',
-        kind: 'pdf',
-        description: 'Year-round care and subscription overview',
-      },
-    ],
-  },
-];
-
-/** @param {LawnGuide} guide */
-export function guideActionLabel(guide) {
-  switch (guide.kind) {
-    case 'pdf':
-    case 'docx':
-    case 'gallery':
-      return 'Read guide';
-    case 'image':
-      return 'View image';
-    default:
-      return 'Open';
-  }
-}
-</file>
-
 <file path="src/services/lawnWeather.js">
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { resolveWeatherLocation } from './lawnLocation.js';
@@ -5619,6 +5619,13 @@ export const PAST_RAIN_DAYS = 7;
 export const RECENT_PAST_RAIN_DAYS = 3;
 export const RECENT_RAIN_WET_SOIL_MM = 5;
 
+/** Hour-of-day windows (Europe/London) for seed misting sessions — end hour exclusive. */
+export const SEED_MISTING_SESSION_WINDOWS = {
+  'Water lawn (Morning)': { startHour: 5, endHour: 11, label: 'morning' },
+  'Water lawn (Midday)': { startHour: 11, endHour: 16, label: 'midday' },
+  'Water lawn (Evening)': { startHour: 16, endHour: 22, label: 'evening' },
+};
+
 /**
  * @typedef {Object} LawnWeatherSnapshot
  * @property {number} forecastedRainSum
@@ -5633,6 +5640,8 @@ export const RECENT_RAIN_WET_SOIL_MM = 5;
  * @property {number} [recentPastRainBeforeToday]
  * @property {number} [todayRainMm]
  * @property {Array<{ date: string, mm: number }>} [dailyForecastByDate]
+ * @property {number[]} [todayHourlyPrecipMm]
+ * @property {number} [todayRainObservedMm]
  * @property {number} netWaterNeeded
  * @property {string} fetchedAt
  * @property {'open-meteo'} source
@@ -5774,6 +5783,124 @@ export function buildDailyForecastSeries(data) {
     date,
     mm: forecast[index] ?? 0,
   }));
+}
+
+/**
+ * Today's 24 hourly precipitation values (index 0 = midnight, 23 = 11pm).
+ * @param {{ hourly?: { precipitation?: Array<number | null> } }} data
+ * @returns {number[]}
+ */
+export function getTodayHourlyPrecipMm(data) {
+  const hourlyPrecip = data?.hourly?.precipitation;
+  if (!Array.isArray(hourlyPrecip) || hourlyPrecip.length === 0) {
+    return [];
+  }
+
+  const start = PAST_RAIN_DAYS * 24;
+  const values = [];
+  for (let hour = 0; hour < 24; hour += 1) {
+    const index = start + hour;
+    values.push(index < hourlyPrecip.length ? hourlyPrecip[index] ?? 0 : 0);
+  }
+  return values;
+}
+
+/**
+ * @param {number[]} todayHourlyPrecipMm
+ * @param {number} startHour inclusive
+ * @param {number} endHour exclusive
+ */
+export function sumHourlyPrecipInWindow(todayHourlyPrecipMm, startHour, endHour) {
+  if (!Array.isArray(todayHourlyPrecipMm) || todayHourlyPrecipMm.length < 24) {
+    return 0;
+  }
+
+  let sum = 0;
+  for (let hour = startHour; hour < endHour && hour < 24; hour += 1) {
+    sum += todayHourlyPrecipMm[hour] ?? 0;
+  }
+  return sum;
+}
+
+/**
+ * Seed establishment: skip a single misting session when rain in that session's
+ * time window meets the surface moisture target (not the whole day).
+ * @param {string} sessionTitle
+ * @param {string} dueDateIso
+ * @param {string} todayStr
+ * @param {number[]} [todayHourlyPrecipMm]
+ * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
+ * @param {number} todayRainMm
+ * @param {number} [todayRainObservedMm]
+ */
+export function getSeedMistingRainSkipForSession(
+  sessionTitle,
+  dueDateIso,
+  todayStr,
+  todayHourlyPrecipMm,
+  dailyForecastByDate,
+  todayRainMm,
+  todayRainObservedMm = 0
+) {
+  const daysUntilDue = Math.floor(
+    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  if (daysUntilDue > 0) {
+    const rainMm = dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0;
+    if (rainMm >= SEED_MIST_TARGET_MM) {
+      return {
+        skip: true,
+        reason: `${rainMm.toFixed(1)}mm rain forecast – skip misting`,
+        fullSoak: false,
+      };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  const window = SEED_MISTING_SESSION_WINDOWS[sessionTitle];
+  if (
+    window &&
+    Array.isArray(todayHourlyPrecipMm) &&
+    todayHourlyPrecipMm.length >= 24
+  ) {
+    const rainMm = sumHourlyPrecipInWindow(
+      todayHourlyPrecipMm,
+      window.startHour,
+      window.endHour
+    );
+    if (rainMm >= SEED_MIST_TARGET_MM) {
+      const label =
+        window.label === 'evening'
+          ? `${rainMm.toFixed(1)}mm rain forecast this evening – skip misting`
+          : `${rainMm.toFixed(1)}mm rain in the ${window.label} – skip misting`;
+      return { skip: true, reason: label, fullSoak: false };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  // Fallback when hourly series unavailable (legacy snapshots).
+  if (sessionTitle === 'Water lawn (Evening)' && todayRainMm >= SEED_MIST_TARGET_MM) {
+    return {
+      skip: true,
+      reason: 'Rain keeping seed bed moist – skip evening misting',
+      fullSoak: false,
+    };
+  }
+  if (todayRainObservedMm >= SEED_MIST_TARGET_MM) {
+    return {
+      skip: true,
+      reason: 'Rain already fallen today – skip misting',
+      fullSoak: false,
+    };
+  }
+
+  return { skip: false, reason: null, fullSoak: false };
 }
 
 /**
@@ -5952,6 +6079,7 @@ export function buildWeatherSnapshotFromOpenMeteo(data) {
   const forecastedRainSumNearTerm = todayRainMm + forecastNearTermBeyondToday;
   const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
   const dailyForecastByDate = buildDailyForecastSeries(data);
+  const todayHourlyPrecipMm = getTodayHourlyPrecipMm(data);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
   const todayWatering = computeTodayWateringRainContext(
@@ -5966,6 +6094,8 @@ export function buildWeatherSnapshotFromOpenMeteo(data) {
     recentPastRainBeforeToday,
     todayRainMm,
     dailyForecastByDate,
+    todayHourlyPrecipMm,
+    todayRainObservedMm,
     rainCreditMm: todayWatering.rainCreditMm,
     currentSoilTemp,
     currentSoilTempMin,
@@ -6254,6 +6384,8 @@ export async function runLawnCloudSync() {
     weather.recentPastRainBeforeToday ??
     Math.max(0, recentPastRainSum - (weather.todayRainMm ?? 0));
   const todayRainMm = weather.todayRainMm ?? 0;
+  const todayHourlyPrecipMm = weather.todayHourlyPrecipMm ?? [];
+  const todayRainObservedMm = weather.todayRainObservedMm ?? 0;
 
   const pendingDates =
     scheduleSnapshot.pendingDates ??
@@ -6303,6 +6435,8 @@ export async function runLawnCloudSync() {
     dailyForecastByDate,
     recentPastRainBeforeToday,
     todayRainMm,
+    todayHourlyPrecipMm,
+    todayRainObservedMm,
     seedEstablishmentActive: maintenance.seedEstablishmentActive,
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,
@@ -7318,6 +7452,10 @@ export function useLawnCareApp() {
   );
   const [recentPastRainBeforeToday, setRecentPastRainBeforeToday] = useState(0);
   const [todayRainMm, setTodayRainMm] = useState(0);
+  const [todayHourlyPrecipMm, setTodayHourlyPrecipMm] = useState(
+    /** @type {number[]} */ ([])
+  );
+  const [todayRainObservedMm, setTodayRainObservedMm] = useState(0);
   const [currentSoilTemp, setCurrentSoilTemp] = useState(
     /** @type {number | null} */ (null)
   );
@@ -7613,8 +7751,10 @@ export function useLawnCareApp() {
         soilRecentlyWet: nextSoilRecentlyWet,
         dailyForecastByDate: nextDailyForecast,
         recentPastRainBeforeToday: nextPastBeforeToday,
-        todayRainMm: nextTodayRain,
-        seedEstablishmentActive: maintenance.seedEstablishmentActive,
+      todayRainMm: nextTodayRain,
+      todayHourlyPrecipMm: overrides.todayHourlyPrecipMm ?? todayHourlyPrecipMm,
+      todayRainObservedMm: overrides.todayRainObservedMm ?? todayRainObservedMm,
+      seedEstablishmentActive: maintenance.seedEstablishmentActive,
         mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
         mowingNextDueIso: maintenance.mowingNextDueIso,
         wateringNextDueIso: maintenance.wateringNextDueIso,
@@ -7647,6 +7787,8 @@ export function useLawnCareApp() {
       recentPastRainBeforeToday,
       todayRainMm,
       scheduleReason,
+      todayHourlyPrecipMm,
+      todayRainObservedMm,
     ]
   );
 
@@ -7916,6 +8058,8 @@ export function useLawnCareApp() {
     setDailyForecastByDate(forecastSeries);
     setRecentPastRainBeforeToday(pastBeforeToday);
     setTodayRainMm(todayRain);
+    setTodayHourlyPrecipMm(snapshot.todayHourlyPrecipMm ?? []);
+    setTodayRainObservedMm(snapshot.todayRainObservedMm ?? 0);
     setNetWaterNeeded(watering.netWaterNeeded);
     setIsNatureProvidingFullSoak(watering.isNatureProvidingFullSoak);
     setSoilRecentlyWet(watering.soilRecentlyWet);
@@ -8553,7 +8697,7 @@ import {
   VERTICUT_BLADE_HEIGHT_RULE,
   VERTICUT_MOW_PAIRING_NOTE,
 } from '../services/lawnScheduleEngine';
-import { getWateringRainSkipForDueDate, SEED_MIST_TARGET_MM } from '../services/lawnWeather';
+import { getWateringRainSkipForDueDate, getSeedMistingRainSkipForSession } from '../services/lawnWeather';
 import { VERTICUT_TASK_NAME } from '../services/lawnMaintenanceSync';
 
 const GYPSUM_CYCLE_DAYS = 182;
@@ -8663,6 +8807,8 @@ export function compileLawnTasks({
   dailyForecastByDate = [],
   recentPastRainBeforeToday = 0,
   todayRainMm = 0,
+  todayHourlyPrecipMm = [],
+  todayRainObservedMm = 0,
   seedEstablishmentActive,
   mowingLockedUntilIso,
   mowingNextDueIso,
@@ -8799,39 +8945,8 @@ export function compileLawnTasks({
     });
   } else {
     const waterDueDate = wateringNextDueIso ?? todayStr;
-    const rainSkip =
-      dailyForecastByDate.length > 0
-        ? getWateringRainSkipForDueDate(
-            waterDueDate,
-            todayStr,
-            dailyForecastByDate,
-            recentPastRainBeforeToday,
-            todayRainMm,
-            { seedEstablishmentActive }
-          )
-        : {
-            skip: seedEstablishmentActive
-              ? todayRainMm >= SEED_MIST_TARGET_MM
-              : isNatureProvidingFullSoak || soilRecentlyWet,
-            reason: seedEstablishmentActive
-              ? todayRainMm >= SEED_MIST_TARGET_MM
-                ? 'Rain keeping seed bed moist – skip misting today'
-                : null
-              : isNatureProvidingFullSoak
-                ? 'Heavy rain – nature providing full soak'
-                : soilRecentlyWet
-                  ? 'Recent rain – soil still damp, skip watering'
-                  : null,
-          };
 
-    if (rainSkip.skip && rainSkip.reason) {
-      pushRainSkippedWaterTasks(
-        compiledTasks,
-        seedEstablishmentActive,
-        waterDueDate,
-        rainSkip.reason
-      );
-    } else if (seedEstablishmentActive) {
+    if (seedEstablishmentActive) {
       const waterStatus = taskStatusFromDue(waterDueDate);
       const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
       const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
@@ -8841,43 +8956,77 @@ export function compileLawnTasks({
         recentWateringSkips > 0
           ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? '' : 's'} this week — keep seed bed moist`
           : null;
-      const mistingReason = [ `${baseReason}Light surface misting · ${perSessionText}`, missAdvisory]
+      const mistingReason = [`${baseReason}Light surface misting · ${perSessionText}`, missAdvisory]
         .filter(Boolean)
         .join(' · ');
 
-      compiledTasks.push({
-        id: 'lawn-water-morning',
-        title: 'Water lawn (Morning)',
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: 'lawn',
-        reason: mistingReason,
-      });
-      compiledTasks.push({
-        id: 'lawn-water-midday',
-        title: 'Water lawn (Midday)',
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: 'lawn',
-        reason: mistingReason,
-      });
-      compiledTasks.push({
-        id: 'lawn-water-evening',
-        title: 'Water lawn (Evening)',
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: 'lawn',
-        reason: mistingReason,
-      });
+      for (const session of [
+        { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
+        { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
+        { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
+      ]) {
+        const sessionRainSkip = getSeedMistingRainSkipForSession(
+          session.title,
+          waterDueDate,
+          todayStr,
+          todayHourlyPrecipMm,
+          dailyForecastByDate,
+          todayRainMm,
+          todayRainObservedMm
+        );
+
+        if (sessionRainSkip.skip && sessionRainSkip.reason) {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: 'completed',
+            module: 'lawn',
+            reason: sessionRainSkip.reason,
+          });
+        } else {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: waterStatus,
+            module: 'lawn',
+            reason: mistingReason,
+          });
+        }
+      }
     } else {
-      compiledTasks.push({
-        id: 'lawn-water',
-        title: 'Water lawn',
-        dueDate: waterDueDate,
-        status: taskStatusFromDue(waterDueDate),
-        module: 'lawn',
-        reason: scheduleReason?.water ?? null,
-      });
+      const rainSkip =
+        dailyForecastByDate.length > 0
+          ? getWateringRainSkipForDueDate(
+              waterDueDate,
+              todayStr,
+              dailyForecastByDate,
+              recentPastRainBeforeToday,
+              todayRainMm,
+              { seedEstablishmentActive: false }
+            )
+          : {
+              skip: isNatureProvidingFullSoak || soilRecentlyWet,
+              reason: isNatureProvidingFullSoak
+                ? 'Heavy rain – nature providing full soak'
+                : soilRecentlyWet
+                  ? 'Recent rain – soil still damp, skip watering'
+                  : null,
+            };
+
+      if (rainSkip.skip && rainSkip.reason) {
+        pushRainSkippedWaterTasks(compiledTasks, false, waterDueDate, rainSkip.reason);
+      } else {
+        compiledTasks.push({
+          id: 'lawn-water',
+          title: 'Water lawn',
+          dueDate: waterDueDate,
+          status: taskStatusFromDue(waterDueDate),
+          module: 'lawn',
+          reason: scheduleReason?.water ?? null,
+        });
+      }
     }
   }
 
@@ -8971,6 +9120,8 @@ export function compileAllLawnTasks(input) {
     dailyForecastByDate = [],
     recentPastRainBeforeToday = 0,
     todayRainMm = 0,
+    todayHourlyPrecipMm = [],
+    todayRainObservedMm = 0,
     seedEstablishmentActive,
     mowingLockedUntilIso,
     mowingNextDueIso,
@@ -8998,6 +9149,8 @@ export function compileAllLawnTasks(input) {
       dailyForecastByDate,
       recentPastRainBeforeToday,
       todayRainMm,
+      todayHourlyPrecipMm,
+      todayRainObservedMm,
       seedEstablishmentActive,
       mowingLockedUntilIso,
       mowingNextDueIso,
@@ -32731,6 +32884,11 @@ var NEAR_TERM_RAIN_DAYS = 3;
 var PAST_RAIN_DAYS = 7;
 var RECENT_PAST_RAIN_DAYS = 3;
 var RECENT_RAIN_WET_SOIL_MM = 5;
+var SEED_MISTING_SESSION_WINDOWS = {
+  "Water lawn (Morning)": { startHour: 5, endHour: 11, label: "morning" },
+  "Water lawn (Midday)": { startHour: 11, endHour: 16, label: "midday" },
+  "Water lawn (Evening)": { startHour: 16, endHour: 22, label: "evening" }
+};
 function sumPrecipitation(precipitationTotals, days = 7) {
   if (!Array.isArray(precipitationTotals)) return 0;
   return precipitationTotals.slice(0, days).reduce((sum, mm) => sum + (mm ?? 0), 0);
@@ -32813,6 +32971,76 @@ function buildDailyForecastSeries(data) {
     date,
     mm: forecast[index] ?? 0
   }));
+}
+function getTodayHourlyPrecipMm(data) {
+  const hourlyPrecip = data?.hourly?.precipitation;
+  if (!Array.isArray(hourlyPrecip) || hourlyPrecip.length === 0) {
+    return [];
+  }
+  const start = PAST_RAIN_DAYS * 24;
+  const values = [];
+  for (let hour = 0; hour < 24; hour += 1) {
+    const index = start + hour;
+    values.push(index < hourlyPrecip.length ? hourlyPrecip[index] ?? 0 : 0);
+  }
+  return values;
+}
+function sumHourlyPrecipInWindow(todayHourlyPrecipMm, startHour, endHour) {
+  if (!Array.isArray(todayHourlyPrecipMm) || todayHourlyPrecipMm.length < 24) {
+    return 0;
+  }
+  let sum = 0;
+  for (let hour = startHour; hour < endHour && hour < 24; hour += 1) {
+    sum += todayHourlyPrecipMm[hour] ?? 0;
+  }
+  return sum;
+}
+function getSeedMistingRainSkipForSession(sessionTitle, dueDateIso, todayStr, todayHourlyPrecipMm, dailyForecastByDate, todayRainMm, todayRainObservedMm = 0) {
+  const daysUntilDue = Math.floor(
+    ((/* @__PURE__ */ new Date(`${dueDateIso}T12:00:00`)).getTime() - (/* @__PURE__ */ new Date(`${todayStr}T12:00:00`)).getTime()) / (1e3 * 60 * 60 * 24)
+  );
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+  if (daysUntilDue > 0) {
+    const rainMm = dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0;
+    if (rainMm >= SEED_MIST_TARGET_MM) {
+      return {
+        skip: true,
+        reason: `${rainMm.toFixed(1)}mm rain forecast \u2013 skip misting`,
+        fullSoak: false
+      };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+  const window2 = SEED_MISTING_SESSION_WINDOWS[sessionTitle];
+  if (window2 && Array.isArray(todayHourlyPrecipMm) && todayHourlyPrecipMm.length >= 24) {
+    const rainMm = sumHourlyPrecipInWindow(
+      todayHourlyPrecipMm,
+      window2.startHour,
+      window2.endHour
+    );
+    if (rainMm >= SEED_MIST_TARGET_MM) {
+      const label = window2.label === "evening" ? `${rainMm.toFixed(1)}mm rain forecast this evening \u2013 skip misting` : `${rainMm.toFixed(1)}mm rain in the ${window2.label} \u2013 skip misting`;
+      return { skip: true, reason: label, fullSoak: false };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+  if (sessionTitle === "Water lawn (Evening)" && todayRainMm >= SEED_MIST_TARGET_MM) {
+    return {
+      skip: true,
+      reason: "Rain keeping seed bed moist \u2013 skip evening misting",
+      fullSoak: false
+    };
+  }
+  if (todayRainObservedMm >= SEED_MIST_TARGET_MM) {
+    return {
+      skip: true,
+      reason: "Rain already fallen today \u2013 skip misting",
+      fullSoak: false
+    };
+  }
+  return { skip: false, reason: null, fullSoak: false };
 }
 function getSeedMistingRainSkipForDueDate(dueDateIso, todayStr, dailyForecastByDate, todayRainMm) {
   const daysUntilDue = Math.floor(
@@ -32926,6 +33154,7 @@ function buildWeatherSnapshotFromOpenMeteo(data) {
   const forecastedRainSumNearTerm = todayRainMm + forecastNearTermBeyondToday;
   const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
   const dailyForecastByDate = buildDailyForecastSeries(data);
+  const todayHourlyPrecipMm = getTodayHourlyPrecipMm(data);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
   const todayWatering = computeTodayWateringRainContext(
@@ -32939,6 +33168,8 @@ function buildWeatherSnapshotFromOpenMeteo(data) {
     recentPastRainBeforeToday,
     todayRainMm,
     dailyForecastByDate,
+    todayHourlyPrecipMm,
+    todayRainObservedMm,
     rainCreditMm: todayWatering.rainCreditMm,
     currentSoilTemp,
     currentSoilTempMin,
@@ -33274,6 +33505,8 @@ function compileLawnTasks({
   dailyForecastByDate = [],
   recentPastRainBeforeToday = 0,
   todayRainMm = 0,
+  todayHourlyPrecipMm = [],
+  todayRainObservedMm = 0,
   seedEstablishmentActive,
   mowingLockedUntilIso,
   mowingNextDueIso,
@@ -33391,64 +33624,71 @@ function compileLawnTasks({
     });
   } else {
     const waterDueDate = wateringNextDueIso ?? todayStr;
-    const rainSkip = dailyForecastByDate.length > 0 ? getWateringRainSkipForDueDate(
-      waterDueDate,
-      todayStr,
-      dailyForecastByDate,
-      recentPastRainBeforeToday,
-      todayRainMm,
-      { seedEstablishmentActive }
-    ) : {
-      skip: seedEstablishmentActive ? todayRainMm >= SEED_MIST_TARGET_MM : isNatureProvidingFullSoak || soilRecentlyWet,
-      reason: seedEstablishmentActive ? todayRainMm >= SEED_MIST_TARGET_MM ? "Rain keeping seed bed moist \u2013 skip misting today" : null : isNatureProvidingFullSoak ? "Heavy rain \u2013 nature providing full soak" : soilRecentlyWet ? "Recent rain \u2013 soil still damp, skip watering" : null
-    };
-    if (rainSkip.skip && rainSkip.reason) {
-      pushRainSkippedWaterTasks(
-        compiledTasks,
-        seedEstablishmentActive,
-        waterDueDate,
-        rainSkip.reason
-      );
-    } else if (seedEstablishmentActive) {
+    if (seedEstablishmentActive) {
       const waterStatus = taskStatusFromDue(waterDueDate);
       const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
       const baseReason = scheduleReason?.water ? `${scheduleReason.water} \xB7 ` : "";
       const perSessionText = mistingMins > 0 ? `Run for ${mistingMins} minutes` : "divide daily duration by 3";
       const missAdvisory = recentWateringSkips > 0 ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? "" : "s"} this week \u2014 keep seed bed moist` : null;
       const mistingReason = [`${baseReason}Light surface misting \xB7 ${perSessionText}`, missAdvisory].filter(Boolean).join(" \xB7 ");
-      compiledTasks.push({
-        id: "lawn-water-morning",
-        title: "Water lawn (Morning)",
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: "lawn",
-        reason: mistingReason
-      });
-      compiledTasks.push({
-        id: "lawn-water-midday",
-        title: "Water lawn (Midday)",
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: "lawn",
-        reason: mistingReason
-      });
-      compiledTasks.push({
-        id: "lawn-water-evening",
-        title: "Water lawn (Evening)",
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: "lawn",
-        reason: mistingReason
-      });
+      for (const session of [
+        { id: "lawn-water-morning", title: "Water lawn (Morning)" },
+        { id: "lawn-water-midday", title: "Water lawn (Midday)" },
+        { id: "lawn-water-evening", title: "Water lawn (Evening)" }
+      ]) {
+        const sessionRainSkip = getSeedMistingRainSkipForSession(
+          session.title,
+          waterDueDate,
+          todayStr,
+          todayHourlyPrecipMm,
+          dailyForecastByDate,
+          todayRainMm,
+          todayRainObservedMm
+        );
+        if (sessionRainSkip.skip && sessionRainSkip.reason) {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: "completed",
+            module: "lawn",
+            reason: sessionRainSkip.reason
+          });
+        } else {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: waterStatus,
+            module: "lawn",
+            reason: mistingReason
+          });
+        }
+      }
     } else {
-      compiledTasks.push({
-        id: "lawn-water",
-        title: "Water lawn",
-        dueDate: waterDueDate,
-        status: taskStatusFromDue(waterDueDate),
-        module: "lawn",
-        reason: scheduleReason?.water ?? null
-      });
+      const rainSkip = dailyForecastByDate.length > 0 ? getWateringRainSkipForDueDate(
+        waterDueDate,
+        todayStr,
+        dailyForecastByDate,
+        recentPastRainBeforeToday,
+        todayRainMm,
+        { seedEstablishmentActive: false }
+      ) : {
+        skip: isNatureProvidingFullSoak || soilRecentlyWet,
+        reason: isNatureProvidingFullSoak ? "Heavy rain \u2013 nature providing full soak" : soilRecentlyWet ? "Recent rain \u2013 soil still damp, skip watering" : null
+      };
+      if (rainSkip.skip && rainSkip.reason) {
+        pushRainSkippedWaterTasks(compiledTasks, false, waterDueDate, rainSkip.reason);
+      } else {
+        compiledTasks.push({
+          id: "lawn-water",
+          title: "Water lawn",
+          dueDate: waterDueDate,
+          status: taskStatusFromDue(waterDueDate),
+          module: "lawn",
+          reason: scheduleReason?.water ?? null
+        });
+      }
     }
   }
   const gypsum = getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr);
@@ -33512,6 +33752,8 @@ function compileAllLawnTasks(input) {
     dailyForecastByDate = [],
     recentPastRainBeforeToday = 0,
     todayRainMm = 0,
+    todayHourlyPrecipMm = [],
+    todayRainObservedMm = 0,
     seedEstablishmentActive,
     mowingLockedUntilIso,
     mowingNextDueIso,
@@ -33538,6 +33780,8 @@ function compileAllLawnTasks(input) {
       dailyForecastByDate,
       recentPastRainBeforeToday,
       todayRainMm,
+      todayHourlyPrecipMm,
+      todayRainObservedMm,
       seedEstablishmentActive,
       mowingLockedUntilIso,
       mowingNextDueIso,
@@ -33647,6 +33891,8 @@ async function runLawnCloudSync() {
   const dailyForecastByDate = weather.dailyForecastByDate ?? [];
   const recentPastRainBeforeToday = weather.recentPastRainBeforeToday ?? Math.max(0, recentPastRainSum - (weather.todayRainMm ?? 0));
   const todayRainMm = weather.todayRainMm ?? 0;
+  const todayHourlyPrecipMm = weather.todayHourlyPrecipMm ?? [];
+  const todayRainObservedMm = weather.todayRainObservedMm ?? 0;
   const pendingDates = scheduleSnapshot.pendingDates ?? createInitialPendingDates(null, userLogs);
   const maintenance = buildMaintenanceSchedule({
     todayStr,
@@ -33689,6 +33935,8 @@ async function runLawnCloudSync() {
     dailyForecastByDate,
     recentPastRainBeforeToday,
     todayRainMm,
+    todayHourlyPrecipMm,
+    todayRainObservedMm,
     seedEstablishmentActive: maintenance.seedEstablishmentActive,
     mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
     mowingNextDueIso: maintenance.mowingNextDueIso,

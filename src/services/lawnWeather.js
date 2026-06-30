@@ -34,6 +34,13 @@ export const PAST_RAIN_DAYS = 7;
 export const RECENT_PAST_RAIN_DAYS = 3;
 export const RECENT_RAIN_WET_SOIL_MM = 5;
 
+/** Hour-of-day windows (Europe/London) for seed misting sessions — end hour exclusive. */
+export const SEED_MISTING_SESSION_WINDOWS = {
+  'Water lawn (Morning)': { startHour: 5, endHour: 11, label: 'morning' },
+  'Water lawn (Midday)': { startHour: 11, endHour: 16, label: 'midday' },
+  'Water lawn (Evening)': { startHour: 16, endHour: 22, label: 'evening' },
+};
+
 /**
  * @typedef {Object} LawnWeatherSnapshot
  * @property {number} forecastedRainSum
@@ -48,6 +55,8 @@ export const RECENT_RAIN_WET_SOIL_MM = 5;
  * @property {number} [recentPastRainBeforeToday]
  * @property {number} [todayRainMm]
  * @property {Array<{ date: string, mm: number }>} [dailyForecastByDate]
+ * @property {number[]} [todayHourlyPrecipMm]
+ * @property {number} [todayRainObservedMm]
  * @property {number} netWaterNeeded
  * @property {string} fetchedAt
  * @property {'open-meteo'} source
@@ -189,6 +198,124 @@ export function buildDailyForecastSeries(data) {
     date,
     mm: forecast[index] ?? 0,
   }));
+}
+
+/**
+ * Today's 24 hourly precipitation values (index 0 = midnight, 23 = 11pm).
+ * @param {{ hourly?: { precipitation?: Array<number | null> } }} data
+ * @returns {number[]}
+ */
+export function getTodayHourlyPrecipMm(data) {
+  const hourlyPrecip = data?.hourly?.precipitation;
+  if (!Array.isArray(hourlyPrecip) || hourlyPrecip.length === 0) {
+    return [];
+  }
+
+  const start = PAST_RAIN_DAYS * 24;
+  const values = [];
+  for (let hour = 0; hour < 24; hour += 1) {
+    const index = start + hour;
+    values.push(index < hourlyPrecip.length ? hourlyPrecip[index] ?? 0 : 0);
+  }
+  return values;
+}
+
+/**
+ * @param {number[]} todayHourlyPrecipMm
+ * @param {number} startHour inclusive
+ * @param {number} endHour exclusive
+ */
+export function sumHourlyPrecipInWindow(todayHourlyPrecipMm, startHour, endHour) {
+  if (!Array.isArray(todayHourlyPrecipMm) || todayHourlyPrecipMm.length < 24) {
+    return 0;
+  }
+
+  let sum = 0;
+  for (let hour = startHour; hour < endHour && hour < 24; hour += 1) {
+    sum += todayHourlyPrecipMm[hour] ?? 0;
+  }
+  return sum;
+}
+
+/**
+ * Seed establishment: skip a single misting session when rain in that session's
+ * time window meets the surface moisture target (not the whole day).
+ * @param {string} sessionTitle
+ * @param {string} dueDateIso
+ * @param {string} todayStr
+ * @param {number[]} [todayHourlyPrecipMm]
+ * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
+ * @param {number} todayRainMm
+ * @param {number} [todayRainObservedMm]
+ */
+export function getSeedMistingRainSkipForSession(
+  sessionTitle,
+  dueDateIso,
+  todayStr,
+  todayHourlyPrecipMm,
+  dailyForecastByDate,
+  todayRainMm,
+  todayRainObservedMm = 0
+) {
+  const daysUntilDue = Math.floor(
+    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  if (daysUntilDue > 0) {
+    const rainMm = dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0;
+    if (rainMm >= SEED_MIST_TARGET_MM) {
+      return {
+        skip: true,
+        reason: `${rainMm.toFixed(1)}mm rain forecast – skip misting`,
+        fullSoak: false,
+      };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  const window = SEED_MISTING_SESSION_WINDOWS[sessionTitle];
+  if (
+    window &&
+    Array.isArray(todayHourlyPrecipMm) &&
+    todayHourlyPrecipMm.length >= 24
+  ) {
+    const rainMm = sumHourlyPrecipInWindow(
+      todayHourlyPrecipMm,
+      window.startHour,
+      window.endHour
+    );
+    if (rainMm >= SEED_MIST_TARGET_MM) {
+      const label =
+        window.label === 'evening'
+          ? `${rainMm.toFixed(1)}mm rain forecast this evening – skip misting`
+          : `${rainMm.toFixed(1)}mm rain in the ${window.label} – skip misting`;
+      return { skip: true, reason: label, fullSoak: false };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  // Fallback when hourly series unavailable (legacy snapshots).
+  if (sessionTitle === 'Water lawn (Evening)' && todayRainMm >= SEED_MIST_TARGET_MM) {
+    return {
+      skip: true,
+      reason: 'Rain keeping seed bed moist – skip evening misting',
+      fullSoak: false,
+    };
+  }
+  if (todayRainObservedMm >= SEED_MIST_TARGET_MM) {
+    return {
+      skip: true,
+      reason: 'Rain already fallen today – skip misting',
+      fullSoak: false,
+    };
+  }
+
+  return { skip: false, reason: null, fullSoak: false };
 }
 
 /**
@@ -367,6 +494,7 @@ export function buildWeatherSnapshotFromOpenMeteo(data) {
   const forecastedRainSumNearTerm = todayRainMm + forecastNearTermBeyondToday;
   const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
   const dailyForecastByDate = buildDailyForecastSeries(data);
+  const todayHourlyPrecipMm = getTodayHourlyPrecipMm(data);
   const currentSoilTemp = getTodayMaxSoilTemp(data);
   const currentSoilTempMin = getTodayMinSoilTemp(data);
   const todayWatering = computeTodayWateringRainContext(
@@ -381,6 +509,8 @@ export function buildWeatherSnapshotFromOpenMeteo(data) {
     recentPastRainBeforeToday,
     todayRainMm,
     dailyForecastByDate,
+    todayHourlyPrecipMm,
+    todayRainObservedMm,
     rainCreditMm: todayWatering.rainCreditMm,
     currentSoilTemp,
     currentSoilTempMin,

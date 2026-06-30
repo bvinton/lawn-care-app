@@ -202,6 +202,10 @@ export function useLawnCareApp() {
   );
   const [recentPastRainBeforeToday, setRecentPastRainBeforeToday] = useState(0);
   const [todayRainMm, setTodayRainMm] = useState(0);
+  const [todayHourlyPrecipMm, setTodayHourlyPrecipMm] = useState(
+    /** @type {number[]} */ ([])
+  );
+  const [todayRainObservedMm, setTodayRainObservedMm] = useState(0);
   const [currentSoilTemp, setCurrentSoilTemp] = useState(
     /** @type {number | null} */ (null)
   );
@@ -497,8 +501,10 @@ export function useLawnCareApp() {
         soilRecentlyWet: nextSoilRecentlyWet,
         dailyForecastByDate: nextDailyForecast,
         recentPastRainBeforeToday: nextPastBeforeToday,
-        todayRainMm: nextTodayRain,
-        seedEstablishmentActive: maintenance.seedEstablishmentActive,
+      todayRainMm: nextTodayRain,
+      todayHourlyPrecipMm: overrides.todayHourlyPrecipMm ?? todayHourlyPrecipMm,
+      todayRainObservedMm: overrides.todayRainObservedMm ?? todayRainObservedMm,
+      seedEstablishmentActive: maintenance.seedEstablishmentActive,
         mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
         mowingNextDueIso: maintenance.mowingNextDueIso,
         wateringNextDueIso: maintenance.wateringNextDueIso,
@@ -531,6 +537,8 @@ export function useLawnCareApp() {
       recentPastRainBeforeToday,
       todayRainMm,
       scheduleReason,
+      todayHourlyPrecipMm,
+      todayRainObservedMm,
     ]
   );
 
@@ -800,6 +808,8 @@ export function useLawnCareApp() {
     setDailyForecastByDate(forecastSeries);
     setRecentPastRainBeforeToday(pastBeforeToday);
     setTodayRainMm(todayRain);
+    setTodayHourlyPrecipMm(snapshot.todayHourlyPrecipMm ?? []);
+    setTodayRainObservedMm(snapshot.todayRainObservedMm ?? 0);
     setNetWaterNeeded(watering.netWaterNeeded);
     setIsNatureProvidingFullSoak(watering.isNatureProvidingFullSoak);
     setSoilRecentlyWet(watering.soilRecentlyWet);

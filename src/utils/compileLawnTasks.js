@@ -12,7 +12,7 @@ import {
   VERTICUT_BLADE_HEIGHT_RULE,
   VERTICUT_MOW_PAIRING_NOTE,
 } from '../services/lawnScheduleEngine';
-import { getWateringRainSkipForDueDate, SEED_MIST_TARGET_MM } from '../services/lawnWeather';
+import { getWateringRainSkipForDueDate, getSeedMistingRainSkipForSession } from '../services/lawnWeather';
 import { VERTICUT_TASK_NAME } from '../services/lawnMaintenanceSync';
 
 const GYPSUM_CYCLE_DAYS = 182;
@@ -122,6 +122,8 @@ export function compileLawnTasks({
   dailyForecastByDate = [],
   recentPastRainBeforeToday = 0,
   todayRainMm = 0,
+  todayHourlyPrecipMm = [],
+  todayRainObservedMm = 0,
   seedEstablishmentActive,
   mowingLockedUntilIso,
   mowingNextDueIso,
@@ -258,39 +260,8 @@ export function compileLawnTasks({
     });
   } else {
     const waterDueDate = wateringNextDueIso ?? todayStr;
-    const rainSkip =
-      dailyForecastByDate.length > 0
-        ? getWateringRainSkipForDueDate(
-            waterDueDate,
-            todayStr,
-            dailyForecastByDate,
-            recentPastRainBeforeToday,
-            todayRainMm,
-            { seedEstablishmentActive }
-          )
-        : {
-            skip: seedEstablishmentActive
-              ? todayRainMm >= SEED_MIST_TARGET_MM
-              : isNatureProvidingFullSoak || soilRecentlyWet,
-            reason: seedEstablishmentActive
-              ? todayRainMm >= SEED_MIST_TARGET_MM
-                ? 'Rain keeping seed bed moist – skip misting today'
-                : null
-              : isNatureProvidingFullSoak
-                ? 'Heavy rain – nature providing full soak'
-                : soilRecentlyWet
-                  ? 'Recent rain – soil still damp, skip watering'
-                  : null,
-          };
 
-    if (rainSkip.skip && rainSkip.reason) {
-      pushRainSkippedWaterTasks(
-        compiledTasks,
-        seedEstablishmentActive,
-        waterDueDate,
-        rainSkip.reason
-      );
-    } else if (seedEstablishmentActive) {
+    if (seedEstablishmentActive) {
       const waterStatus = taskStatusFromDue(waterDueDate);
       const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
       const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
@@ -300,43 +271,77 @@ export function compileLawnTasks({
         recentWateringSkips > 0
           ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? '' : 's'} this week — keep seed bed moist`
           : null;
-      const mistingReason = [ `${baseReason}Light surface misting · ${perSessionText}`, missAdvisory]
+      const mistingReason = [`${baseReason}Light surface misting · ${perSessionText}`, missAdvisory]
         .filter(Boolean)
         .join(' · ');
 
-      compiledTasks.push({
-        id: 'lawn-water-morning',
-        title: 'Water lawn (Morning)',
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: 'lawn',
-        reason: mistingReason,
-      });
-      compiledTasks.push({
-        id: 'lawn-water-midday',
-        title: 'Water lawn (Midday)',
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: 'lawn',
-        reason: mistingReason,
-      });
-      compiledTasks.push({
-        id: 'lawn-water-evening',
-        title: 'Water lawn (Evening)',
-        dueDate: waterDueDate,
-        status: waterStatus,
-        module: 'lawn',
-        reason: mistingReason,
-      });
+      for (const session of [
+        { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
+        { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
+        { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
+      ]) {
+        const sessionRainSkip = getSeedMistingRainSkipForSession(
+          session.title,
+          waterDueDate,
+          todayStr,
+          todayHourlyPrecipMm,
+          dailyForecastByDate,
+          todayRainMm,
+          todayRainObservedMm
+        );
+
+        if (sessionRainSkip.skip && sessionRainSkip.reason) {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: 'completed',
+            module: 'lawn',
+            reason: sessionRainSkip.reason,
+          });
+        } else {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: waterStatus,
+            module: 'lawn',
+            reason: mistingReason,
+          });
+        }
+      }
     } else {
-      compiledTasks.push({
-        id: 'lawn-water',
-        title: 'Water lawn',
-        dueDate: waterDueDate,
-        status: taskStatusFromDue(waterDueDate),
-        module: 'lawn',
-        reason: scheduleReason?.water ?? null,
-      });
+      const rainSkip =
+        dailyForecastByDate.length > 0
+          ? getWateringRainSkipForDueDate(
+              waterDueDate,
+              todayStr,
+              dailyForecastByDate,
+              recentPastRainBeforeToday,
+              todayRainMm,
+              { seedEstablishmentActive: false }
+            )
+          : {
+              skip: isNatureProvidingFullSoak || soilRecentlyWet,
+              reason: isNatureProvidingFullSoak
+                ? 'Heavy rain – nature providing full soak'
+                : soilRecentlyWet
+                  ? 'Recent rain – soil still damp, skip watering'
+                  : null,
+            };
+
+      if (rainSkip.skip && rainSkip.reason) {
+        pushRainSkippedWaterTasks(compiledTasks, false, waterDueDate, rainSkip.reason);
+      } else {
+        compiledTasks.push({
+          id: 'lawn-water',
+          title: 'Water lawn',
+          dueDate: waterDueDate,
+          status: taskStatusFromDue(waterDueDate),
+          module: 'lawn',
+          reason: scheduleReason?.water ?? null,
+        });
+      }
     }
   }
 
@@ -430,6 +435,8 @@ export function compileAllLawnTasks(input) {
     dailyForecastByDate = [],
     recentPastRainBeforeToday = 0,
     todayRainMm = 0,
+    todayHourlyPrecipMm = [],
+    todayRainObservedMm = 0,
     seedEstablishmentActive,
     mowingLockedUntilIso,
     mowingNextDueIso,
@@ -457,6 +464,8 @@ export function compileAllLawnTasks(input) {
       dailyForecastByDate,
       recentPastRainBeforeToday,
       todayRainMm,
+      todayHourlyPrecipMm,
+      todayRainObservedMm,
       seedEstablishmentActive,
       mowingLockedUntilIso,
       mowingNextDueIso,
