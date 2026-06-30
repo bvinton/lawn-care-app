@@ -5582,6 +5582,40 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
 }
 </file>
 
+<file path="package.json">
+{
+  "name": "lawn-care-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "node scripts/generate-pwa-icons.mjs && node scripts/bundle-sync-api.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
+    "mammoth": "^1.12.0",
+    "pdfjs-dist": "^6.0.227",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "husky": "^9.1.7",
+    "postcss": "^8.5.6",
+    "sharp": "^0.34.2",
+    "tailwindcss": "^3.4.17",
+    "vite": "^5.4.19",
+    "vite-plugin-pwa": "^0.21.1"
+  }
+}
+</file>
+
 <file path="src/services/lawnWeather.js">
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { resolveWeatherLocation } from './lawnLocation.js';
@@ -5611,6 +5645,8 @@ export const SOAK_DEPTH_MM = 10;
 export const RAIN_THRESHOLD_MM = 5;
 /** Light surface misting target during seed establishment (~2.5mm). */
 export const SEED_MIST_TARGET_MM = 2.5;
+// Per-session skip: seed surface stays moist with much less rain than a full daily soak.
+export const SEED_MIST_SESSION_THRESHOLD_MM = 1.0;
 /** Rain in the next few days drives forward-looking adjustments. */
 export const NEAR_TERM_RAIN_DAYS = 3;
 /** Observed rain history from Open-Meteo. */
@@ -5874,7 +5910,7 @@ export function getSeedMistingRainSkipForSession(
       window.startHour,
       window.endHour
     );
-    if (rainMm >= SEED_MIST_TARGET_MM) {
+    if (rainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
       const label =
         window.label === 'evening'
           ? `${rainMm.toFixed(1)}mm rain forecast this evening – skip misting`
@@ -5885,14 +5921,14 @@ export function getSeedMistingRainSkipForSession(
   }
 
   // Fallback when hourly series unavailable (legacy snapshots).
-  if (sessionTitle === 'Water lawn (Evening)' && todayRainMm >= SEED_MIST_TARGET_MM) {
+  if (sessionTitle === 'Water lawn (Evening)' && todayRainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
     return {
       skip: true,
       reason: 'Rain keeping seed bed moist – skip evening misting',
       fullSoak: false,
     };
   }
-  if (todayRainObservedMm >= SEED_MIST_TARGET_MM) {
+  if (todayRainObservedMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
     return {
       skip: true,
       reason: 'Rain already fallen today – skip misting',
@@ -6199,40 +6235,6 @@ export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
   if (!fetchedAt) return false;
   const ageMs = Date.now() - new Date(fetchedAt).getTime();
   return ageMs >= 0 && ageMs < maxAgeHours * 60 * 60 * 1000;
-}
-</file>
-
-<file path="package.json">
-{
-  "name": "lawn-care-app",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "prebuild": "node scripts/generate-pwa-icons.mjs && node scripts/bundle-sync-api.mjs",
-    "build": "vite build",
-    "preview": "vite preview",
-    "prepare": "husky"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.106.2",
-    "mammoth": "^1.12.0",
-    "pdfjs-dist": "^6.0.227",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
-    "husky": "^9.1.7",
-    "postcss": "^8.5.6",
-    "sharp": "^0.34.2",
-    "tailwindcss": "^3.4.17",
-    "vite": "^5.4.19",
-    "vite-plugin-pwa": "^0.21.1"
-  }
 }
 </file>
 
@@ -8682,495 +8684,6 @@ export function useLawnCareApp() {
 }
 </file>
 
-<file path="src/utils/compileLawnTasks.js">
-import {
-  addDaysToDateString,
-  SEASONS,
-  SEASON_ORDER,
-  makeStepKey,
-  getWorkflowSeasonForDate,
-  getSeasonAnchorDate,
-  cascadeSeasonDates,
-  isSeasonPackComplete,
-} from '../data/LawnPackData';
-import {
-  VERTICUT_BLADE_HEIGHT_RULE,
-  VERTICUT_MOW_PAIRING_NOTE,
-} from '../services/lawnScheduleEngine';
-import { getWateringRainSkipForDueDate, getSeedMistingRainSkipForSession } from '../services/lawnWeather';
-import { VERTICUT_TASK_NAME } from '../services/lawnMaintenanceSync';
-
-const GYPSUM_CYCLE_DAYS = 182;
-
-/**
- * @param {string | null} lastGypsumDate
- * @param {string | null | undefined} gypsumPostponedUntil
- * @param {string} todayStr
- */
-export function getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr) {
-  const naturalDue = lastGypsumDate
-    ? addDaysToDateString(lastGypsumDate, GYPSUM_CYCLE_DAYS)
-    : todayStr;
-
-  const snoozed =
-    typeof gypsumPostponedUntil === 'string' &&
-    /^\d{4}-\d{2}-\d{2}$/.test(gypsumPostponedUntil) &&
-    gypsumPostponedUntil > todayStr;
-
-  const dueDate = snoozed ? gypsumPostponedUntil : naturalDue;
-  const cycleWouldBeDue =
-    !lastGypsumDate || daysBetween(naturalDue, todayStr) >= 0;
-  const gypsumDue = snoozed ? false : cycleWouldBeDue;
-
-  let gypsumDaysRemaining = 0;
-  if (snoozed) {
-    gypsumDaysRemaining = daysBetween(todayStr, gypsumPostponedUntil);
-  } else if (!gypsumDue && lastGypsumDate && daysBetween(naturalDue, todayStr) < 0) {
-    gypsumDaysRemaining = daysBetween(todayStr, naturalDue);
-  }
-
-  return {
-    dueDate,
-    gypsumDue,
-    gypsumDaysRemaining,
-    naturalDue,
-    snoozed,
-    gypsumPostponedUntil: snoozed ? gypsumPostponedUntil : null,
-  };
-}
-
-/** @param {string | Date} from @param {string | Date} to */
-function daysBetween(from, to) {
-  const start = typeof from === 'string' ? new Date(`${from}T12:00:00`) : from;
-  const end = typeof to === 'string' ? new Date(`${to}T12:00:00`) : to;
-  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-/** @param {string} dueDateIso @param {string} reason */
-function pushRainSkippedWaterTasks(compiledTasks, seedEstablishmentActive, dueDateIso, reason) {
-  if (seedEstablishmentActive) {
-    for (const session of [
-      { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
-      { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
-      { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
-    ]) {
-      compiledTasks.push({
-        id: session.id,
-        title: session.title,
-        dueDate: dueDateIso,
-        status: 'completed',
-        module: 'lawn',
-        reason,
-      });
-    }
-    return;
-  }
-
-  compiledTasks.push({
-    id: 'lawn-water',
-    title: 'Water lawn',
-    dueDate: dueDateIso,
-    status: 'completed',
-    module: 'lawn',
-    reason,
-  });
-}
-
-/**
- * @param {Object} input
- * @param {string} input.todayStr
- * @param {boolean} input.isDormantSeason   - calendar-based (Dec–Feb): grass not growing
- * @param {boolean} input.isNatureProvidingFullSoak
- * @param {boolean} [input.soilRecentlyWet]
- * @param {Array<{ date: string, mm: number }>} [input.dailyForecastByDate]
- * @param {number} [input.recentPastRainBeforeToday]
- * @param {number} [input.todayRainMm]
- * @param {boolean} input.seedEstablishmentActive
- * @param {string | null} input.mowingLockedUntilIso
- * @param {string | null} input.mowingNextDueIso    - pre-computed from dynamic interval
- * @param {string | null} input.wateringNextDueIso  - pre-computed from dynamic interval
- * @param {boolean} [input.isVerticutSeason]
- * @param {boolean} [input.renovationHoldActive]
- * @param {string | null} [input.verticutLockedUntilIso]
- * @param {boolean} [input.verticutHeatDroughtPaused]
- * @param {string | null} [input.verticutNextDueIso]
- * @param {boolean} [input.verticutPairedWithMow]
- * @param {string | null} [input.lastGypsumDate]
- * @param {string | null} [input.gypsumPostponedUntil]
- * @param {{ mow: string | null, water: string | null, verticut?: string | null } | null} [input.scheduleReason]
- */
-export function compileLawnTasks({
-  todayStr,
-  isDormantSeason,
-  isNatureProvidingFullSoak,
-  soilRecentlyWet = false,
-  dailyForecastByDate = [],
-  recentPastRainBeforeToday = 0,
-  todayRainMm = 0,
-  todayHourlyPrecipMm = [],
-  todayRainObservedMm = 0,
-  seedEstablishmentActive,
-  mowingLockedUntilIso,
-  mowingNextDueIso,
-  wateringNextDueIso,
-  isVerticutSeason = false,
-  renovationHoldActive = false,
-  verticutLockedUntilIso = null,
-  verticutHeatDroughtPaused = false,
-  verticutNextDueIso = null,
-  verticutPairedWithMow = false,
-  lastGypsumDate,
-  gypsumPostponedUntil = null,
-  scheduleReason = null,
-  dynamicMinutes = 0,
-  recentWateringSkips = 0,
-}) {
-  /** @param {string} dueDateIso */
-  const taskStatusFromDue = (dueDateIso) =>
-    daysBetween(dueDateIso, todayStr) >= 0 ? 'urgent' : 'pending';
-
-  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
-  const compiledTasks = [];
-
-  const mowPairedWithVerticut =
-    verticutPairedWithMow &&
-    isVerticutSeason &&
-    !renovationHoldActive &&
-    !verticutHeatDroughtPaused &&
-    verticutNextDueIso &&
-    mowingNextDueIso &&
-    verticutNextDueIso === mowingNextDueIso;
-
-  const buildMowReason = () => {
-    const parts = [];
-    if (mowPairedWithVerticut) {
-      parts.push(VERTICUT_MOW_PAIRING_NOTE);
-    }
-    if (scheduleReason?.mow) {
-      parts.push(scheduleReason.mow);
-    }
-    return parts.length > 0 ? parts.join(' · ') : null;
-  };
-
-  const buildVerticutReason = () => {
-    const parts = [VERTICUT_BLADE_HEIGHT_RULE];
-    if (mowPairedWithVerticut) {
-      parts.push(VERTICUT_MOW_PAIRING_NOTE);
-    }
-    if (scheduleReason?.verticut) {
-      parts.push(scheduleReason.verticut);
-    }
-    return parts.join(' · ');
-  };
-
-  if (isDormantSeason) {
-    compiledTasks.push({
-      id: 'lawn-mow',
-      title: 'Mow lawn',
-      dueDate: mowingNextDueIso ?? todayStr,
-      status: 'completed',
-      module: 'lawn',
-      reason: 'Winter dormancy – grass not actively growing',
-    });
-  } else if (seedEstablishmentActive && mowingLockedUntilIso) {
-    compiledTasks.push({
-      id: 'lawn-mow',
-      title: 'Mow lawn',
-      dueDate: mowingLockedUntilIso,
-      status: 'pending',
-      module: 'lawn',
-      reason: 'Seed establishment – do not mow fresh seed',
-    });
-  } else {
-    const mowDueDate = mowingNextDueIso ?? todayStr;
-    compiledTasks.push({
-      id: 'lawn-mow',
-      title: 'Mow lawn',
-      dueDate: mowDueDate,
-      status: taskStatusFromDue(mowDueDate),
-      module: 'lawn',
-      reason: buildMowReason(),
-    });
-  }
-
-  if (!isVerticutSeason) {
-    compiledTasks.push({
-      id: 'lawn-verticut',
-      title: VERTICUT_TASK_NAME,
-      dueDate: verticutNextDueIso ?? todayStr,
-      status: 'completed',
-      module: 'lawn',
-      reason: 'Outside active season (Apr 1 – Sep 30)',
-    });
-  } else if (renovationHoldActive && verticutLockedUntilIso) {
-    compiledTasks.push({
-      id: 'lawn-verticut',
-      title: VERTICUT_TASK_NAME,
-      dueDate: verticutLockedUntilIso,
-      status: 'pending',
-      module: 'lawn',
-      reason: 'Post-renovation hold – allow 6–8 weeks for root maturation',
-    });
-  } else if (verticutHeatDroughtPaused) {
-    compiledTasks.push({
-      id: 'lawn-verticut',
-      title: VERTICUT_TASK_NAME,
-      dueDate: verticutNextDueIso ?? todayStr,
-      status: 'completed',
-      module: 'lawn',
-      reason:
-        scheduleReason?.verticut ??
-        'Paused during extreme heat or drought risk to protect the lawn from stress',
-    });
-  } else {
-    const verticutDueDate = verticutNextDueIso ?? todayStr;
-    compiledTasks.push({
-      id: 'lawn-verticut',
-      title: VERTICUT_TASK_NAME,
-      dueDate: verticutDueDate,
-      status: taskStatusFromDue(verticutDueDate),
-      module: 'lawn',
-      reason: buildVerticutReason(),
-    });
-  }
-
-  if (isDormantSeason) {
-    compiledTasks.push({
-      id: 'lawn-water',
-      title: 'Water lawn',
-      dueDate: wateringNextDueIso ?? todayStr,
-      status: 'completed',
-      module: 'lawn',
-      reason: 'Winter dormancy – watering suspended',
-    });
-  } else {
-    const waterDueDate = wateringNextDueIso ?? todayStr;
-
-    if (seedEstablishmentActive) {
-      const waterStatus = taskStatusFromDue(waterDueDate);
-      const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
-      const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
-      const perSessionText =
-        mistingMins > 0 ? `Run for ${mistingMins} minutes` : 'divide daily duration by 3';
-      const missAdvisory =
-        recentWateringSkips > 0
-          ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? '' : 's'} this week — keep seed bed moist`
-          : null;
-      const mistingReason = [`${baseReason}Light surface misting · ${perSessionText}`, missAdvisory]
-        .filter(Boolean)
-        .join(' · ');
-
-      for (const session of [
-        { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
-        { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
-        { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
-      ]) {
-        const sessionRainSkip = getSeedMistingRainSkipForSession(
-          session.title,
-          waterDueDate,
-          todayStr,
-          todayHourlyPrecipMm,
-          dailyForecastByDate,
-          todayRainMm,
-          todayRainObservedMm
-        );
-
-        if (sessionRainSkip.skip && sessionRainSkip.reason) {
-          compiledTasks.push({
-            id: session.id,
-            title: session.title,
-            dueDate: waterDueDate,
-            status: 'completed',
-            module: 'lawn',
-            reason: sessionRainSkip.reason,
-          });
-        } else {
-          compiledTasks.push({
-            id: session.id,
-            title: session.title,
-            dueDate: waterDueDate,
-            status: waterStatus,
-            module: 'lawn',
-            reason: mistingReason,
-          });
-        }
-      }
-    } else {
-      const rainSkip =
-        dailyForecastByDate.length > 0
-          ? getWateringRainSkipForDueDate(
-              waterDueDate,
-              todayStr,
-              dailyForecastByDate,
-              recentPastRainBeforeToday,
-              todayRainMm,
-              { seedEstablishmentActive: false }
-            )
-          : {
-              skip: isNatureProvidingFullSoak || soilRecentlyWet,
-              reason: isNatureProvidingFullSoak
-                ? 'Heavy rain – nature providing full soak'
-                : soilRecentlyWet
-                  ? 'Recent rain – soil still damp, skip watering'
-                  : null,
-            };
-
-      if (rainSkip.skip && rainSkip.reason) {
-        pushRainSkippedWaterTasks(compiledTasks, false, waterDueDate, rainSkip.reason);
-      } else {
-        compiledTasks.push({
-          id: 'lawn-water',
-          title: 'Water lawn',
-          dueDate: waterDueDate,
-          status: taskStatusFromDue(waterDueDate),
-          module: 'lawn',
-          reason: scheduleReason?.water ?? null,
-        });
-      }
-    }
-  }
-
-  const gypsum = getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr);
-  compiledTasks.push({
-    id: 'lawn-gypsum',
-    title: 'Apply Liquid Gypsum',
-    dueDate: gypsum.dueDate,
-    status: gypsum.gypsumDue ? 'urgent' : taskStatusFromDue(gypsum.dueDate),
-    module: 'lawn',
-    reason: gypsum.snoozed
-      ? `Postponed — remind ${gypsum.dueDate}`
-      : 'Typically every ~6 months for soil drainage',
-  });
-
-  return compiledTasks;
-}
-
-/**
- * Lawn Pack timeline steps → shared Tasks reminders (Weedol, scarify, seed, etc.).
- * @param {Object} input
- * @param {string} input.todayStr
- * @param {Record<string, string>} input.userLogs
- * @param {Record<string, Record<string, string>>} input.pendingDates
- */
-export function compilePackStepTasks({ todayStr, userLogs, pendingDates }) {
-  const workflowSeason = getWorkflowSeasonForDate(todayStr, userLogs);
-  const workflowIndex = SEASON_ORDER.indexOf(workflowSeason);
-
-  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
-  const compiledTasks = [];
-
-  for (let i = 0; i <= workflowIndex; i++) {
-    const seasonKey = SEASON_ORDER[i];
-    const seasonComplete = isSeasonPackComplete(seasonKey, userLogs);
-    const anchor = getSeasonAnchorDate(seasonKey, userLogs, pendingDates);
-    const seasonPending = cascadeSeasonDates(seasonKey, anchor, userLogs, pendingDates);
-
-    for (const step of SEASONS[seasonKey].steps) {
-      const logKey = makeStepKey(seasonKey, step.id);
-      const completedDate = userLogs[logKey] ?? null;
-
-      if (seasonComplete) {
-        if (!completedDate) continue;
-        compiledTasks.push({
-          id: `lawn-pack-${seasonKey}-${step.id}`,
-          title: step.label,
-          dueDate: completedDate,
-          status: 'completed',
-          module: 'lawn',
-          completedDate,
-        });
-        continue;
-      }
-
-      const dueDate = completedDate ?? seasonPending[step.id];
-      if (!dueDate) continue;
-
-      const status = completedDate
-        ? 'completed'
-        : daysBetween(dueDate, todayStr) >= 0
-          ? 'urgent'
-          : 'pending';
-
-      compiledTasks.push({
-        id: `lawn-pack-${seasonKey}-${step.id}`,
-        title: step.label,
-        dueDate,
-        status,
-        module: 'lawn',
-        completedDate: completedDate ?? null,
-      });
-    }
-  }
-
-  return compiledTasks;
-}
-
-/**
- * Maintenance (mow/water/gypsum) + pack timeline steps for Supabase / Tasks app.
- * @param {Object} input
- */
-export function compileAllLawnTasks(input) {
-  const {
-    todayStr,
-    userLogs,
-    pendingDates,
-    isDormantSeason,
-    isNatureProvidingFullSoak,
-    soilRecentlyWet = false,
-    dailyForecastByDate = [],
-    recentPastRainBeforeToday = 0,
-    todayRainMm = 0,
-    todayHourlyPrecipMm = [],
-    todayRainObservedMm = 0,
-    seedEstablishmentActive,
-    mowingLockedUntilIso,
-    mowingNextDueIso,
-    wateringNextDueIso,
-    isVerticutSeason,
-    renovationHoldActive,
-    verticutLockedUntilIso,
-    verticutHeatDroughtPaused,
-    verticutNextDueIso,
-    verticutPairedWithMow,
-    lastGypsumDate,
-    gypsumPostponedUntil = null,
-    scheduleReason = null,
-    dynamicMinutes = 0,
-    recentWateringSkips = 0,
-  } = input;
-
-  return [
-    ...compilePackStepTasks({ todayStr, userLogs, pendingDates }),
-    ...compileLawnTasks({
-      todayStr,
-      isDormantSeason,
-      isNatureProvidingFullSoak,
-      soilRecentlyWet,
-      dailyForecastByDate,
-      recentPastRainBeforeToday,
-      todayRainMm,
-      todayHourlyPrecipMm,
-      todayRainObservedMm,
-      seedEstablishmentActive,
-      mowingLockedUntilIso,
-      mowingNextDueIso,
-      wateringNextDueIso,
-      isVerticutSeason,
-      renovationHoldActive,
-      verticutLockedUntilIso,
-      verticutHeatDroughtPaused,
-      verticutNextDueIso,
-      verticutPairedWithMow,
-      lastGypsumDate,
-      gypsumPostponedUntil,
-      scheduleReason,
-      dynamicMinutes,
-      recentWateringSkips,
-    }),
-  ];
-}
-</file>
-
 <file path="src/services/lawnTasks.js">
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import {
@@ -9815,6 +9328,495 @@ export async function deleteStaleLawnTasks(compiledTasks) {
     if (row.is_completed) continue;
     await deleteLawnTask(row.id);
   }
+}
+</file>
+
+<file path="src/utils/compileLawnTasks.js">
+import {
+  addDaysToDateString,
+  SEASONS,
+  SEASON_ORDER,
+  makeStepKey,
+  getWorkflowSeasonForDate,
+  getSeasonAnchorDate,
+  cascadeSeasonDates,
+  isSeasonPackComplete,
+} from '../data/LawnPackData';
+import {
+  VERTICUT_BLADE_HEIGHT_RULE,
+  VERTICUT_MOW_PAIRING_NOTE,
+} from '../services/lawnScheduleEngine';
+import { getWateringRainSkipForDueDate, getSeedMistingRainSkipForSession } from '../services/lawnWeather';
+import { VERTICUT_TASK_NAME } from '../services/lawnMaintenanceSync';
+
+const GYPSUM_CYCLE_DAYS = 182;
+
+/**
+ * @param {string | null} lastGypsumDate
+ * @param {string | null | undefined} gypsumPostponedUntil
+ * @param {string} todayStr
+ */
+export function getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr) {
+  const naturalDue = lastGypsumDate
+    ? addDaysToDateString(lastGypsumDate, GYPSUM_CYCLE_DAYS)
+    : todayStr;
+
+  const snoozed =
+    typeof gypsumPostponedUntil === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(gypsumPostponedUntil) &&
+    gypsumPostponedUntil > todayStr;
+
+  const dueDate = snoozed ? gypsumPostponedUntil : naturalDue;
+  const cycleWouldBeDue =
+    !lastGypsumDate || daysBetween(naturalDue, todayStr) >= 0;
+  const gypsumDue = snoozed ? false : cycleWouldBeDue;
+
+  let gypsumDaysRemaining = 0;
+  if (snoozed) {
+    gypsumDaysRemaining = daysBetween(todayStr, gypsumPostponedUntil);
+  } else if (!gypsumDue && lastGypsumDate && daysBetween(naturalDue, todayStr) < 0) {
+    gypsumDaysRemaining = daysBetween(todayStr, naturalDue);
+  }
+
+  return {
+    dueDate,
+    gypsumDue,
+    gypsumDaysRemaining,
+    naturalDue,
+    snoozed,
+    gypsumPostponedUntil: snoozed ? gypsumPostponedUntil : null,
+  };
+}
+
+/** @param {string | Date} from @param {string | Date} to */
+function daysBetween(from, to) {
+  const start = typeof from === 'string' ? new Date(`${from}T12:00:00`) : from;
+  const end = typeof to === 'string' ? new Date(`${to}T12:00:00`) : to;
+  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** @param {string} dueDateIso @param {string} reason */
+function pushRainSkippedWaterTasks(compiledTasks, seedEstablishmentActive, dueDateIso, reason) {
+  if (seedEstablishmentActive) {
+    for (const session of [
+      { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
+      { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
+      { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
+    ]) {
+      compiledTasks.push({
+        id: session.id,
+        title: session.title,
+        dueDate: dueDateIso,
+        status: 'completed',
+        module: 'lawn',
+        reason,
+      });
+    }
+    return;
+  }
+
+  compiledTasks.push({
+    id: 'lawn-water',
+    title: 'Water lawn',
+    dueDate: dueDateIso,
+    status: 'completed',
+    module: 'lawn',
+    reason,
+  });
+}
+
+/**
+ * @param {Object} input
+ * @param {string} input.todayStr
+ * @param {boolean} input.isDormantSeason   - calendar-based (Dec–Feb): grass not growing
+ * @param {boolean} input.isNatureProvidingFullSoak
+ * @param {boolean} [input.soilRecentlyWet]
+ * @param {Array<{ date: string, mm: number }>} [input.dailyForecastByDate]
+ * @param {number} [input.recentPastRainBeforeToday]
+ * @param {number} [input.todayRainMm]
+ * @param {boolean} input.seedEstablishmentActive
+ * @param {string | null} input.mowingLockedUntilIso
+ * @param {string | null} input.mowingNextDueIso    - pre-computed from dynamic interval
+ * @param {string | null} input.wateringNextDueIso  - pre-computed from dynamic interval
+ * @param {boolean} [input.isVerticutSeason]
+ * @param {boolean} [input.renovationHoldActive]
+ * @param {string | null} [input.verticutLockedUntilIso]
+ * @param {boolean} [input.verticutHeatDroughtPaused]
+ * @param {string | null} [input.verticutNextDueIso]
+ * @param {boolean} [input.verticutPairedWithMow]
+ * @param {string | null} [input.lastGypsumDate]
+ * @param {string | null} [input.gypsumPostponedUntil]
+ * @param {{ mow: string | null, water: string | null, verticut?: string | null } | null} [input.scheduleReason]
+ */
+export function compileLawnTasks({
+  todayStr,
+  isDormantSeason,
+  isNatureProvidingFullSoak,
+  soilRecentlyWet = false,
+  dailyForecastByDate = [],
+  recentPastRainBeforeToday = 0,
+  todayRainMm = 0,
+  todayHourlyPrecipMm = [],
+  todayRainObservedMm = 0,
+  seedEstablishmentActive,
+  mowingLockedUntilIso,
+  mowingNextDueIso,
+  wateringNextDueIso,
+  isVerticutSeason = false,
+  renovationHoldActive = false,
+  verticutLockedUntilIso = null,
+  verticutHeatDroughtPaused = false,
+  verticutNextDueIso = null,
+  verticutPairedWithMow = false,
+  lastGypsumDate,
+  gypsumPostponedUntil = null,
+  scheduleReason = null,
+  dynamicMinutes = 0,
+  recentWateringSkips = 0,
+}) {
+  /** @param {string} dueDateIso */
+  const taskStatusFromDue = (dueDateIso) =>
+    daysBetween(dueDateIso, todayStr) >= 0 ? 'urgent' : 'pending';
+
+  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
+  const compiledTasks = [];
+
+  const mowPairedWithVerticut =
+    verticutPairedWithMow &&
+    isVerticutSeason &&
+    !renovationHoldActive &&
+    !verticutHeatDroughtPaused &&
+    verticutNextDueIso &&
+    mowingNextDueIso &&
+    verticutNextDueIso === mowingNextDueIso;
+
+  const buildMowReason = () => {
+    const parts = [];
+    if (mowPairedWithVerticut) {
+      parts.push(VERTICUT_MOW_PAIRING_NOTE);
+    }
+    if (scheduleReason?.mow) {
+      parts.push(scheduleReason.mow);
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
+  };
+
+  const buildVerticutReason = () => {
+    const parts = [VERTICUT_BLADE_HEIGHT_RULE];
+    if (mowPairedWithVerticut) {
+      parts.push(VERTICUT_MOW_PAIRING_NOTE);
+    }
+    if (scheduleReason?.verticut) {
+      parts.push(scheduleReason.verticut);
+    }
+    return parts.join(' · ');
+  };
+
+  if (isDormantSeason) {
+    compiledTasks.push({
+      id: 'lawn-mow',
+      title: 'Mow lawn',
+      dueDate: mowingNextDueIso ?? todayStr,
+      status: 'completed',
+      module: 'lawn',
+      reason: 'Winter dormancy – grass not actively growing',
+    });
+  } else if (seedEstablishmentActive && mowingLockedUntilIso) {
+    compiledTasks.push({
+      id: 'lawn-mow',
+      title: 'Mow lawn',
+      dueDate: mowingLockedUntilIso,
+      status: 'pending',
+      module: 'lawn',
+      reason: 'Seed establishment – do not mow fresh seed',
+    });
+  } else {
+    const mowDueDate = mowingNextDueIso ?? todayStr;
+    compiledTasks.push({
+      id: 'lawn-mow',
+      title: 'Mow lawn',
+      dueDate: mowDueDate,
+      status: taskStatusFromDue(mowDueDate),
+      module: 'lawn',
+      reason: buildMowReason(),
+    });
+  }
+
+  if (!isVerticutSeason) {
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutNextDueIso ?? todayStr,
+      status: 'completed',
+      module: 'lawn',
+      reason: 'Outside active season (Apr 1 – Sep 30)',
+    });
+  } else if (renovationHoldActive && verticutLockedUntilIso) {
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutLockedUntilIso,
+      status: 'pending',
+      module: 'lawn',
+      reason: 'Post-renovation hold – allow 6–8 weeks for root maturation',
+    });
+  } else if (verticutHeatDroughtPaused) {
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutNextDueIso ?? todayStr,
+      status: 'completed',
+      module: 'lawn',
+      reason:
+        scheduleReason?.verticut ??
+        'Paused during extreme heat or drought risk to protect the lawn from stress',
+    });
+  } else {
+    const verticutDueDate = verticutNextDueIso ?? todayStr;
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutDueDate,
+      status: taskStatusFromDue(verticutDueDate),
+      module: 'lawn',
+      reason: buildVerticutReason(),
+    });
+  }
+
+  if (isDormantSeason) {
+    compiledTasks.push({
+      id: 'lawn-water',
+      title: 'Water lawn',
+      dueDate: wateringNextDueIso ?? todayStr,
+      status: 'completed',
+      module: 'lawn',
+      reason: 'Winter dormancy – watering suspended',
+    });
+  } else {
+    const waterDueDate = wateringNextDueIso ?? todayStr;
+
+    if (seedEstablishmentActive) {
+      const waterStatus = taskStatusFromDue(waterDueDate);
+      const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
+      const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
+      const perSessionText =
+        mistingMins > 0 ? `Run for ${mistingMins} minutes` : 'divide daily duration by 3';
+      const missAdvisory =
+        recentWateringSkips > 0
+          ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? '' : 's'} this week — keep seed bed moist`
+          : null;
+      const mistingReason = [`${baseReason}Light surface misting · ${perSessionText}`, missAdvisory]
+        .filter(Boolean)
+        .join(' · ');
+
+      for (const session of [
+        { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
+        { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
+        { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
+      ]) {
+        const sessionRainSkip = getSeedMistingRainSkipForSession(
+          session.title,
+          waterDueDate,
+          todayStr,
+          todayHourlyPrecipMm,
+          dailyForecastByDate,
+          todayRainMm,
+          todayRainObservedMm
+        );
+
+        if (sessionRainSkip.skip && sessionRainSkip.reason) {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: 'completed',
+            module: 'lawn',
+            reason: sessionRainSkip.reason,
+          });
+        } else {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: waterStatus,
+            module: 'lawn',
+            reason: mistingReason,
+          });
+        }
+      }
+    } else {
+      const rainSkip =
+        dailyForecastByDate.length > 0
+          ? getWateringRainSkipForDueDate(
+              waterDueDate,
+              todayStr,
+              dailyForecastByDate,
+              recentPastRainBeforeToday,
+              todayRainMm,
+              { seedEstablishmentActive: false }
+            )
+          : {
+              skip: isNatureProvidingFullSoak || soilRecentlyWet,
+              reason: isNatureProvidingFullSoak
+                ? 'Heavy rain – nature providing full soak'
+                : soilRecentlyWet
+                  ? 'Recent rain – soil still damp, skip watering'
+                  : null,
+            };
+
+      if (rainSkip.skip && rainSkip.reason) {
+        pushRainSkippedWaterTasks(compiledTasks, false, waterDueDate, rainSkip.reason);
+      } else {
+        compiledTasks.push({
+          id: 'lawn-water',
+          title: 'Water lawn',
+          dueDate: waterDueDate,
+          status: taskStatusFromDue(waterDueDate),
+          module: 'lawn',
+          reason: scheduleReason?.water ?? null,
+        });
+      }
+    }
+  }
+
+  const gypsum = getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr);
+  compiledTasks.push({
+    id: 'lawn-gypsum',
+    title: 'Apply Liquid Gypsum',
+    dueDate: gypsum.dueDate,
+    status: gypsum.gypsumDue ? 'urgent' : taskStatusFromDue(gypsum.dueDate),
+    module: 'lawn',
+    reason: gypsum.snoozed
+      ? `Postponed — remind ${gypsum.dueDate}`
+      : 'Typically every ~6 months for soil drainage',
+  });
+
+  return compiledTasks;
+}
+
+/**
+ * Lawn Pack timeline steps → shared Tasks reminders (Weedol, scarify, seed, etc.).
+ * @param {Object} input
+ * @param {string} input.todayStr
+ * @param {Record<string, string>} input.userLogs
+ * @param {Record<string, Record<string, string>>} input.pendingDates
+ */
+export function compilePackStepTasks({ todayStr, userLogs, pendingDates }) {
+  const workflowSeason = getWorkflowSeasonForDate(todayStr, userLogs);
+  const workflowIndex = SEASON_ORDER.indexOf(workflowSeason);
+
+  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
+  const compiledTasks = [];
+
+  for (let i = 0; i <= workflowIndex; i++) {
+    const seasonKey = SEASON_ORDER[i];
+    const seasonComplete = isSeasonPackComplete(seasonKey, userLogs);
+    const anchor = getSeasonAnchorDate(seasonKey, userLogs, pendingDates);
+    const seasonPending = cascadeSeasonDates(seasonKey, anchor, userLogs, pendingDates);
+
+    for (const step of SEASONS[seasonKey].steps) {
+      const logKey = makeStepKey(seasonKey, step.id);
+      const completedDate = userLogs[logKey] ?? null;
+
+      if (seasonComplete) {
+        if (!completedDate) continue;
+        compiledTasks.push({
+          id: `lawn-pack-${seasonKey}-${step.id}`,
+          title: step.label,
+          dueDate: completedDate,
+          status: 'completed',
+          module: 'lawn',
+          completedDate,
+        });
+        continue;
+      }
+
+      const dueDate = completedDate ?? seasonPending[step.id];
+      if (!dueDate) continue;
+
+      const status = completedDate
+        ? 'completed'
+        : daysBetween(dueDate, todayStr) >= 0
+          ? 'urgent'
+          : 'pending';
+
+      compiledTasks.push({
+        id: `lawn-pack-${seasonKey}-${step.id}`,
+        title: step.label,
+        dueDate,
+        status,
+        module: 'lawn',
+        completedDate: completedDate ?? null,
+      });
+    }
+  }
+
+  return compiledTasks;
+}
+
+/**
+ * Maintenance (mow/water/gypsum) + pack timeline steps for Supabase / Tasks app.
+ * @param {Object} input
+ */
+export function compileAllLawnTasks(input) {
+  const {
+    todayStr,
+    userLogs,
+    pendingDates,
+    isDormantSeason,
+    isNatureProvidingFullSoak,
+    soilRecentlyWet = false,
+    dailyForecastByDate = [],
+    recentPastRainBeforeToday = 0,
+    todayRainMm = 0,
+    todayHourlyPrecipMm = [],
+    todayRainObservedMm = 0,
+    seedEstablishmentActive,
+    mowingLockedUntilIso,
+    mowingNextDueIso,
+    wateringNextDueIso,
+    isVerticutSeason,
+    renovationHoldActive,
+    verticutLockedUntilIso,
+    verticutHeatDroughtPaused,
+    verticutNextDueIso,
+    verticutPairedWithMow,
+    lastGypsumDate,
+    gypsumPostponedUntil = null,
+    scheduleReason = null,
+    dynamicMinutes = 0,
+    recentWateringSkips = 0,
+  } = input;
+
+  return [
+    ...compilePackStepTasks({ todayStr, userLogs, pendingDates }),
+    ...compileLawnTasks({
+      todayStr,
+      isDormantSeason,
+      isNatureProvidingFullSoak,
+      soilRecentlyWet,
+      dailyForecastByDate,
+      recentPastRainBeforeToday,
+      todayRainMm,
+      todayHourlyPrecipMm,
+      todayRainObservedMm,
+      seedEstablishmentActive,
+      mowingLockedUntilIso,
+      mowingNextDueIso,
+      wateringNextDueIso,
+      isVerticutSeason,
+      renovationHoldActive,
+      verticutLockedUntilIso,
+      verticutHeatDroughtPaused,
+      verticutNextDueIso,
+      verticutPairedWithMow,
+      lastGypsumDate,
+      gypsumPostponedUntil,
+      scheduleReason,
+      dynamicMinutes,
+      recentWateringSkips,
+    }),
+  ];
 }
 </file>
 
@@ -32880,6 +32882,7 @@ function buildOpenMeteoForecastUrl(latitude, longitude) {
 var SOAK_DEPTH_MM = 10;
 var RAIN_THRESHOLD_MM = 5;
 var SEED_MIST_TARGET_MM = 2.5;
+var SEED_MIST_SESSION_THRESHOLD_MM = 1;
 var NEAR_TERM_RAIN_DAYS = 3;
 var PAST_RAIN_DAYS = 7;
 var RECENT_PAST_RAIN_DAYS = 3;
@@ -33020,20 +33023,20 @@ function getSeedMistingRainSkipForSession(sessionTitle, dueDateIso, todayStr, to
       window2.startHour,
       window2.endHour
     );
-    if (rainMm >= SEED_MIST_TARGET_MM) {
+    if (rainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
       const label = window2.label === "evening" ? `${rainMm.toFixed(1)}mm rain forecast this evening \u2013 skip misting` : `${rainMm.toFixed(1)}mm rain in the ${window2.label} \u2013 skip misting`;
       return { skip: true, reason: label, fullSoak: false };
     }
     return { skip: false, reason: null, fullSoak: false };
   }
-  if (sessionTitle === "Water lawn (Evening)" && todayRainMm >= SEED_MIST_TARGET_MM) {
+  if (sessionTitle === "Water lawn (Evening)" && todayRainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
     return {
       skip: true,
       reason: "Rain keeping seed bed moist \u2013 skip evening misting",
       fullSoak: false
     };
   }
-  if (todayRainObservedMm >= SEED_MIST_TARGET_MM) {
+  if (todayRainObservedMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
     return {
       skip: true,
       reason: "Rain already fallen today \u2013 skip misting",

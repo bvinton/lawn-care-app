@@ -26,6 +26,8 @@ export const SOAK_DEPTH_MM = 10;
 export const RAIN_THRESHOLD_MM = 5;
 /** Light surface misting target during seed establishment (~2.5mm). */
 export const SEED_MIST_TARGET_MM = 2.5;
+// Per-session skip: seed surface stays moist with much less rain than a full daily soak.
+export const SEED_MIST_SESSION_THRESHOLD_MM = 1.0;
 /** Rain in the next few days drives forward-looking adjustments. */
 export const NEAR_TERM_RAIN_DAYS = 3;
 /** Observed rain history from Open-Meteo. */
@@ -289,7 +291,7 @@ export function getSeedMistingRainSkipForSession(
       window.startHour,
       window.endHour
     );
-    if (rainMm >= SEED_MIST_TARGET_MM) {
+    if (rainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
       const label =
         window.label === 'evening'
           ? `${rainMm.toFixed(1)}mm rain forecast this evening – skip misting`
@@ -300,14 +302,14 @@ export function getSeedMistingRainSkipForSession(
   }
 
   // Fallback when hourly series unavailable (legacy snapshots).
-  if (sessionTitle === 'Water lawn (Evening)' && todayRainMm >= SEED_MIST_TARGET_MM) {
+  if (sessionTitle === 'Water lawn (Evening)' && todayRainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
     return {
       skip: true,
       reason: 'Rain keeping seed bed moist – skip evening misting',
       fullSoak: false,
     };
   }
-  if (todayRainObservedMm >= SEED_MIST_TARGET_MM) {
+  if (todayRainObservedMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
     return {
       skip: true,
       reason: 'Rain already fallen today – skip misting',

@@ -23059,6 +23059,7 @@ function buildOpenMeteoForecastUrl(latitude, longitude) {
 var SOAK_DEPTH_MM = 10;
 var RAIN_THRESHOLD_MM = 5;
 var SEED_MIST_TARGET_MM = 2.5;
+var SEED_MIST_SESSION_THRESHOLD_MM = 1;
 var NEAR_TERM_RAIN_DAYS = 3;
 var PAST_RAIN_DAYS = 7;
 var RECENT_PAST_RAIN_DAYS = 3;
@@ -23199,20 +23200,20 @@ function getSeedMistingRainSkipForSession(sessionTitle, dueDateIso, todayStr, to
       window2.startHour,
       window2.endHour
     );
-    if (rainMm >= SEED_MIST_TARGET_MM) {
+    if (rainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
       const label = window2.label === "evening" ? `${rainMm.toFixed(1)}mm rain forecast this evening \u2013 skip misting` : `${rainMm.toFixed(1)}mm rain in the ${window2.label} \u2013 skip misting`;
       return { skip: true, reason: label, fullSoak: false };
     }
     return { skip: false, reason: null, fullSoak: false };
   }
-  if (sessionTitle === "Water lawn (Evening)" && todayRainMm >= SEED_MIST_TARGET_MM) {
+  if (sessionTitle === "Water lawn (Evening)" && todayRainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
     return {
       skip: true,
       reason: "Rain keeping seed bed moist \u2013 skip evening misting",
       fullSoak: false
     };
   }
-  if (todayRainObservedMm >= SEED_MIST_TARGET_MM) {
+  if (todayRainObservedMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
     return {
       skip: true,
       reason: "Rain already fallen today \u2013 skip misting",
