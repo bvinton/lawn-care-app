@@ -24026,40 +24026,49 @@ async function runLawnCloudSync() {
   );
   await saveLawnUserLogsToSupabase(userLogs);
   const weatherLocation = resolveWeatherLocation(scheduleSnapshot.weatherLocation);
+  const WEATHER_FRESH_MS = 30 * 60 * 1e3;
+  const cachedWeather = cloudState.weatherSnapshot;
+  const cachedFetchedAt = cachedWeather?.fetchedAt ? new Date(cachedWeather.fetchedAt).getTime() : 0;
+  const weatherIsFresh = Date.now() - cachedFetchedAt < WEATHER_FRESH_MS;
   let weather;
-  try {
-    weather = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
-    await saveLawnWeatherSnapshot(weather);
-  } catch (err) {
-    console.warn("[Lawn sync API] Weather fetch failed, using cloud snapshot:", err);
-    const fromCloud = cloudState.weatherSnapshot;
-    if (fromCloud && typeof fromCloud.forecastedRainSum === "number") {
-      weather = fromCloud;
-    } else if (typeof scheduleSnapshot.forecastedRainSum === "number") {
-      const nearTerm = getEffectiveNearTermRain({
-        forecastedRainSum: scheduleSnapshot.forecastedRainSum,
-        forecastedRainSumNearTerm: scheduleSnapshot.forecastedRainSumNearTerm
-      });
-      const pastRain = getEffectiveRecentPastRain({
-        recentPastRainSum: scheduleSnapshot.recentPastRainSum
-      });
-      const watering = computeWateringRainContext(pastRain, nearTerm);
-      weather = {
-        forecastedRainSum: scheduleSnapshot.forecastedRainSum,
-        forecastedRainSumNearTerm: nearTerm,
-        recentPastRainSum: pastRain,
-        rainCreditMm: watering.rainCreditMm,
-        currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
-        currentSoilTempMin: null,
-        isRainForecasted: nearTerm >= 5 || pastRain >= 5,
-        isNatureProvidingFullSoak: scheduleSnapshot.isNatureProvidingFullSoak ?? watering.isNatureProvidingFullSoak,
-        soilRecentlyWet: watering.soilRecentlyWet,
-        netWaterNeeded: watering.netWaterNeeded,
-        fetchedAt: scheduleSnapshot.savedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
-        source: "open-meteo"
-      };
-    } else {
-      throw new Error("Weather forecast unavailable and no cached snapshot in cloud.");
+  if (weatherIsFresh && cachedWeather && typeof cachedWeather.forecastedRainSum === "number") {
+    weather = cachedWeather;
+    console.log("[Lawn sync API] Using cached weather snapshot (fresh).");
+  } else {
+    try {
+      weather = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
+      await saveLawnWeatherSnapshot(weather);
+    } catch (err) {
+      console.warn("[Lawn sync API] Weather fetch failed, using cloud snapshot:", err);
+      const fromCloud = cloudState.weatherSnapshot;
+      if (fromCloud && typeof fromCloud.forecastedRainSum === "number") {
+        weather = fromCloud;
+      } else if (typeof scheduleSnapshot.forecastedRainSum === "number") {
+        const nearTerm = getEffectiveNearTermRain({
+          forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+          forecastedRainSumNearTerm: scheduleSnapshot.forecastedRainSumNearTerm
+        });
+        const pastRain = getEffectiveRecentPastRain({
+          recentPastRainSum: scheduleSnapshot.recentPastRainSum
+        });
+        const watering = computeWateringRainContext(pastRain, nearTerm);
+        weather = {
+          forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+          forecastedRainSumNearTerm: nearTerm,
+          recentPastRainSum: pastRain,
+          rainCreditMm: watering.rainCreditMm,
+          currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
+          currentSoilTempMin: null,
+          isRainForecasted: nearTerm >= 5 || pastRain >= 5,
+          isNatureProvidingFullSoak: scheduleSnapshot.isNatureProvidingFullSoak ?? watering.isNatureProvidingFullSoak,
+          soilRecentlyWet: watering.soilRecentlyWet,
+          netWaterNeeded: watering.netWaterNeeded,
+          fetchedAt: scheduleSnapshot.savedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
+          source: "open-meteo"
+        };
+      } else {
+        throw new Error("Weather forecast unavailable and no cached snapshot in cloud.");
+      }
     }
   }
   const forecastedRainSum = weather.forecastedRainSum;
