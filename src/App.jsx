@@ -4,7 +4,7 @@ import LoginPage from './pages/LoginPage';
 import { useAuth } from './state/AuthContext';
 
 export default function App() {
-  const { isAuthenticated, loading, signOut, user } = useAuth();
+  const { isAuthenticated, loading, switchGoogleAccount, user } = useAuth();
 
   if (loading || !isAuthenticated) {
     return <LoginPage loading={loading} />;
@@ -17,7 +17,7 @@ export default function App() {
           <div className="flex items-center justify-end mb-2">
             <button
               type="button"
-              onClick={() => void signOut()}
+              onClick={() => void switchGoogleAccount()}
               className="text-[10px] font-bold uppercase tracking-widest text-green-700 px-3 py-1 rounded-full border border-green-200 bg-white"
               title={user?.email ?? 'Sign out'}
             >

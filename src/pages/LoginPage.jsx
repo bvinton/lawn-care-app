@@ -53,8 +53,8 @@ export default function LoginPage({ loading }) {
           </button>
           {error && <p className="text-xs text-red-600">{error}</p>}
           <p className="text-xs leading-relaxed text-gray-500">
-            Sign in to sync your lawn schedule and tasks. Your data is private and only visible to you.
-            To use a different Google account, tap Sign out first, then sign in again.
+            Uses Google to verify your identity for this app only — not a new sign-in to your phone.
+            Use Switch account in the app header to pick a different Google account.
           </p>
         </div>
       )}
