@@ -1,0 +1,1 @@
+-- See Tasks App supabase/tasks_auth_user_id.sql (same migration applied to shared project).

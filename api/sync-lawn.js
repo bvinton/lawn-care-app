@@ -22382,6 +22382,22 @@ function formatSupabaseSyncError(error) {
   }
   return message;
 }
+function getTasksOwnerUserId() {
+  return process.env.TASKS_OWNER_USER_ID || null;
+}
+async function resolveTaskUserId(supabase) {
+  if (isServerRuntime()) {
+    return getTasksOwnerUserId();
+  }
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
+function withTaskUserId(row, userId) {
+  if (!userId) {
+    return row;
+  }
+  return { ...row, user_id: userId };
+}
 
 // src/services/lawnTaskInboundSync.js
 var GYPSUM_TASK_NAME = "Apply Liquid Gypsum";
@@ -22651,10 +22667,12 @@ function buildPackSyncRow(task, existingRows, canUseLastCompleted, todayStr) {
   return row;
 }
 async function applyTaskWrite(supabase, body, taskTitle, fullPayload) {
+  const userId = await resolveTaskUserId(supabase);
+  body = withTaskUserId(body, userId);
   let { error } = await supabase.from("tasks").insert(body);
   if (error && isMissingLastCompletedColumnError(error)) {
     resetLastCompletedColumnProbe();
-    body = withoutLastCompletedDate(fullPayload);
+    body = withTaskUserId(withoutLastCompletedDate(fullPayload), userId);
     ({ error } = await supabase.from("tasks").insert(body));
   }
   if (error) {

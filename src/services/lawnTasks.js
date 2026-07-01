@@ -1,4 +1,4 @@
-import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
+import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError, resolveTaskUserId, withTaskUserId } from '../lib/supabase';
 import {
   MOW_TASK_NAME,
   WATER_TASK_NAME,
@@ -264,11 +264,14 @@ function compiledTaskToRow(task, maintenance = {}) {
  * @param {Record<string, unknown>} fullPayload
  */
 async function applyTaskWrite(supabase, body, taskTitle, fullPayload) {
+  const userId = await resolveTaskUserId(supabase);
+  body = withTaskUserId(body, userId);
+
   let { error } = await supabase.from('tasks').insert(body);
 
   if (error && isMissingLastCompletedColumnError(error)) {
     resetLastCompletedColumnProbe();
-    body = withoutLastCompletedDate(fullPayload);
+    body = withTaskUserId(withoutLastCompletedDate(fullPayload), userId);
     ({ error } = await supabase.from('tasks').insert(body));
   }
 

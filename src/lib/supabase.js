@@ -105,3 +105,33 @@ export function formatSupabaseSyncError(error) {
 
   return message;
 }
+
+/** UUID for server-side task writes when using the service role (no auth session). */
+export function getTasksOwnerUserId() {
+  return process.env.TASKS_OWNER_USER_ID || null;
+}
+
+/**
+ * Resolve user_id for task rows — authenticated browser session or server env fallback.
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ */
+export async function resolveTaskUserId(supabase) {
+  if (isServerRuntime()) {
+    return getTasksOwnerUserId();
+  }
+
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
+
+/**
+ * Attach user_id to a task payload when available.
+ * @param {Record<string, unknown>} row
+ * @param {string | null | undefined} userId
+ */
+export function withTaskUserId(row, userId) {
+  if (!userId) {
+    return row;
+  }
+  return { ...row, user_id: userId };
+}
