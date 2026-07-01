@@ -54,6 +54,7 @@ export default function LoginPage({ loading }) {
           {error && <p className="text-xs text-red-600">{error}</p>}
           <p className="text-xs leading-relaxed text-gray-500">
             Sign in to sync your lawn schedule and tasks. Your data is private and only visible to you.
+            To use a different Google account, tap Sign out first, then sign in again.
           </p>
         </div>
       )}

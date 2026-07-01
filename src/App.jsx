@@ -21,7 +21,7 @@ export default function App() {
               className="text-[10px] font-bold uppercase tracking-widest text-green-700 px-3 py-1 rounded-full border border-green-200 bg-white"
               title={user?.email ?? 'Sign out'}
             >
-              Sign out
+              Switch account
             </button>
           </div>
           <h1 className="text-2xl font-black text-green-950 tracking-tight">
