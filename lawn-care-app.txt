@@ -141,6 +141,7 @@ src/hooks/useLawnCareApp.js
 src/hooks/useMobileBackNavigation.js
 src/index.css
 src/lib/claimLegacyTasks.js
+src/lib/googleSignIn.js
 src/lib/supabase.js
 src/main.jsx
 src/pages/LoginPage.jsx
@@ -174,6 +175,32 @@ vite.config.js
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/lib/googleSignIn.js">
+/** Start Google OAuth and always show the account chooser. */
+export async function signInWithGoogleAccountPicker(supabase) {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin,
+      skipBrowserRedirect: true,
+      queryParams: {
+        prompt: 'consent select_account',
+      },
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.url) {
+    throw new Error('Could not start Google sign-in.');
+  }
+
+  window.location.assign(data.url);
+}
+</file>
 
 <file path=".cursor/rules/git-workflow.mdc">
 ---
@@ -1961,6 +1988,43 @@ LAWN_SYNC_SECRET=your-random-secret
 <!doctype html>
 <html lang="en-GB">
   <head>
+    <script>
+      (function () {
+        var key = 'lawn-app-sw-reset-v1';
+        try {
+          if (localStorage.getItem(key) === '1') return;
+          localStorage.setItem(key, '1');
+        } catch (e) {
+          return;
+        }
+        var reloadAfterReset = function () {
+          window.location.reload();
+        };
+        var clearCaches = function () {
+          if (!('caches' in window)) {
+            reloadAfterReset();
+            return;
+          }
+          caches
+            .keys()
+            .then(function (keys) {
+              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
+            })
+            .finally(reloadAfterReset);
+        };
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (regs) {
+              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+            })
+            .then(clearCaches)
+            .catch(clearCaches);
+        } else {
+          clearCaches();
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#14532d" />
@@ -2504,154 +2568,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 </file>
 
-<file path="src/pages/LoginPage.jsx">
-import { useState } from 'react';
-import { useAuth } from '../state/AuthContext';
-
-function GoogleIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
-      <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
-      <path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
-      <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
-      <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
-    </svg>
-  );
-}
-
-export default function LoginPage({ loading }) {
-  const { signInWithGoogle } = useAuth();
-  const [error, setError] = useState(null);
-  const [signingIn, setSigningIn] = useState(false);
-
-  const handleSignIn = async () => {
-    setError(null);
-    setSigningIn(true);
-    try {
-      await signInWithGoogle();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start Google sign-in');
-      setSigningIn(false);
-    }
-  };
-
-  return (
-    <div className="min-h-dvh flex flex-col items-center justify-center bg-gray-100 px-6 text-center">
-      <div className="mb-8">
-        <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-green-100 text-3xl">
-          🌿
-        </div>
-        <h1 className="text-2xl font-black text-green-950 tracking-tight">Lawn Pack Companion</h1>
-        <p className="mt-2 text-sm text-green-800">Seasonal lawn workflow & reminders</p>
-      </div>
-
-      {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
-      ) : (
-        <div className="w-full max-w-xs space-y-4">
-          <button
-            type="button"
-            onClick={() => void handleSignIn()}
-            disabled={signingIn}
-            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-6 py-4 text-base font-semibold text-gray-900 shadow-sm active:bg-gray-50 disabled:opacity-60"
-          >
-            <GoogleIcon />
-            {signingIn ? 'Signing in…' : 'Continue with Google'}
-          </button>
-          {error && <p className="text-xs text-red-600">{error}</p>}
-        </div>
-      )}
-    </div>
-  );
-}
-</file>
-
-<file path="src/state/AuthContext.jsx">
-import { createContext, useContext, useEffect, useState } from 'react';
-import { getSupabase } from '../lib/supabase';
-import { claimLegacyTasks } from '../lib/claimLegacyTasks';
-
-const AuthContext = createContext(null);
-
-export function AuthProvider({ children }) {
-  const [session, setSession] = useState(undefined);
-
-  useEffect(() => {
-    const supabase = getSupabase();
-    if (!supabase) {
-      setSession(null);
-      return;
-    }
-
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session ?? null);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const supabase = getSupabase();
-    if (!session || !supabase) {
-      return;
-    }
-
-    void claimLegacyTasks(supabase);
-  }, [session]);
-
-  const signInWithGoogle = async () => {
-    const supabase = getSupabase();
-    if (!supabase) {
-      throw new Error('Supabase is not configured.');
-    }
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-        queryParams: {
-          prompt: 'select_account',
-        },
-      },
-    });
-
-    if (error) {
-      throw error;
-    }
-  };
-
-  const signOut = async () => {
-    const supabase = getSupabase();
-    await supabase?.auth.signOut();
-  };
-
-  const value = {
-    session: session ?? null,
-    user: session?.user ?? null,
-    loading: session === undefined,
-    isAuthenticated: Boolean(session),
-    signInWithGoogle,
-    signOut,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return ctx;
-}
-</file>
-
 <file path="vercel.json">
 {
   "headers": [
@@ -2665,6 +2581,10 @@ export function useAuth() {
     },
     {
       "source": "/manifest.webmanifest",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/sw.js",
       "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
     }
   ],
@@ -2816,6 +2736,143 @@ export function withTaskUserId(row, userId) {
     return row;
   }
   return { ...row, user_id: userId };
+}
+</file>
+
+<file path="src/pages/LoginPage.jsx">
+import { useState } from 'react';
+import { useAuth } from '../state/AuthContext';
+
+function GoogleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
+      <path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
+      <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
+      <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
+    </svg>
+  );
+}
+
+export default function LoginPage({ loading }) {
+  const { signInWithGoogle } = useAuth();
+  const [error, setError] = useState(null);
+  const [signingIn, setSigningIn] = useState(false);
+
+  const handleSignIn = async () => {
+    setError(null);
+    setSigningIn(true);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start Google sign-in');
+      setSigningIn(false);
+    }
+  };
+
+  return (
+    <div className="min-h-dvh flex flex-col items-center justify-center bg-gray-100 px-6 text-center">
+      <div className="mb-8">
+        <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-green-100 text-3xl">
+          🌿
+        </div>
+        <h1 className="text-2xl font-black text-green-950 tracking-tight">Lawn Pack Companion</h1>
+        <p className="mt-2 text-sm text-green-800">Seasonal lawn workflow & reminders</p>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-gray-500">Loading…</p>
+      ) : (
+        <div className="w-full max-w-xs space-y-4">
+          <button
+            type="button"
+            onClick={() => void handleSignIn()}
+            disabled={signingIn}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white px-6 py-4 text-base font-semibold text-gray-900 shadow-sm active:bg-gray-50 disabled:opacity-60"
+          >
+            <GoogleIcon />
+            {signingIn ? 'Signing in…' : 'Continue with Google'}
+          </button>
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="src/state/AuthContext.jsx">
+import { createContext, useContext, useEffect, useState } from 'react';
+import { getSupabase } from '../lib/supabase';
+import { claimLegacyTasks } from '../lib/claimLegacyTasks';
+import { signInWithGoogleAccountPicker } from '../lib/googleSignIn';
+
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
+  const [session, setSession] = useState(undefined);
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      setSession(null);
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!session || !supabase) {
+      return;
+    }
+
+    void claimLegacyTasks(supabase);
+  }, [session]);
+
+  const signInWithGoogle = async () => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    await signInWithGoogleAccountPicker(supabase);
+  };
+
+  const signOut = async () => {
+    const supabase = getSupabase();
+    await supabase?.auth.signOut({ scope: 'local' });
+  };
+
+  const value = {
+    session: session ?? null,
+    user: session?.user ?? null,
+    loading: session === undefined,
+    isAuthenticated: Boolean(session),
+    signInWithGoogle,
+    signOut,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return ctx;
 }
 </file>
 
@@ -4124,7 +4181,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'The Lawn Pack Companion',
@@ -4194,54 +4251,6 @@ export default defineConfig({
     }),
   ],
 });
-</file>
-
-<file path="src/App.jsx">
-import React from 'react';
-import LawnCareApp from './components/lawn/LawnCareApp';
-import LoginPage from './pages/LoginPage';
-import { useAuth } from './state/AuthContext';
-
-export default function App() {
-  const { isAuthenticated, loading, signOut, user } = useAuth();
-
-  if (loading || !isAuthenticated) {
-    return <LoginPage loading={loading} />;
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-100 py-4 sm:py-8">
-      <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
-        <header className="text-center mb-6">
-          <div className="flex items-center justify-end mb-2">
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="text-xs font-semibold text-gray-500 px-3 py-1.5 rounded-lg border border-gray-200 bg-white active:bg-gray-50"
-              title={user?.email ?? 'Sign out'}
-            >
-              Sign out
-            </button>
-          </div>
-          <h1 className="text-2xl font-black text-green-950 tracking-tight">
-            🌿 THE LAWN PACK COMPANION
-          </h1>
-          <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mt-1">
-            Data-Driven Multi-Season Task Tracker
-          </p>
-        </header>
-
-        <main>
-          <LawnCareApp />
-        </main>
-
-        <footer className="text-center text-[10px] text-gray-400 mt-6 font-semibold">
-          Lawn Pack Engine v2.0.0 • Verified Sequence Matrix
-        </footer>
-      </div>
-    </div>
-  );
-}
 </file>
 
 <file path="src/components/lawn/LawnSettings.jsx">
@@ -5861,6 +5870,54 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
     "vite": "^5.4.19",
     "vite-plugin-pwa": "^0.21.1"
   }
+}
+</file>
+
+<file path="src/App.jsx">
+import React from 'react';
+import LawnCareApp from './components/lawn/LawnCareApp';
+import LoginPage from './pages/LoginPage';
+import { useAuth } from './state/AuthContext';
+
+export default function App() {
+  const { isAuthenticated, loading, signOut, user } = useAuth();
+
+  if (loading || !isAuthenticated) {
+    return <LoginPage loading={loading} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 py-4 sm:py-8">
+      <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
+        <header className="text-center mb-6">
+          <div className="flex items-center justify-end mb-2">
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="text-xs font-semibold text-gray-500 px-3 py-1.5 rounded-lg border border-gray-200 bg-white active:bg-gray-50"
+              title={user?.email ?? 'Sign out'}
+            >
+              Sign out
+            </button>
+          </div>
+          <h1 className="text-2xl font-black text-green-950 tracking-tight">
+            🌿 THE LAWN PACK COMPANION
+          </h1>
+          <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mt-1">
+            Data-Driven Multi-Season Task Tracker
+          </p>
+        </header>
+
+        <main>
+          <LawnCareApp />
+        </main>
+
+        <footer className="text-center text-[10px] text-gray-400 mt-6 font-semibold">
+          Lawn Pack Engine v2.0.0 • Verified Sequence Matrix
+        </footer>
+      </div>
+    </div>
+  );
 }
 </file>
 

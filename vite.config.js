@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'The Lawn Pack Companion',

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { claimLegacyTasks } from '../lib/claimLegacyTasks';
+import { signInWithGoogleAccountPicker } from '../lib/googleSignIn';
 
 const AuthContext = createContext(null);
 
@@ -42,24 +43,12 @@ export function AuthProvider({ children }) {
       throw new Error('Supabase is not configured.');
     }
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-        queryParams: {
-          prompt: 'select_account',
-        },
-      },
-    });
-
-    if (error) {
-      throw error;
-    }
+    await signInWithGoogleAccountPicker(supabase);
   };
 
   const signOut = async () => {
     const supabase = getSupabase();
-    await supabase?.auth.signOut();
+    await supabase?.auth.signOut({ scope: 'local' });
   };
 
   const value = {
