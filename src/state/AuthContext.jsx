@@ -46,26 +46,6 @@ export function AuthProvider({ children }) {
       provider: 'google',
       options: {
         redirectTo: window.location.origin,
-      },
-    });
-
-    if (error) {
-      throw error;
-    }
-  };
-
-  const switchGoogleAccount = async () => {
-    const supabase = getSupabase();
-    if (!supabase) {
-      throw new Error('Supabase is not configured.');
-    }
-
-    await supabase.auth.signOut();
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
         queryParams: {
           prompt: 'select_account',
         },
@@ -88,7 +68,6 @@ export function AuthProvider({ children }) {
     loading: session === undefined,
     isAuthenticated: Boolean(session),
     signInWithGoogle,
-    switchGoogleAccount,
     signOut,
   };
 
