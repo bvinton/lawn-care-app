@@ -18,10 +18,24 @@ export default function App() {
             <button
               type="button"
               onClick={() => void signOut()}
-              className="text-xs font-semibold text-gray-500 px-3 py-1.5 rounded-lg border border-gray-200 bg-white active:bg-gray-50"
-              title={user?.email ?? 'Sign out'}
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-500 active:bg-gray-50"
+              aria-label="Sign out"
+              title={user?.email ? `Sign out (${user.email})` : 'Sign out'}
             >
-              Sign out
+              <svg
+                className="w-5 h-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
             </button>
           </div>
           <h1 className="text-2xl font-black text-green-950 tracking-tight">

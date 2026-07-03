@@ -22581,9 +22581,7 @@ function getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr) {
     }
   }
   if (!resolvedOn) return null;
-  const nextDay = addDaysToDateString(resolvedOn, 1);
-  const tomorrowFromToday = addDaysToDateString(todayStr, 1);
-  return nextDay > tomorrowFromToday ? nextDay : tomorrowFromToday;
+  return addDaysToDateString(resolvedOn, 1);
 }
 function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
   const localLast = task.title === MOW_TASK_NAME ? maintenance.lastMowedDate : task.title === WATER_TASK_NAME || task.title.startsWith("Water lawn (") ? maintenance.lastWateredDate : task.title === VERTICUT_TASK_NAME ? maintenance.lastVerticutDate : null;

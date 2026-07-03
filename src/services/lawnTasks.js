@@ -93,9 +93,7 @@ function getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr) {
 
   if (!resolvedOn) return null;
 
-  const nextDay = addDaysToDateString(resolvedOn, 1);
-  const tomorrowFromToday = addDaysToDateString(todayStr, 1);
-  return nextDay > tomorrowFromToday ? nextDay : tomorrowFromToday;
+  return addDaysToDateString(resolvedOn, 1);
 }
 
 /**

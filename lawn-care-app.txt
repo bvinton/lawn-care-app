@@ -176,32 +176,6 @@ vite.config.js
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/lib/googleSignIn.js">
-/** Start Google OAuth and always show the account chooser. */
-export async function signInWithGoogleAccountPicker(supabase) {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: window.location.origin,
-      skipBrowserRedirect: true,
-      queryParams: {
-        prompt: 'consent select_account',
-      },
-    },
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  if (!data?.url) {
-    throw new Error('Could not start Google sign-in.');
-  }
-
-  window.location.assign(data.url);
-}
-</file>
-
 <file path=".cursor/rules/git-workflow.mdc">
 ---
 description: How to commit and push — use push-all.ps1 to deploy both apps together
@@ -1209,6 +1183,32 @@ export async function claimLegacyTasks(supabase) {
 }
 </file>
 
+<file path="src/lib/googleSignIn.js">
+/** Start Google OAuth and always show the account chooser. */
+export async function signInWithGoogleAccountPicker(supabase) {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin,
+      skipBrowserRedirect: true,
+      queryParams: {
+        prompt: 'consent select_account',
+      },
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.url) {
+    throw new Error('Could not start Google sign-in.');
+  }
+
+  window.location.assign(data.url);
+}
+</file>
+
 <file path="src/services/lawnLocation.js">
 import { WALLSEND_COORDS } from '../data/LawnPackData.js';
 
@@ -1984,67 +1984,6 @@ TASKS_OWNER_USER_ID=your-user-uuid-here
 LAWN_SYNC_SECRET=your-random-secret
 </file>
 
-<file path="index.html">
-<!doctype html>
-<html lang="en-GB">
-  <head>
-    <script>
-      (function () {
-        var key = 'lawn-app-sw-reset-v1';
-        try {
-          if (localStorage.getItem(key) === '1') return;
-          localStorage.setItem(key, '1');
-        } catch (e) {
-          return;
-        }
-        var reloadAfterReset = function () {
-          window.location.reload();
-        };
-        var clearCaches = function () {
-          if (!('caches' in window)) {
-            reloadAfterReset();
-            return;
-          }
-          caches
-            .keys()
-            .then(function (keys) {
-              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
-            })
-            .finally(reloadAfterReset);
-        };
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker
-            .getRegistrations()
-            .then(function (regs) {
-              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
-            })
-            .then(clearCaches)
-            .catch(clearCaches);
-        } else {
-          clearCaches();
-        }
-      })();
-    </script>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#14532d" />
-    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>The Lawn Pack Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-</file>
-
 <file path="src/components/lawn/GuideViewerModal.jsx">
 import React, { useEffect, useState } from 'react';
 import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
@@ -2568,35 +2507,65 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 </file>
 
-<file path="vercel.json">
-{
-  "headers": [
-    {
-      "source": "/",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-    },
-    {
-      "source": "/index.html",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-    },
-    {
-      "source": "/manifest.webmanifest",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-    },
-    {
-      "source": "/sw.js",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-    }
-  ],
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
-  "functions": {
-    "api/sync-lawn.js": {
-      "maxDuration": 60
-    }
-  }
-}
+<file path="index.html">
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <script>
+      (function () {
+        var key = 'lawn-app-sw-reset-v1';
+        try {
+          if (localStorage.getItem(key) === '1') return;
+          localStorage.setItem(key, '1');
+        } catch (e) {
+          return;
+        }
+        var reloadAfterReset = function () {
+          window.location.reload();
+        };
+        var clearCaches = function () {
+          if (!('caches' in window)) {
+            reloadAfterReset();
+            return;
+          }
+          caches
+            .keys()
+            .then(function (keys) {
+              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
+            })
+            .finally(reloadAfterReset);
+        };
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (regs) {
+              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+            })
+            .then(clearCaches)
+            .catch(clearCaches);
+        } else {
+          clearCaches();
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>The Lawn Pack Companion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
 </file>
 
 <file path="src/lib/supabase.js">
@@ -2801,81 +2770,6 @@ export default function LoginPage({ loading }) {
 }
 </file>
 
-<file path="src/state/AuthContext.jsx">
-import { createContext, useContext, useEffect, useState } from 'react';
-import { getSupabase } from '../lib/supabase';
-import { claimLegacyTasks } from '../lib/claimLegacyTasks';
-import { signInWithGoogleAccountPicker } from '../lib/googleSignIn';
-
-const AuthContext = createContext(null);
-
-export function AuthProvider({ children }) {
-  const [session, setSession] = useState(undefined);
-
-  useEffect(() => {
-    const supabase = getSupabase();
-    if (!supabase) {
-      setSession(null);
-      return;
-    }
-
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session ?? null);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const supabase = getSupabase();
-    if (!session || !supabase) {
-      return;
-    }
-
-    void claimLegacyTasks(supabase);
-  }, [session]);
-
-  const signInWithGoogle = async () => {
-    const supabase = getSupabase();
-    if (!supabase) {
-      throw new Error('Supabase is not configured.');
-    }
-
-    await signInWithGoogleAccountPicker(supabase);
-  };
-
-  const signOut = async () => {
-    const supabase = getSupabase();
-    await supabase?.auth.signOut({ scope: 'local' });
-  };
-
-  const value = {
-    session: session ?? null,
-    user: session?.user ?? null,
-    loading: session === undefined,
-    isAuthenticated: Boolean(session),
-    signInWithGoogle,
-    signOut,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return ctx;
-}
-</file>
-
 <file path="src/utils/lawnDeepLink.js">
 /** Short keys used in ?focus= from the Tasks app */
 export const LAWN_FOCUS_ALIASES = {
@@ -2997,6 +2891,37 @@ export function applyLawnFocusFromUrl(options = {}) {
   };
 
   window.setTimeout(() => attempt(retries), delayMs);
+}
+</file>
+
+<file path="vercel.json">
+{
+  "headers": [
+    {
+      "source": "/",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    }
+  ],
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "functions": {
+    "api/sync-lawn.js": {
+      "maxDuration": 60
+    }
+  }
 }
 </file>
 
@@ -4172,85 +4097,79 @@ export function getLawnAppStateSetupHint() {
 }
 </file>
 
-<file path="vite.config.js">
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
+<file path="src/state/AuthContext.jsx">
+import { createContext, useContext, useEffect, useState } from 'react';
+import { getSupabase } from '../lib/supabase';
+import { claimLegacyTasks } from '../lib/claimLegacyTasks';
+import { signInWithGoogleAccountPicker } from '../lib/googleSignIn';
 
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      registerType: 'prompt',
-      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'The Lawn Pack Companion',
-        short_name: 'Lawn Pack',
-        description:
-          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
-        theme_color: '#14532d',
-        background_color: '#f3f4f6',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
-        lang: 'en-GB',
-        categories: ['lifestyle', 'utilities'],
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
-        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
-        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'open-meteo-forecast',
-              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
-            },
-          },
-          {
-            urlPattern: /\.(pdf|docx)$/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'lawn-pack-guides',
-              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-          {
-            urlPattern: /\/guides\/masterclass\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'lawn-masterclass-images',
-              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-        ],
-      },
-    }),
-  ],
-});
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
+  const [session, setSession] = useState(undefined);
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      setSession(null);
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!session || !supabase) {
+      return;
+    }
+
+    void claimLegacyTasks(supabase);
+  }, [session]);
+
+  const signInWithGoogle = async () => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    await signInWithGoogleAccountPicker(supabase);
+  };
+
+  const signOut = async () => {
+    const supabase = getSupabase();
+    await supabase?.auth.signOut({ scope: 'local' });
+  };
+
+  const value = {
+    session: session ?? null,
+    user: session?.user ?? null,
+    loading: session === undefined,
+    isAuthenticated: Boolean(session),
+    signInWithGoogle,
+    signOut,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return ctx;
+}
 </file>
 
 <file path="src/components/lawn/LawnSettings.jsx">
@@ -5839,6 +5758,87 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
 }
 </file>
 
+<file path="vite.config.js">
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'prompt',
+      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'The Lawn Pack Companion',
+        short_name: 'Lawn Pack',
+        description:
+          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
+        theme_color: '#14532d',
+        background_color: '#f3f4f6',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
+        lang: 'en-GB',
+        categories: ['lifestyle', 'utilities'],
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
+        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
+        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'open-meteo-forecast',
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
+            },
+          },
+          {
+            urlPattern: /\.(pdf|docx)$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'lawn-pack-guides',
+              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+          {
+            urlPattern: /\/guides\/masterclass\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'lawn-masterclass-images',
+              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+        ],
+      },
+    }),
+  ],
+});
+</file>
+
 <file path="package.json">
 {
   "name": "lawn-care-app",
@@ -5894,10 +5894,24 @@ export default function App() {
             <button
               type="button"
               onClick={() => void signOut()}
-              className="text-xs font-semibold text-gray-500 px-3 py-1.5 rounded-lg border border-gray-200 bg-white active:bg-gray-50"
-              title={user?.email ?? 'Sign out'}
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-500 active:bg-gray-50"
+              aria-label="Sign out"
+              title={user?.email ? `Sign out (${user.email})` : 'Sign out'}
             >
-              Sign out
+              <svg
+                className="w-5 h-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
             </button>
           </div>
           <h1 className="text-2xl font-black text-green-950 tracking-tight">
@@ -9586,9 +9600,7 @@ function getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr) {
 
   if (!resolvedOn) return null;
 
-  const nextDay = addDaysToDateString(resolvedOn, 1);
-  const tomorrowFromToday = addDaysToDateString(todayStr, 1);
-  return nextDay > tomorrowFromToday ? nextDay : tomorrowFromToday;
+  return addDaysToDateString(resolvedOn, 1);
 }
 
 /**
@@ -32724,9 +32736,7 @@ function getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr) {
     }
   }
   if (!resolvedOn) return null;
-  const nextDay = addDaysToDateString(resolvedOn, 1);
-  const tomorrowFromToday = addDaysToDateString(todayStr, 1);
-  return nextDay > tomorrowFromToday ? nextDay : tomorrowFromToday;
+  return addDaysToDateString(resolvedOn, 1);
 }
 function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
   const localLast = task.title === MOW_TASK_NAME ? maintenance.lastMowedDate : task.title === WATER_TASK_NAME || task.title.startsWith("Water lawn (") ? maintenance.lastWateredDate : task.title === VERTICUT_TASK_NAME ? maintenance.lastVerticutDate : null;
