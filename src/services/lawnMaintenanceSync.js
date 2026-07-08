@@ -230,6 +230,12 @@ export function inferMaintenanceDatesFromRows(rows, todayStr) {
   }
 
   for (const row of rows) {
+    if (row.task_name === WATER_TASK_NAME) {
+      if (row.skipped_on && row.due_date && row.skipped_on >= row.due_date) {
+        lastWateredDate = pickLatestIsoDate(lastWateredDate, row.skipped_on);
+      }
+    }
+
     const inferred = inferLastDoneFromMaintenanceRow(row, todayStr);
     if (!inferred) continue;
 

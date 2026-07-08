@@ -93,7 +93,8 @@ function getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr) {
 
   if (!resolvedOn) return null;
 
-  return addDaysToDateString(resolvedOn, 1);
+  const advanced = addDaysToDateString(resolvedOn, 1);
+  return advanced < todayStr ? todayStr : advanced;
 }
 
 /**
@@ -138,7 +139,7 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
 
   const taskDueDate = task.dueDate;
 
-  if (task.title.startsWith('Water lawn (')) {
+  if (task.title.startsWith('Water lawn (') || task.title === WATER_TASK_NAME) {
     const advancedDue = getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr);
     if (advancedDue) {
       row.due_date = advancedDue;

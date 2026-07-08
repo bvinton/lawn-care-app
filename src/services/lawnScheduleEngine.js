@@ -7,6 +7,9 @@ import {
 } from './lawnWeather.js';
 
 export const SEED_ESTABLISHMENT_DAYS = 21;
+/** Days after seed lock ends when mowing uses a gentler interval and height steps down gradually. */
+export const SEED_RECOVERY_WINDOW_DAYS = 42;
+export const SEED_RECOVERY_MOWING_DAYS = 7;
 export const VERTICUT_INTERVAL_DAYS = 14;
 export const VERTICUT_RENOVATION_HOLD_DAYS = 42;
 export const VERTICUT_HEAT_THRESHOLD_C = 25;
@@ -118,7 +121,9 @@ export function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) 
 
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 14;
+    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) {
+      return SEED_RECOVERY_MOWING_DAYS;
+    }
   }
 
   if (temp !== null && temp < 8) return 14;
@@ -165,7 +170,7 @@ export function getDynamicWateringDays(
 
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) return 2;
+    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) return 2;
   }
 
   if (recentPastRainSum >= 8) return 5;
@@ -208,8 +213,10 @@ export function getScheduleReason(input) {
 
   if (springSeedDate) {
     const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < 42) {
-      mowReasons.push('gentle recovery schedule after seeding');
+    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) {
+      mowReasons.push(
+        `${SEED_RECOVERY_MOWING_DAYS}-day recovery cuts — gradually lower height each mow`
+      );
       waterReasons.push('enhanced watering during turf recovery');
     }
   }
@@ -346,9 +353,13 @@ export function buildMaintenanceSchedule(input) {
     !seedEstablishmentActive && (isNatureProvidingFullSoak || soilRecentlyWet)
       ? todayStr
       : lastWateredDate;
-  const wateringNextDueIso = effectiveLastWateredDate
+  let wateringNextDueIso = effectiveLastWateredDate
     ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays)
     : null;
+
+  if (wateringNextDueIso && wateringNextDueIso < todayStr) {
+    wateringNextDueIso = todayStr;
+  }
 
   const isVerticutSeason = isVerticutSeasonForDate(todayStr);
   const { renovationHoldActive, verticutLockedUntilIso } = getVerticutRenovationState(

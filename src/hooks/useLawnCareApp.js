@@ -73,10 +73,15 @@ import {
   buildMaintenanceSchedule,
   getMowingWeatherAdvisory,
   getScheduleReason,
+  SEED_RECOVERY_WINDOW_DAYS,
 } from '../services/lawnScheduleEngine';
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { compileAllLawnTasks } from '../utils/compileLawnTasks';
 import { applyLawnFocusFromUrl, getFocusFromUrl, parsePackStepFocus } from '../utils/lawnDeepLink';
+import {
+  getPostSeedRecoveryMowerHeightRecommendation,
+  getSeasonalMowerHeightRecommendation,
+} from '../utils/lawnMowerHeight';
 import { readStoredJson } from '../utils/lawnStorage';
 import {
   startOfDay,
@@ -352,24 +357,30 @@ export function useLawnCareApp() {
   const isOnScarificationPrepStep =
     currentSeason === 'AUTUMN' && activeSeasonStep?.id === 'prep';
 
-  let recommendedSetting =
-    'Height: Setting 3 (45mm) - Standard safe maintenance cut to prevent scalping';
+  const mowerHeightInput = {
+    isDormantSeason,
+    isOnScarificationPrepStep,
+    currentSoilTemp,
+    lawnSurface,
+  };
+
+  let recommendedSetting;
   if (isDormantSeason) {
     recommendedSetting = 'Height: N/A - Growth Dormant';
   } else if (currentSeason === 'SPRING' && seedEstablishmentActive) {
     recommendedSetting = 'Height: 🚫 LOCKED - Do not mow fresh seed';
-  } else if (isOnScarificationPrepStep) {
-    recommendedSetting = 'Height: Setting 1 (25mm) - Scalp for renovation';
-  } else if (currentSoilTemp !== null && currentSoilTemp >= 22) {
-    recommendedSetting =
-      lawnSurface === 'FLAT'
-        ? 'Height: Setting 3 (45mm) - Hot spell: leave slightly longer to reduce stress'
-        : 'Height: Setting 4 (50mm) - Hot spell: leave longer on uneven turf';
-  } else if (lawnSurface === 'FLAT') {
-    recommendedSetting = 'Height: Setting 2 (35mm) - Standard low maintenance cut';
-  } else if (lawnSurface === 'UNEVEN') {
-    recommendedSetting =
-      'Height: Setting 3 (45mm) - Standard safe maintenance cut to prevent scalping';
+  } else if (
+    springSeedDate &&
+    daysSinceSeed !== null &&
+    daysSinceSeed > SEED_ESTABLISHMENT_DAYS &&
+    daysSinceSeed < SEED_RECOVERY_WINDOW_DAYS
+  ) {
+    recommendedSetting = getPostSeedRecoveryMowerHeightRecommendation({
+      ...mowerHeightInput,
+      daysSinceSeed,
+    });
+  } else {
+    recommendedSetting = getSeasonalMowerHeightRecommendation(mowerHeightInput);
   }
 
   const todayRainSkip = getWateringRainSkipForDueDate(
