@@ -41,6 +41,7 @@ The content is organized as follows:
 
 <directory_structure>
 .cursor/rules/git-workflow.mdc
+.cursor/rules/linked-apps-integration.mdc
 .env.example
 .gitignore
 .husky/pre-commit
@@ -177,117 +178,50 @@ vite.config.js
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/utils/lawnMowerHeight.js">
-import { SEED_ESTABLISHMENT_DAYS } from '../data/lawnUiConfig.jsx';
+<file path=".cursor/rules/linked-apps-integration.mdc">
+---
+description: Cross-app task integration checklist — run when touching skip/complete/sync/deep links
+alwaysApply: true
+---
 
-export const MOWER_SETTING_LABELS = {
-  1: 'Setting 1 (25mm)',
-  2: 'Setting 2 (35mm)',
-  3: 'Setting 3 (45mm)',
-  4: 'Setting 4 (50mm)',
-};
+# Linked apps integration contract
 
-/**
- * Normal maintenance height for current weather and lawn surface (not post-seed recovery).
- * Higher number = taller cut. Returns null during dormancy.
- * @param {{
- *   isDormantSeason: boolean,
- *   isOnScarificationPrepStep: boolean,
- *   currentSoilTemp: number | null,
- *   lawnSurface: string,
- * }} input
- * @returns {number | null}
- */
-export function getSeasonalMowerSettingNumber(input) {
-  const { isDormantSeason, isOnScarificationPrepStep, currentSoilTemp, lawnSurface } = input;
+Tasks App is the **reader**; Lawn, Hot Tub, and Fitness apps are **writers**. When fixing or adding skip, complete, sync, or deep-link behaviour, audit **all linked apps** — not just the file where the bug appeared.
 
-  if (isDormantSeason) return null;
-  if (isOnScarificationPrepStep) return 1;
-  if (currentSoilTemp !== null && currentSoilTemp >= 22) {
-    return lawnSurface === 'FLAT' ? 3 : 4;
-  }
-  if (lawnSurface === 'FLAT') return 2;
-  return 3;
-}
+## Invariants (check every app)
 
-/**
- * @param {number} settingNumber
- * @param {string} reasonSuffix
- */
-export function formatMowerHeightRecommendation(settingNumber, reasonSuffix) {
-  const label = MOWER_SETTING_LABELS[settingNumber] ?? `Setting ${settingNumber}`;
-  return `Height: ${label} - ${reasonSuffix}`;
-}
+| # | Invariant | Tasks App | Source app | Server sync |
+|---|-----------|-----------|------------|-------------|
+| 1 | **Skip hides the task** | `fetchTasks` excludes `skipped_on >= due_date` | — | — |
+| 2 | **Skip reschedules** | `skipTask` → `forceSync` for recurring apps | — | `buildReconcilePatch` handles `skipped_on` |
+| 3 | **Complete writes the same row** | `completeTask` by row `id` | Match `app_source`, `task_name`, `due_date`, `user_id` | — |
+| 4 | **One calendar for dates** | Local / `Europe/London` — never UTC `toISOString().slice(0,10)` for due dates | Same | Same |
+| 5 | **Deep links identify the row** | Emit `?due=YYYY-MM-DD` | Read `due` from URL for write-back | — |
+| 6 | **Notifications match UI** | Push query uses same open-task rules as `fetchTasks` | — | — |
 
-/**
- * @param {{
- *   isDormantSeason: boolean,
- *   isOnScarificationPrepStep: boolean,
- *   currentSoilTemp: number | null,
- *   lawnSurface: string,
- * }} input
- */
-export function getSeasonalMowerHeightRecommendation(input) {
-  const setting = getSeasonalMowerSettingNumber(input);
-  if (setting === null) {
-    return 'Height: N/A - Growth Dormant';
-  }
+## When a bug is found
 
-  if (input.isOnScarificationPrepStep) {
-    return formatMowerHeightRecommendation(1, 'Scalp for renovation');
-  }
+1. Name which invariant broke.
+2. Grep all repos under `C:\Projects` for the same pattern.
+3. Run `C:\Projects\audit-linked-apps.ps1` before deploy.
+4. Fix all gaps in one pass, then deploy with `push-all.ps1`.
 
-  if (input.currentSoilTemp !== null && input.currentSoilTemp >= 22) {
-    return formatMowerHeightRecommendation(
-      setting,
-      input.lawnSurface === 'FLAT'
-        ? 'Hot spell: leave slightly longer to reduce stress'
-        : 'Hot spell: leave longer on uneven turf',
-    );
-  }
+## App roles
 
-  if (input.lawnSurface === 'FLAT') {
-    return formatMowerHeightRecommendation(2, 'Standard low maintenance cut');
-  }
+| App | Generates tasks | Write-back on in-app complete | Sync API |
+|-----|-----------------|------------------------------|----------|
+| Lawn | Yes | Via maintenance sync | `/api/sync-lawn` |
+| Hot Tub | Yes | No (Tasks app only) | `/api/sync-hot-tub` |
+| Fitness | Yes | Yes (`taskCompletion.js`) | `/api/sync-fitness` |
+| Tasks | **No** (fitness/lawn/hot tub) | N/A | Triggers remote sync |
 
-  return formatMowerHeightRecommendation(3, 'Standard safe maintenance cut to prevent scalping');
-}
+## Red flags (grep targets)
 
-/**
- * Post-seed recovery height: step down each week (4 → 3 → 2) but never shorter than the
- * seasonal baseline for current weather and time of year.
- * @param {{
- *   daysSinceSeed: number,
- *   isDormantSeason: boolean,
- *   isOnScarificationPrepStep: boolean,
- *   currentSoilTemp: number | null,
- *   lawnSurface: string,
- * }} input
- */
-export function getPostSeedRecoveryMowerHeightRecommendation(input) {
-  const { daysSinceSeed } = input;
-  const baseline = getSeasonalMowerSettingNumber(input);
-  if (baseline === null) {
-    return 'Height: N/A - Growth Dormant';
-  }
-
-  const recoveryWeek = Math.ceil((daysSinceSeed - SEED_ESTABLISHMENT_DAYS) / 7);
-  const targetSetting = recoveryWeek <= 1 ? 4 : recoveryWeek === 2 ? 3 : 2;
-  const effectiveSetting = Math.max(targetSetting, baseline);
-
-  let reason;
-  if (effectiveSetting === baseline && targetSetting < baseline) {
-    reason = 'Seasonal minimum for current conditions — do not go shorter during recovery';
-  } else if (recoveryWeek <= 1) {
-    reason = 'First recovery cut: leave long, then step down each week';
-  } else if (effectiveSetting === baseline) {
-    reason = 'At normal maintenance height for current conditions';
-  } else {
-    reason = 'Gradually lowering after seeding';
-  }
-
-  return formatMowerHeightRecommendation(effectiveSetting, reason);
-}
+- `toISOString().slice(0, 10)` in task sync/completion code
+- `.eq('is_completed', false)` without filtering `skipped_on`
+- `useFitnessTaskCompletion()` without `getTaskDueFromUrl()`
+- Deep link builders that omit `dueDate` for Fitness (required) / Lawn / Hot Tub (recommended)
+- Skip/complete handlers that call `refresh({ supabaseOnly: true })` for recurring maintenance tasks
 </file>
 
 <file path=".cursor/rules/git-workflow.mdc">
@@ -1675,6 +1609,119 @@ export function formatNextDueDate(lastDateString, daysToAdd) {
   const month = String(dueDate.getMonth() + 1).padStart(2, '0');
   const year = dueDate.getFullYear();
   return `${weekday}, ${day}/${month}/${year}`;
+}
+</file>
+
+<file path="src/utils/lawnMowerHeight.js">
+import { SEED_ESTABLISHMENT_DAYS } from '../data/lawnUiConfig.jsx';
+
+export const MOWER_SETTING_LABELS = {
+  1: 'Setting 1 (25mm)',
+  2: 'Setting 2 (35mm)',
+  3: 'Setting 3 (45mm)',
+  4: 'Setting 4 (50mm)',
+};
+
+/**
+ * Normal maintenance height for current weather and lawn surface (not post-seed recovery).
+ * Higher number = taller cut. Returns null during dormancy.
+ * @param {{
+ *   isDormantSeason: boolean,
+ *   isOnScarificationPrepStep: boolean,
+ *   currentSoilTemp: number | null,
+ *   lawnSurface: string,
+ * }} input
+ * @returns {number | null}
+ */
+export function getSeasonalMowerSettingNumber(input) {
+  const { isDormantSeason, isOnScarificationPrepStep, currentSoilTemp, lawnSurface } = input;
+
+  if (isDormantSeason) return null;
+  if (isOnScarificationPrepStep) return 1;
+  if (currentSoilTemp !== null && currentSoilTemp >= 22) {
+    return lawnSurface === 'FLAT' ? 3 : 4;
+  }
+  if (lawnSurface === 'FLAT') return 2;
+  return 3;
+}
+
+/**
+ * @param {number} settingNumber
+ * @param {string} reasonSuffix
+ */
+export function formatMowerHeightRecommendation(settingNumber, reasonSuffix) {
+  const label = MOWER_SETTING_LABELS[settingNumber] ?? `Setting ${settingNumber}`;
+  return `Height: ${label} - ${reasonSuffix}`;
+}
+
+/**
+ * @param {{
+ *   isDormantSeason: boolean,
+ *   isOnScarificationPrepStep: boolean,
+ *   currentSoilTemp: number | null,
+ *   lawnSurface: string,
+ * }} input
+ */
+export function getSeasonalMowerHeightRecommendation(input) {
+  const setting = getSeasonalMowerSettingNumber(input);
+  if (setting === null) {
+    return 'Height: N/A - Growth Dormant';
+  }
+
+  if (input.isOnScarificationPrepStep) {
+    return formatMowerHeightRecommendation(1, 'Scalp for renovation');
+  }
+
+  if (input.currentSoilTemp !== null && input.currentSoilTemp >= 22) {
+    return formatMowerHeightRecommendation(
+      setting,
+      input.lawnSurface === 'FLAT'
+        ? 'Hot spell: leave slightly longer to reduce stress'
+        : 'Hot spell: leave longer on uneven turf',
+    );
+  }
+
+  if (input.lawnSurface === 'FLAT') {
+    return formatMowerHeightRecommendation(2, 'Standard low maintenance cut');
+  }
+
+  return formatMowerHeightRecommendation(3, 'Standard safe maintenance cut to prevent scalping');
+}
+
+/**
+ * Post-seed recovery height: step down each week (4 → 3 → 2) but never shorter than the
+ * seasonal baseline for current weather and time of year.
+ * @param {{
+ *   daysSinceSeed: number,
+ *   isDormantSeason: boolean,
+ *   isOnScarificationPrepStep: boolean,
+ *   currentSoilTemp: number | null,
+ *   lawnSurface: string,
+ * }} input
+ */
+export function getPostSeedRecoveryMowerHeightRecommendation(input) {
+  const { daysSinceSeed } = input;
+  const baseline = getSeasonalMowerSettingNumber(input);
+  if (baseline === null) {
+    return 'Height: N/A - Growth Dormant';
+  }
+
+  const recoveryWeek = Math.ceil((daysSinceSeed - SEED_ESTABLISHMENT_DAYS) / 7);
+  const targetSetting = recoveryWeek <= 1 ? 4 : recoveryWeek === 2 ? 3 : 2;
+  const effectiveSetting = Math.max(targetSetting, baseline);
+
+  let reason;
+  if (effectiveSetting === baseline && targetSetting < baseline) {
+    reason = 'Seasonal minimum for current conditions — do not go shorter during recovery';
+  } else if (recoveryWeek <= 1) {
+    reason = 'First recovery cut: leave long, then step down each week';
+  } else if (effectiveSetting === baseline) {
+    reason = 'At normal maintenance height for current conditions';
+  } else {
+    reason = 'Gradually lowering after seeding';
+  }
+
+  return formatMowerHeightRecommendation(effectiveSetting, reason);
 }
 </file>
 

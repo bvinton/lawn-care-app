@@ -1,0 +1,43 @@
+---
+description: Cross-app task integration checklist — run when touching skip/complete/sync/deep links
+alwaysApply: true
+---
+
+# Linked apps integration contract
+
+Tasks App is the **reader**; Lawn, Hot Tub, and Fitness apps are **writers**. When fixing or adding skip, complete, sync, or deep-link behaviour, audit **all linked apps** — not just the file where the bug appeared.
+
+## Invariants (check every app)
+
+| # | Invariant | Tasks App | Source app | Server sync |
+|---|-----------|-----------|------------|-------------|
+| 1 | **Skip hides the task** | `fetchTasks` excludes `skipped_on >= due_date` | — | — |
+| 2 | **Skip reschedules** | `skipTask` → `forceSync` for recurring apps | — | `buildReconcilePatch` handles `skipped_on` |
+| 3 | **Complete writes the same row** | `completeTask` by row `id` | Match `app_source`, `task_name`, `due_date`, `user_id` | — |
+| 4 | **One calendar for dates** | Local / `Europe/London` — never UTC `toISOString().slice(0,10)` for due dates | Same | Same |
+| 5 | **Deep links identify the row** | Emit `?due=YYYY-MM-DD` | Read `due` from URL for write-back | — |
+| 6 | **Notifications match UI** | Push query uses same open-task rules as `fetchTasks` | — | — |
+
+## When a bug is found
+
+1. Name which invariant broke.
+2. Grep all repos under `C:\Projects` for the same pattern.
+3. Run `C:\Projects\audit-linked-apps.ps1` before deploy.
+4. Fix all gaps in one pass, then deploy with `push-all.ps1`.
+
+## App roles
+
+| App | Generates tasks | Write-back on in-app complete | Sync API |
+|-----|-----------------|------------------------------|----------|
+| Lawn | Yes | Via maintenance sync | `/api/sync-lawn` |
+| Hot Tub | Yes | No (Tasks app only) | `/api/sync-hot-tub` |
+| Fitness | Yes | Yes (`taskCompletion.js`) | `/api/sync-fitness` |
+| Tasks | **No** (fitness/lawn/hot tub) | N/A | Triggers remote sync |
+
+## Red flags (grep targets)
+
+- `toISOString().slice(0, 10)` in task sync/completion code
+- `.eq('is_completed', false)` without filtering `skipped_on`
+- `useFitnessTaskCompletion()` without `getTaskDueFromUrl()`
+- Deep link builders that omit `dueDate` for Fitness (required) / Lawn / Hot Tub (recommended)
+- Skip/complete handlers that call `refresh({ supabaseOnly: true })` for recurring maintenance tasks
