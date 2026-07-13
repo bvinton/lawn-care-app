@@ -13,9 +13,10 @@ function GoogleIcon() {
 }
 
 export default function LoginPage({ loading }) {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, authError } = useAuth();
   const [error, setError] = useState(null);
   const [signingIn, setSigningIn] = useState(false);
+  const displayError = error || authError;
 
   const handleSignIn = async () => {
     setError(null);
@@ -51,7 +52,7 @@ export default function LoginPage({ loading }) {
             <GoogleIcon />
             {signingIn ? 'Signing in…' : 'Continue with Google'}
           </button>
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {displayError && <p className="text-xs text-red-600">{displayError}</p>}
         </div>
       )}
     </div>

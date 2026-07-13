@@ -2,11 +2,21 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { claimLegacyTasks } from '../lib/claimLegacyTasks';
 import { signInWithGoogleAccountPicker } from '../lib/googleSignIn';
+import {
+  APP_OAUTH_LABEL,
+  cleanAuthCallbackFromUrl,
+  formatOAuthError,
+  formatPendingOAuthCodeError,
+  getOAuthRedirectUrl,
+  hasPendingOAuthCode,
+  readOAuthCallbackError,
+} from '../lib/oauthRedirect';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined);
+  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -15,14 +25,38 @@ export function AuthProvider({ children }) {
       return;
     }
 
+    const redirectUrl = getOAuthRedirectUrl();
+    const callbackError = readOAuthCallbackError();
+    if (callbackError) {
+      setAuthError(formatOAuthError(APP_OAUTH_LABEL, redirectUrl, callbackError));
+      cleanAuthCallbackFromUrl();
+    }
+
+    const pendingCode = hasPendingOAuthCode();
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session ?? null);
+      if (data.session) {
+        cleanAuthCallbackFromUrl();
+        return;
+      }
+
+      if (pendingCode && !callbackError) {
+        setAuthError(formatPendingOAuthCodeError(APP_OAUTH_LABEL, redirectUrl));
+        cleanAuthCallbackFromUrl();
+      }
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession ?? null);
+      if (nextSession) {
+        setAuthError(null);
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        cleanAuthCallbackFromUrl();
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -38,6 +72,7 @@ export function AuthProvider({ children }) {
   }, [session]);
 
   const signInWithGoogle = async () => {
+    setAuthError(null);
     const supabase = getSupabase();
     if (!supabase) {
       throw new Error('Supabase is not configured.');
@@ -56,6 +91,7 @@ export function AuthProvider({ children }) {
     user: session?.user ?? null,
     loading: session === undefined,
     isAuthenticated: Boolean(session),
+    authError,
     signInWithGoogle,
     signOut,
   };

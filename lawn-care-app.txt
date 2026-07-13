@@ -40,136 +40,161 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
-.cursor/rules/git-workflow.mdc
-.cursor/rules/linked-apps-integration.mdc
+.cursor/
+  rules/
+    git-workflow.mdc
+    linked-apps-integration.mdc
+.husky/
+  pre-commit
+api/
+  sync-lawn.js
+  sync-lawn.source.js
+public/
+  guides/
+    masterclass/
+      part-2/
+        01.webp
+        02.webp
+        03.webp
+        04.webp
+        05.webp
+        06.webp
+        07.webp
+        08.webp
+        09.webp
+        10.webp
+      part-3/
+        01.webp
+        02.webp
+        03.webp
+        04.webp
+        05.webp
+        06.webp
+        07.webp
+        08.webp
+        09.webp
+        10.webp
+        11.webp
+        12.webp
+        13.webp
+      part-4/
+        01.webp
+        02.webp
+        03.webp
+        04.webp
+        05.webp
+        06.webp
+        07.webp
+        08.webp
+        09.webp
+        10.webp
+      part-5/
+        01.webp
+        02.webp
+        03.webp
+        04.webp
+        05.webp
+        06.webp
+        07.webp
+        08.webp
+        09.webp
+        10.webp
+        11.webp
+        12.webp
+        13.webp
+      manifest.json
+  apple-touch-icon.png
+  favicon-32x32.png
+  hose.jfif
+  icon.svg
+  impact.jfif
+  Iron Sulphate Guide.docx
+  Lawn Masterclass Part 2.pdf
+  Lawn Masterclass Part 3.pdf
+  Lawn Masterclass Part 4.pdf
+  Lawn Masterclass Part 5.pdf
+  Lawn Pack, Maintain your lawn Guide.pdf
+  oscillating.jfif
+  pwa-192x192.png
+  pwa-512x512.png
+  Starting your lawn from scratch guide.docx
+  static.jfif
+  The Autumn Pack.docx
+  The Spring Pack.docx
+  The Summer Pack.docx
+  The Winter Pack.docx
+scripts/
+  bundle-sync-api.mjs
+  check-lawn-tasks.mjs
+  extract-masterclass-images.py
+  generate-pwa-icons.mjs
+src/
+  components/
+    lawn/
+      GuideViewerModal.jsx
+      LawnCareApp.jsx
+      LawnGuides.jsx
+      LawnMaterials.jsx
+      LawnSettings.jsx
+      LawnWorkflow.jsx
+      MaintenancePanel.jsx
+      SeasonTimeline.jsx
+      SprinklerLightbox.jsx
+      UkDateInput.jsx
+  data/
+    lawnGuidesData.js
+    LawnPackData.js
+    lawnUiConfig.jsx
+    masterclassManifest.json
+  hooks/
+    useLawnCareApp.js
+    useMobileBackNavigation.js
+  lib/
+    claimLegacyTasks.js
+    googleSignIn.js
+    oauthRedirect.js
+    supabase.js
+  pages/
+    LoginPage.jsx
+  server/
+    runLawnCloudSync.js
+  services/
+    lawnAppState.js
+    lawnLocation.js
+    lawnMaintenanceSync.js
+    lawnScheduleEngine.js
+    lawnTaskInboundSync.js
+    lawnTasks.js
+    lawnWeather.js
+  state/
+    AuthContext.jsx
+  utils/
+    backNavigation.js
+    compileLawnTasks.js
+    lawnDates.js
+    lawnDeepLink.js
+    lawnMowerHeight.js
+    lawnStepAmounts.js
+    lawnStorage.js
+    openGuide.js
+  App.jsx
+  index.css
+  main.jsx
+supabase/
+  lawn_app_state.sql
+  lawn_schedule_snapshot.sql
+  lawn_weather_snapshot.sql
+  maintenance_link.sql
+  policies.sql
+  tasks_auth_user_id.sql
+  tasks_updated_at.sql
 .env.example
 .gitignore
-.husky/pre-commit
-api/sync-lawn.js
-api/sync-lawn.source.js
 index.html
 jsconfig.json
 package.json
 postcss.config.js
-public/apple-touch-icon.png
-public/favicon-32x32.png
-public/guides/masterclass/manifest.json
-public/guides/masterclass/part-2/01.webp
-public/guides/masterclass/part-2/02.webp
-public/guides/masterclass/part-2/03.webp
-public/guides/masterclass/part-2/04.webp
-public/guides/masterclass/part-2/05.webp
-public/guides/masterclass/part-2/06.webp
-public/guides/masterclass/part-2/07.webp
-public/guides/masterclass/part-2/08.webp
-public/guides/masterclass/part-2/09.webp
-public/guides/masterclass/part-2/10.webp
-public/guides/masterclass/part-3/01.webp
-public/guides/masterclass/part-3/02.webp
-public/guides/masterclass/part-3/03.webp
-public/guides/masterclass/part-3/04.webp
-public/guides/masterclass/part-3/05.webp
-public/guides/masterclass/part-3/06.webp
-public/guides/masterclass/part-3/07.webp
-public/guides/masterclass/part-3/08.webp
-public/guides/masterclass/part-3/09.webp
-public/guides/masterclass/part-3/10.webp
-public/guides/masterclass/part-3/11.webp
-public/guides/masterclass/part-3/12.webp
-public/guides/masterclass/part-3/13.webp
-public/guides/masterclass/part-4/01.webp
-public/guides/masterclass/part-4/02.webp
-public/guides/masterclass/part-4/03.webp
-public/guides/masterclass/part-4/04.webp
-public/guides/masterclass/part-4/05.webp
-public/guides/masterclass/part-4/06.webp
-public/guides/masterclass/part-4/07.webp
-public/guides/masterclass/part-4/08.webp
-public/guides/masterclass/part-4/09.webp
-public/guides/masterclass/part-4/10.webp
-public/guides/masterclass/part-5/01.webp
-public/guides/masterclass/part-5/02.webp
-public/guides/masterclass/part-5/03.webp
-public/guides/masterclass/part-5/04.webp
-public/guides/masterclass/part-5/05.webp
-public/guides/masterclass/part-5/06.webp
-public/guides/masterclass/part-5/07.webp
-public/guides/masterclass/part-5/08.webp
-public/guides/masterclass/part-5/09.webp
-public/guides/masterclass/part-5/10.webp
-public/guides/masterclass/part-5/11.webp
-public/guides/masterclass/part-5/12.webp
-public/guides/masterclass/part-5/13.webp
-public/hose.jfif
-public/icon.svg
-public/impact.jfif
-public/Iron Sulphate Guide.docx
-public/Lawn Masterclass Part 2.pdf
-public/Lawn Masterclass Part 3.pdf
-public/Lawn Masterclass Part 4.pdf
-public/Lawn Masterclass Part 5.pdf
-public/Lawn Pack, Maintain your lawn Guide.pdf
-public/oscillating.jfif
-public/pwa-192x192.png
-public/pwa-512x512.png
-public/Starting your lawn from scratch guide.docx
-public/static.jfif
-public/The Autumn Pack.docx
-public/The Spring Pack.docx
-public/The Summer Pack.docx
-public/The Winter Pack.docx
 README.md
-scripts/bundle-sync-api.mjs
-scripts/check-lawn-tasks.mjs
-scripts/extract-masterclass-images.py
-scripts/generate-pwa-icons.mjs
-src/App.jsx
-src/components/lawn/GuideViewerModal.jsx
-src/components/lawn/LawnCareApp.jsx
-src/components/lawn/LawnGuides.jsx
-src/components/lawn/LawnMaterials.jsx
-src/components/lawn/LawnSettings.jsx
-src/components/lawn/LawnWorkflow.jsx
-src/components/lawn/MaintenancePanel.jsx
-src/components/lawn/SeasonTimeline.jsx
-src/components/lawn/SprinklerLightbox.jsx
-src/components/lawn/UkDateInput.jsx
-src/data/lawnGuidesData.js
-src/data/LawnPackData.js
-src/data/lawnUiConfig.jsx
-src/data/masterclassManifest.json
-src/hooks/useLawnCareApp.js
-src/hooks/useMobileBackNavigation.js
-src/index.css
-src/lib/claimLegacyTasks.js
-src/lib/googleSignIn.js
-src/lib/supabase.js
-src/main.jsx
-src/pages/LoginPage.jsx
-src/server/runLawnCloudSync.js
-src/services/lawnAppState.js
-src/services/lawnLocation.js
-src/services/lawnMaintenanceSync.js
-src/services/lawnScheduleEngine.js
-src/services/lawnTaskInboundSync.js
-src/services/lawnTasks.js
-src/services/lawnWeather.js
-src/state/AuthContext.jsx
-src/utils/backNavigation.js
-src/utils/compileLawnTasks.js
-src/utils/lawnDates.js
-src/utils/lawnDeepLink.js
-src/utils/lawnMowerHeight.js
-src/utils/lawnStepAmounts.js
-src/utils/lawnStorage.js
-src/utils/openGuide.js
-supabase/lawn_app_state.sql
-supabase/lawn_schedule_snapshot.sql
-supabase/lawn_weather_snapshot.sql
-supabase/maintenance_link.sql
-supabase/policies.sql
-supabase/tasks_auth_user_id.sql
-supabase/tasks_updated_at.sql
 tailwind.config.js
 vercel.json
 vite.config.js
@@ -177,6 +202,148 @@ vite.config.js
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/lib/oauthRedirect.js">
+export const APP_OAUTH_LABEL = 'Lawn Pack Companion';
+export const DEFAULT_APP_URL = 'https://lawn-care-app-vert.vercel.app';
+
+/** OAuth must redirect to a URL whitelisted in Supabase Auth → URL configuration. */
+export function getOAuthRedirectUrl() {
+  const configured = import.meta.env.VITE_APP_URL?.replace(/\/$/, '');
+  if (configured) {
+    return `${configured}/`;
+  }
+
+  if (import.meta.env.DEV) {
+    return `${window.location.origin}/`;
+  }
+
+  return `${DEFAULT_APP_URL}/`;
+}
+
+function normalizeRedirectUrl(value) {
+  if (!value) return '';
+  try {
+    return decodeURIComponent(value).replace(/\/$/, '');
+  } catch {
+    return value.replace(/\/$/, '');
+  }
+}
+
+export function formatRedirectAllowListError(appLabel, redirectUrl, actualRedirectUrl) {
+  const expected = normalizeRedirectUrl(redirectUrl);
+  const allowListEntry = `${expected}/**`;
+  const fallbackNote = actualRedirectUrl
+    ? ` Supabase would send you to ${actualRedirectUrl} instead (usually the project Site URL).`
+    : '';
+
+  return [
+    `${appLabel} cannot sign in: this app's URL is not registered in Supabase.${fallbackNote}`,
+    `Add this redirect URL in Supabase Dashboard → Authentication → URL configuration:`,
+    allowListEntry,
+  ].join(' ');
+}
+
+export function extractRedirectToFromAuthorizeUrl(authorizeUrl) {
+  try {
+    return new URL(authorizeUrl).searchParams.get('redirect_to');
+  } catch {
+    return null;
+  }
+}
+
+export function assertAuthorizeUrlRedirectsToApp(authorizeUrl, expectedRedirectUrl, appLabel) {
+  const actual = extractRedirectToFromAuthorizeUrl(authorizeUrl);
+  if (!actual) return;
+
+  if (normalizeRedirectUrl(actual) !== normalizeRedirectUrl(expectedRedirectUrl)) {
+    throw new Error(formatRedirectAllowListError(appLabel, expectedRedirectUrl, actual));
+  }
+}
+
+export function readOAuthCallbackError() {
+  const url = new URL(window.location.href);
+  const queryError = url.searchParams.get('error_description') || url.searchParams.get('error');
+  if (queryError) return queryError;
+
+  if (url.hash.includes('error=')) {
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+    return hashParams.get('error_description') || hashParams.get('error');
+  }
+
+  return null;
+}
+
+export function hasPendingOAuthCode() {
+  return new URL(window.location.href).searchParams.has('code');
+}
+
+export function formatOAuthError(appLabel, redirectUrl, rawError) {
+  if (/redirect|url|invalid.*redirect|not allowed/i.test(rawError)) {
+    return formatRedirectAllowListError(appLabel, redirectUrl);
+  }
+  return rawError;
+}
+
+export function cleanAuthCallbackFromUrl() {
+  const url = new URL(window.location.href);
+  const hadAuthParams =
+    url.searchParams.has('code') ||
+    url.searchParams.has('error') ||
+    url.searchParams.has('error_description') ||
+    url.hash.includes('access_token=') ||
+    url.hash.includes('error=');
+
+  if (!hadAuthParams) return;
+
+  url.searchParams.delete('code');
+  url.searchParams.delete('error');
+  url.searchParams.delete('error_description');
+  url.hash = '';
+
+  const nextSearch = url.searchParams.toString();
+  const nextUrl = `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}`;
+  window.history.replaceState({}, document.title, nextUrl);
+}
+
+export function formatPendingOAuthCodeError(appLabel, redirectUrl) {
+  return formatRedirectAllowListError(appLabel, redirectUrl);
+}
+</file>
+
+<file path=".cursor/rules/git-workflow.mdc">
+---
+description: How to commit and push — use push-all.ps1 to deploy both apps together
+alwaysApply: true
+---
+
+# Git / deploy workflow
+
+Both apps (Tasks App and Lawn Care App) should always be committed and pushed together using the shared script at `C:\Projects\push-all.ps1`.
+
+## Committing via the agent
+
+When the user says "commit", "push", "deploy", or similar, run:
+
+```powershell
+C:\Projects\push-all.ps1 "commit message here"
+```
+
+This stages all changes, commits, and pushes **both repos** in one command.
+
+## Committing manually (terminal)
+
+The user can open a terminal and run:
+
+```powershell
+C:\Projects\push-all.ps1 "describe what changed"
+```
+
+## Notes
+
+- Always push to `main` (Tasks App) / `master` (Lawn Care App) — never create branches unless explicitly asked.
+- If only one repo has changes the script skips the other automatically.
+</file>
 
 <file path=".cursor/rules/linked-apps-integration.mdc">
 ---
@@ -224,66 +391,9 @@ Tasks App is the **reader**; Lawn, Hot Tub, and Fitness apps are **writers**. Wh
 - Skip/complete handlers that call `refresh({ supabaseOnly: true })` for recurring maintenance tasks
 </file>
 
-<file path=".cursor/rules/git-workflow.mdc">
----
-description: How to commit and push — use push-all.ps1 to deploy both apps together
-alwaysApply: true
----
-
-# Git / deploy workflow
-
-Both apps (Tasks App and Lawn Care App) should always be committed and pushed together using the shared script at `C:\Projects\push-all.ps1`.
-
-## Committing via the agent
-
-When the user says "commit", "push", "deploy", or similar, run:
-
-```powershell
-C:\Projects\push-all.ps1 "commit message here"
-```
-
-This stages all changes, commits, and pushes **both repos** in one command.
-
-## Committing manually (terminal)
-
-The user can open a terminal and run:
-
-```powershell
-C:\Projects\push-all.ps1 "describe what changed"
-```
-
-## Notes
-
-- Always push to `main` (Tasks App) / `master` (Lawn Care App) — never create branches unless explicitly asked.
-- If only one repo has changes the script skips the other automatically.
-</file>
-
 <file path=".husky/pre-commit">
 npx repomix --output "lawn-care-app.txt"
 git add "lawn-care-app.txt"
-</file>
-
-<file path="jsconfig.json">
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "target": "ES2020",
-    "allowJs": true,
-    "checkJs": true
-  },
-  "include": ["src"]
-}
-</file>
-
-<file path="postcss.config.js">
-export default {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-};
 </file>
 
 <file path="public/guides/masterclass/manifest.json">
@@ -1232,27 +1342,37 @@ export async function claimLegacyTasks(supabase) {
 </file>
 
 <file path="src/lib/googleSignIn.js">
+import {
+  APP_OAUTH_LABEL,
+  assertAuthorizeUrlRedirectsToApp,
+  formatOAuthError,
+  getOAuthRedirectUrl,
+} from './oauthRedirect';
+
 /** Start Google OAuth and always show the account chooser. */
 export async function signInWithGoogleAccountPicker(supabase) {
+  const redirectTo = getOAuthRedirectUrl();
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: window.location.origin,
+      redirectTo,
       skipBrowserRedirect: true,
       queryParams: {
-        prompt: 'consent select_account',
+        prompt: 'select_account',
       },
     },
   });
 
   if (error) {
-    throw error;
+    throw new Error(formatOAuthError(APP_OAUTH_LABEL, redirectTo, error.message));
   }
 
   if (!data?.url) {
     throw new Error('Could not start Google sign-in.');
   }
 
+  assertAuthorizeUrlRedirectsToApp(data.url, redirectTo, APP_OAUTH_LABEL);
   window.location.assign(data.url);
 }
 </file>
@@ -1889,6 +2009,29 @@ create trigger tasks_set_updated_at
   execute function public.set_tasks_updated_at();
 </file>
 
+<file path="jsconfig.json">
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2020",
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["src"]
+}
+</file>
+
+<file path="postcss.config.js">
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+</file>
+
 <file path="tailwind.config.js">
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -1898,24 +2041,6 @@ export default {
   },
   plugins: [],
 };
-</file>
-
-<file path=".gitignore">
-node_modules/
-dist/
-dist-ssr/
-*.local
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.DS_Store
-.vercel
 </file>
 
 <file path="api/sync-lawn.source.js">
@@ -1986,6 +2111,37 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, taskCount: 0, message });
   }
 }
+</file>
+
+<file path="src/index.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.lawn-focus-highlight {
+  outline: 3px solid #16a34a;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
+  transition: outline 0.25s ease, box-shadow 0.25s ease;
+}
+</file>
+
+<file path=".gitignore">
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
+.vercel
 </file>
 
 <file path="README.md">
@@ -2117,32 +2273,6 @@ Open **⚙️ Show Setup** in the app to configure:
 ## License
 
 Private project — all rights reserved.
-</file>
-
-<file path="src/index.css">
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-.lawn-focus-highlight {
-  outline: 3px solid #16a34a;
-  outline-offset: 4px;
-  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
-  transition: outline 0.25s ease, box-shadow 0.25s ease;
-}
-</file>
-
-<file path=".env.example">
-VITE_SUPABASE_URL=https://sbcpszlqycaynyurqfws.supabase.co
-VITE_SUPABASE_ANON_KEY=your_publishable_key_here
-
-# Server-only (Vercel → Environment Variables — do NOT prefix with VITE_)
-SUPABASE_URL=https://sbcpszlqycaynyurqfws.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-# Your Google account UUID — set after first sign-in so server sync writes tasks you can read
-TASKS_OWNER_USER_ID=your-user-uuid-here
-# Shared secret for Tasks app POST /api/sync-lawn (same value as Tasks VITE_LAWN_SYNC_SECRET)
-LAWN_SYNC_SECRET=your-random-secret
 </file>
 
 <file path="src/components/lawn/GuideViewerModal.jsx">
@@ -2668,65 +2798,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 </file>
 
-<file path="index.html">
-<!doctype html>
-<html lang="en-GB">
-  <head>
-    <script>
-      (function () {
-        var key = 'lawn-app-sw-reset-v1';
-        try {
-          if (localStorage.getItem(key) === '1') return;
-          localStorage.setItem(key, '1');
-        } catch (e) {
-          return;
-        }
-        var reloadAfterReset = function () {
-          window.location.reload();
-        };
-        var clearCaches = function () {
-          if (!('caches' in window)) {
-            reloadAfterReset();
-            return;
-          }
-          caches
-            .keys()
-            .then(function (keys) {
-              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
-            })
-            .finally(reloadAfterReset);
-        };
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker
-            .getRegistrations()
-            .then(function (regs) {
-              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
-            })
-            .then(clearCaches)
-            .catch(clearCaches);
-        } else {
-          clearCaches();
-        }
-      })();
-    </script>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#14532d" />
-    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>The Lawn Pack Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
+<file path=".env.example">
+VITE_SUPABASE_URL=https://sbcpszlqycaynyurqfws.supabase.co
+VITE_SUPABASE_ANON_KEY=your_publishable_key_here
+
+# OAuth redirect — must also be in Supabase Dashboard → Auth → URL configuration (as https://lawn-care-app-vert.vercel.app/**)
+VITE_APP_URL=https://lawn-care-app-vert.vercel.app
+
+# Server-only (Vercel → Environment Variables — do NOT prefix with VITE_)
+SUPABASE_URL=https://sbcpszlqycaynyurqfws.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+# Your Google account UUID — set after first sign-in so server sync writes tasks you can read
+TASKS_OWNER_USER_ID=your-user-uuid-here
+# Shared secret for Tasks app POST /api/sync-lawn (same value as Tasks VITE_LAWN_SYNC_SECRET)
+LAWN_SYNC_SECRET=your-random-secret
 </file>
 
 <file path="src/lib/supabase.js">
@@ -2885,9 +2970,10 @@ function GoogleIcon() {
 }
 
 export default function LoginPage({ loading }) {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, authError } = useAuth();
   const [error, setError] = useState(null);
   const [signingIn, setSigningIn] = useState(false);
+  const displayError = error || authError;
 
   const handleSignIn = async () => {
     setError(null);
@@ -2923,7 +3009,7 @@ export default function LoginPage({ loading }) {
             <GoogleIcon />
             {signingIn ? 'Signing in…' : 'Continue with Google'}
           </button>
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {displayError && <p className="text-xs text-red-600">{displayError}</p>}
         </div>
       )}
     </div>
@@ -3053,6 +3139,67 @@ export function applyLawnFocusFromUrl(options = {}) {
 
   window.setTimeout(() => attempt(retries), delayMs);
 }
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <script>
+      (function () {
+        var key = 'lawn-app-sw-reset-v1';
+        try {
+          if (localStorage.getItem(key) === '1') return;
+          localStorage.setItem(key, '1');
+        } catch (e) {
+          return;
+        }
+        var reloadAfterReset = function () {
+          window.location.reload();
+        };
+        var clearCaches = function () {
+          if (!('caches' in window)) {
+            reloadAfterReset();
+            return;
+          }
+          caches
+            .keys()
+            .then(function (keys) {
+              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
+            })
+            .finally(reloadAfterReset);
+        };
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (regs) {
+              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+            })
+            .then(clearCaches)
+            .catch(clearCaches);
+        } else {
+          clearCaches();
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>The Lawn Pack Companion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
 </file>
 
 <file path="vercel.json">
@@ -4263,11 +4410,21 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { claimLegacyTasks } from '../lib/claimLegacyTasks';
 import { signInWithGoogleAccountPicker } from '../lib/googleSignIn';
+import {
+  APP_OAUTH_LABEL,
+  cleanAuthCallbackFromUrl,
+  formatOAuthError,
+  formatPendingOAuthCodeError,
+  getOAuthRedirectUrl,
+  hasPendingOAuthCode,
+  readOAuthCallbackError,
+} from '../lib/oauthRedirect';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined);
+  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -4276,14 +4433,38 @@ export function AuthProvider({ children }) {
       return;
     }
 
+    const redirectUrl = getOAuthRedirectUrl();
+    const callbackError = readOAuthCallbackError();
+    if (callbackError) {
+      setAuthError(formatOAuthError(APP_OAUTH_LABEL, redirectUrl, callbackError));
+      cleanAuthCallbackFromUrl();
+    }
+
+    const pendingCode = hasPendingOAuthCode();
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session ?? null);
+      if (data.session) {
+        cleanAuthCallbackFromUrl();
+        return;
+      }
+
+      if (pendingCode && !callbackError) {
+        setAuthError(formatPendingOAuthCodeError(APP_OAUTH_LABEL, redirectUrl));
+        cleanAuthCallbackFromUrl();
+      }
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession ?? null);
+      if (nextSession) {
+        setAuthError(null);
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        cleanAuthCallbackFromUrl();
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -4299,6 +4480,7 @@ export function AuthProvider({ children }) {
   }, [session]);
 
   const signInWithGoogle = async () => {
+    setAuthError(null);
     const supabase = getSupabase();
     if (!supabase) {
       throw new Error('Supabase is not configured.');
@@ -4317,6 +4499,7 @@ export function AuthProvider({ children }) {
     user: session?.user ?? null,
     loading: session === undefined,
     isAuthenticated: Boolean(session),
+    authError,
     signInWithGoogle,
     signOut,
   };
@@ -6034,68 +6217,6 @@ export default defineConfig({
 }
 </file>
 
-<file path="src/App.jsx">
-import React from 'react';
-import LawnCareApp from './components/lawn/LawnCareApp';
-import LoginPage from './pages/LoginPage';
-import { useAuth } from './state/AuthContext';
-
-export default function App() {
-  const { isAuthenticated, loading, signOut, user } = useAuth();
-
-  if (loading || !isAuthenticated) {
-    return <LoginPage loading={loading} />;
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-100 py-4 sm:py-8">
-      <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
-        <header className="text-center mb-6">
-          <div className="flex items-center justify-end mb-2">
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-500 active:bg-gray-50"
-              aria-label="Sign out"
-              title={user?.email ? `Sign out (${user.email})` : 'Sign out'}
-            >
-              <svg
-                className="w-5 h-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-            </button>
-          </div>
-          <h1 className="text-2xl font-black text-green-950 tracking-tight">
-            🌿 THE LAWN PACK COMPANION
-          </h1>
-          <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mt-1">
-            Data-Driven Multi-Season Task Tracker
-          </p>
-        </header>
-
-        <main>
-          <LawnCareApp />
-        </main>
-
-        <footer className="text-center text-[10px] text-gray-400 mt-6 font-semibold">
-          Lawn Pack Engine v2.0.0 • Verified Sequence Matrix
-        </footer>
-      </div>
-    </div>
-  );
-}
-</file>
-
 <file path="src/services/lawnWeather.js">
 import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
 import { resolveWeatherLocation } from './lawnLocation.js';
@@ -6715,6 +6836,68 @@ export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
   if (!fetchedAt) return false;
   const ageMs = Date.now() - new Date(fetchedAt).getTime();
   return ageMs >= 0 && ageMs < maxAgeHours * 60 * 60 * 1000;
+}
+</file>
+
+<file path="src/App.jsx">
+import React from 'react';
+import LawnCareApp from './components/lawn/LawnCareApp';
+import LoginPage from './pages/LoginPage';
+import { useAuth } from './state/AuthContext';
+
+export default function App() {
+  const { isAuthenticated, loading, signOut, user } = useAuth();
+
+  if (loading || !isAuthenticated) {
+    return <LoginPage loading={loading} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 py-4 sm:py-8">
+      <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
+        <header className="text-center mb-6">
+          <div className="flex items-center justify-end mb-2">
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 bg-white text-gray-500 active:bg-gray-50"
+              aria-label="Sign out"
+              title={user?.email ? `Sign out (${user.email})` : 'Sign out'}
+            >
+              <svg
+                className="w-5 h-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
+          </div>
+          <h1 className="text-2xl font-black text-green-950 tracking-tight">
+            🌿 THE LAWN PACK COMPANION
+          </h1>
+          <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mt-1">
+            Data-Driven Multi-Season Task Tracker
+          </p>
+        </header>
+
+        <main>
+          <LawnCareApp />
+        </main>
+
+        <footer className="text-center text-[10px] text-gray-400 mt-6 font-semibold">
+          Lawn Pack Engine v2.0.0 • Verified Sequence Matrix
+        </footer>
+      </div>
+    </div>
+  );
 }
 </file>
 
