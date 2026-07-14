@@ -1,11 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { registerSW } from 'virtual:pwa-register';
 import App from './App.jsx';
+import { registerAppServiceWorker } from './lib/appServiceWorker.js';
 import { AuthProvider } from './state/AuthContext.jsx';
 import './index.css';
 
-registerSW({ immediate: true });
+registerAppServiceWorker();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

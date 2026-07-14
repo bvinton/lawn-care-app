@@ -1,4 +1,5 @@
 import React from 'react';
+import AppUpdatePrompt from './components/AppUpdatePrompt';
 import LawnCareApp from './components/lawn/LawnCareApp';
 import LoginPage from './pages/LoginPage';
 import { useAuth } from './state/AuthContext';
@@ -7,10 +8,17 @@ export default function App() {
   const { isAuthenticated, loading, signOut, user } = useAuth();
 
   if (loading || !isAuthenticated) {
-    return <LoginPage loading={loading} />;
+    return (
+      <>
+        <AppUpdatePrompt />
+        <LoginPage loading={loading} />
+      </>
+    );
   }
 
   return (
+    <>
+    <AppUpdatePrompt />
     <div className="min-h-screen bg-gray-100 py-4 sm:py-8">
       <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
         <header className="text-center mb-6">
@@ -55,5 +63,6 @@ export default function App() {
         </footer>
       </div>
     </div>
+    </>
   );
 }
