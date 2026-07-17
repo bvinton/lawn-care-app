@@ -22497,8 +22497,7 @@ function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenance = {})
   let packStepsUpdated = 0;
   let maintenanceUpdated = false;
   for (const row of rows) {
-    if (!row.is_completed) continue;
-    const completionDate = row.last_completed_date ?? (row.due_date && row.due_date <= todayStr ? row.due_date : null);
+    const completionDate = row.last_completed_date ?? (row.is_completed && row.due_date && row.due_date <= todayStr ? row.due_date : null);
     if (!completionDate) continue;
     if (row.task_name === MOW_TASK_NAME) {
       const merged = pickLatestIsoDate(lastMowedDate, completionDate);
@@ -22618,6 +22617,8 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     if (advancedDue) {
       row.due_date = advancedDue;
     }
+  } else if ((task.title === MOW_TASK_NAME || task.title === VERTICUT_TASK_NAME) && lastCompleted && lastCompleted >= taskDueDate && task.dueDate <= lastCompleted) {
+    row.due_date = addDaysToDateString(lastCompleted, 7);
   }
   if (getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr)) {
     row.skipped_on = null;

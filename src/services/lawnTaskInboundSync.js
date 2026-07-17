@@ -171,11 +171,11 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
   let maintenanceUpdated = false;
 
   for (const row of rows) {
-    if (!row.is_completed) continue;
-
+    // Tasks app keeps recurring lawn rows open (is_completed=false) and writes
+    // last_completed_date instead — treat that as a real completion.
     const completionDate =
       row.last_completed_date ??
-      (row.due_date && row.due_date <= todayStr ? row.due_date : null);
+      (row.is_completed && row.due_date && row.due_date <= todayStr ? row.due_date : null);
     if (!completionDate) continue;
 
     if (row.task_name === MOW_TASK_NAME) {

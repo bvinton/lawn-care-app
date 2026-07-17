@@ -149,6 +149,16 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     if (advancedDue) {
       row.due_date = advancedDue;
     }
+  } else if (
+    (task.title === MOW_TASK_NAME || task.title === VERTICUT_TASK_NAME) &&
+    lastCompleted &&
+    lastCompleted >= taskDueDate &&
+    task.dueDate <= lastCompleted
+  ) {
+    // Tasks app may write last_completed_date while leaving due_date stale when sync
+    // was offline. Prefer the schedule-compiled due when it has moved; otherwise nudge
+    // forward from the completion so the open row does not look stuck.
+    row.due_date = addDaysToDateString(lastCompleted, 7);
   }
 
   if (getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr)) {

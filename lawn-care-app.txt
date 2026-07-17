@@ -205,71 +205,6 @@ vite.config.js
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/components/AppUpdatePrompt.jsx">
-import { useEffect, useState } from 'react';
-import { reloadForAppUpdate } from '../lib/appServiceWorker';
-
-export default function AppUpdatePrompt() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const onUpdate = () => setVisible(true);
-    window.addEventListener('app-update-available', onUpdate);
-    return () => window.removeEventListener('app-update-available', onUpdate);
-  }, []);
-
-  if (!visible) return null;
-
-  return (
-    <div
-      role="status"
-      className="fixed inset-x-0 top-0 z-[100] flex items-center justify-between gap-3 border-b border-green-800 bg-green-900 px-4 py-3 text-sm text-white shadow-lg"
-      style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
-    >
-      <p className="font-medium">A new version of Lawn Pack is ready.</p>
-      <div className="flex shrink-0 items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setVisible(false)}
-          className="rounded-lg px-2 py-1 text-green-200 active:bg-green-800"
-        >
-          Later
-        </button>
-        <button
-          type="button"
-          onClick={() => reloadForAppUpdate()}
-          className="rounded-lg bg-white px-3 py-1.5 font-semibold text-green-900 active:bg-green-50"
-        >
-          Update
-        </button>
-      </div>
-    </div>
-  );
-}
-</file>
-
-<file path="src/lib/appServiceWorker.js">
-import { registerSW } from 'virtual:pwa-register';
-
-/** @type {((reloadPage?: boolean) => Promise<void>) | undefined} */
-let applyUpdate;
-
-export function registerAppServiceWorker() {
-  if (!('serviceWorker' in navigator)) return;
-
-  applyUpdate = registerSW({
-    immediate: true,
-    onNeedRefresh() {
-      window.dispatchEvent(new Event('app-update-available'));
-    },
-  });
-}
-
-export function reloadForAppUpdate() {
-  void applyUpdate?.(true);
-}
-</file>
-
 <file path=".cursor/rules/git-workflow.mdc">
 ---
 description: How to commit and push — use push-all.ps1 to deploy both apps together
@@ -1092,6 +1027,49 @@ export function UkDateInput({ id, value, onChange, max, disabled, className }) {
 }
 </file>
 
+<file path="src/components/AppUpdatePrompt.jsx">
+import { useEffect, useState } from 'react';
+import { reloadForAppUpdate } from '../lib/appServiceWorker';
+
+export default function AppUpdatePrompt() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const onUpdate = () => setVisible(true);
+    window.addEventListener('app-update-available', onUpdate);
+    return () => window.removeEventListener('app-update-available', onUpdate);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      role="status"
+      className="fixed inset-x-0 top-0 z-[100] flex items-center justify-between gap-3 border-b border-green-800 bg-green-900 px-4 py-3 text-sm text-white shadow-lg"
+      style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+    >
+      <p className="font-medium">A new version of Lawn Pack is ready.</p>
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setVisible(false)}
+          className="rounded-lg px-2 py-1 text-green-200 active:bg-green-800"
+        >
+          Later
+        </button>
+        <button
+          type="button"
+          onClick={() => reloadForAppUpdate()}
+          className="rounded-lg bg-white px-3 py-1.5 font-semibold text-green-900 active:bg-green-50"
+        >
+          Update
+        </button>
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="src/data/lawnUiConfig.jsx">
 export const MS_PER_HOUR = 1000 * 60 * 60;
 export const SEED_ESTABLISHMENT_DAYS = 21;
@@ -1272,6 +1250,28 @@ export function useRegisterBackHandler(handler, enabled = true) {
 
     return registerBackHandler(() => handlerRef.current());
   }, [enabled]);
+}
+</file>
+
+<file path="src/lib/appServiceWorker.js">
+import { registerSW } from 'virtual:pwa-register';
+
+/** @type {((reloadPage?: boolean) => Promise<void>) | undefined} */
+let applyUpdate;
+
+export function registerAppServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+
+  applyUpdate = registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      window.dispatchEvent(new Event('app-update-available'));
+    },
+  });
+}
+
+export function reloadForAppUpdate() {
+  void applyUpdate?.(true);
 }
 </file>
 
@@ -2846,25 +2846,6 @@ export default function SeasonTimeline({ app }) {
 }
 </file>
 
-<file path="src/main.jsx">
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App.jsx';
-import { registerAppServiceWorker } from './lib/appServiceWorker.js';
-import { AuthProvider } from './state/AuthContext.jsx';
-import './index.css';
-
-registerAppServiceWorker();
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
-  </React.StrictMode>,
-);
-</file>
-
 <file path="src/lib/supabase.js">
 import { createClient } from '@supabase/supabase-js';
 
@@ -3127,6 +3108,25 @@ export function applyLawnFocusFromUrl(options = {}) {
 
   window.setTimeout(() => attempt(retries), delayMs);
 }
+</file>
+
+<file path="src/main.jsx">
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.jsx';
+import { registerAppServiceWorker } from './lib/appServiceWorker.js';
+import { AuthProvider } from './state/AuthContext.jsx';
+import './index.css';
+
+registerAppServiceWorker();
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  </React.StrictMode>,
+);
 </file>
 
 <file path=".env.example">
@@ -5994,11 +5994,11 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
   let maintenanceUpdated = false;
 
   for (const row of rows) {
-    if (!row.is_completed) continue;
-
+    // Tasks app keeps recurring lawn rows open (is_completed=false) and writes
+    // last_completed_date instead — treat that as a real completion.
     const completionDate =
       row.last_completed_date ??
-      (row.due_date && row.due_date <= todayStr ? row.due_date : null);
+      (row.is_completed && row.due_date && row.due_date <= todayStr ? row.due_date : null);
     if (!completionDate) continue;
 
     if (row.task_name === MOW_TASK_NAME) {
@@ -10104,6 +10104,16 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     if (advancedDue) {
       row.due_date = advancedDue;
     }
+  } else if (
+    (task.title === MOW_TASK_NAME || task.title === VERTICUT_TASK_NAME) &&
+    lastCompleted &&
+    lastCompleted >= taskDueDate &&
+    task.dueDate <= lastCompleted
+  ) {
+    // Tasks app may write last_completed_date while leaving due_date stale when sync
+    // was offline. Prefer the schedule-compiled due when it has moved; otherwise nudge
+    // forward from the completion so the open row does not look stuck.
+    row.due_date = addDaysToDateString(lastCompleted, 7);
   }
 
   if (getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr)) {
@@ -33101,8 +33111,7 @@ function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenance = {})
   let packStepsUpdated = 0;
   let maintenanceUpdated = false;
   for (const row of rows) {
-    if (!row.is_completed) continue;
-    const completionDate = row.last_completed_date ?? (row.due_date && row.due_date <= todayStr ? row.due_date : null);
+    const completionDate = row.last_completed_date ?? (row.is_completed && row.due_date && row.due_date <= todayStr ? row.due_date : null);
     if (!completionDate) continue;
     if (row.task_name === MOW_TASK_NAME) {
       const merged = pickLatestIsoDate(lastMowedDate, completionDate);
@@ -33222,6 +33231,8 @@ function buildMaintenanceSyncRow(task, maintenance, existingRows, todayStr) {
     if (advancedDue) {
       row.due_date = advancedDue;
     }
+  } else if ((task.title === MOW_TASK_NAME || task.title === VERTICUT_TASK_NAME) && lastCompleted && lastCompleted >= taskDueDate && task.dueDate <= lastCompleted) {
+    row.due_date = addDaysToDateString(lastCompleted, 7);
   }
   if (getSessionAdvancedDueDate(existingRows, taskDueDate, todayStr)) {
     row.skipped_on = null;
