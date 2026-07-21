@@ -216,21 +216,6 @@
   color: var(--lawn-muted);
 }
 
-.lawn-hub__theme-note {
-  margin-top: 0.35rem;
-  font-size: 0.75rem;
-  color: var(--lawn-muted);
-}
-
-.lawn-hub__section-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--lawn-muted);
-  margin-bottom: 0.5rem;
-}
-
 .lawn-hub__weather,
 .lawn-hub__rooms,
 .lawn-hub__tools,
@@ -308,14 +293,6 @@
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-}
-
-.lawn-hub__room-blurb {
-  display: block;
-  margin-top: 0.2rem;
-  font-size: 0.72rem;
-  line-height: 1.35;
-  color: var(--lawn-muted);
 }
 
 .lawn-hub__room-meta {
@@ -398,17 +375,6 @@
   font-size: 1.05rem;
   font-weight: 750;
   letter-spacing: -0.02em;
-}
-
-.lawn-room__seasonal-intro {
-  margin-bottom: 1rem;
-  padding: 0.75rem 0.9rem;
-  border-radius: 0.85rem;
-  background: color-mix(in srgb, var(--lawn-accent-soft) 50%, white);
-  border: 1px solid var(--lawn-hub-room-border);
-  font-size: 0.78rem;
-  line-height: 1.4;
-  color: var(--lawn-muted);
 }
 
 [data-lawn-theme='signal'] .lawn-hub__room,

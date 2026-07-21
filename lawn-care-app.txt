@@ -759,241 +759,6 @@ export default function LawnAlerts({ app }) {
 }
 </file>
 
-<file path="src/components/lawn/LawnHub.jsx">
-import React from 'react';
-import { SEASONS } from '../../data/LawnPackData';
-import { formatSyncTimeAgo } from '../../utils/lawnDates';
-import { CalculatorIcon } from './LawnMaterials';
-
-/**
- * Hub home for sectioned themes.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-export default function LawnHub({ app }) {
-  const {
-    sqm,
-    length,
-    width,
-    runFullCloudSync,
-    cloudSyncStatus,
-    lastCloudSyncAt,
-    setActiveScreen,
-    setActiveRoom,
-    mowingDue,
-    wateringDue,
-    verticutDue,
-    gypsumDue,
-    seedEstablishmentActive,
-    petLockoutActive,
-    springPackIncomplete,
-    incompleteSpringSteps,
-    currentSeason,
-    weatherStatusText,
-    weatherLocationLabel,
-  } = app;
-
-  const dueCount = [mowingDue, wateringDue, verticutDue, gypsumDue].filter(Boolean).length;
-
-  const syncLabel =
-    cloudSyncStatus === 'pulling'
-      ? 'Pull…'
-      : cloudSyncStatus === 'pushing'
-        ? 'Push…'
-        : cloudSyncStatus === 'error'
-          ? 'Retry'
-          : cloudSyncStatus === 'idle'
-            ? 'Sync'
-            : null;
-
-  const rooms = [
-    {
-      id: 'maintenance',
-      title: 'Maintenance',
-      meta: dueCount > 0 ? `${dueCount} due` : seedEstablishmentActive ? 'Seed lock' : 'Up to date',
-      tone: dueCount > 0 || seedEstablishmentActive ? 'alert' : 'ok',
-      icon: '✂️',
-    },
-    {
-      id: 'seasonal',
-      title: 'Seasonal Pack',
-      meta: springPackIncomplete
-        ? `${incompleteSpringSteps.length} Spring left`
-        : SEASONS[currentSeason]?.name ?? 'Open',
-      tone: springPackIncomplete ? 'warn' : 'ok',
-      icon: '📋',
-    },
-  ];
-
-  return (
-    <div className="lawn-hub">
-      <header className="lawn-hub__hero">
-        <h2 className="lawn-hub__title">
-          <span className="lawn-hub__sqm">{sqm} SQM</span>
-        </h2>
-        <p className="lawn-hub__lede">
-          <span className="lawn-hub__dims">
-            {length}m × {width}m
-          </span>
-        </p>
-      </header>
-
-      {(petLockoutActive || springPackIncomplete) && (
-        <div className="lawn-hub__notices" aria-live="polite">
-          {petLockoutActive && (
-            <p className="lawn-hub__notice lawn-hub__notice--alert">
-              Chemical drying — pets off the lawn for now.
-            </p>
-          )}
-          {springPackIncomplete && (
-            <p className="lawn-hub__notice lawn-hub__notice--warn">
-              Spring Pack still in progress — open Seasonal Pack to finish.
-            </p>
-          )}
-        </div>
-      )}
-
-      <section className="lawn-hub__weather" aria-label="Weather">
-        <p className="lawn-hub__weather-text">
-          {weatherLocationLabel}: {weatherStatusText}
-        </p>
-      </section>
-
-      <section className="lawn-hub__rooms" aria-label="Sections">
-        <div className="lawn-hub__room-grid">
-          {rooms.map((room) => (
-            <button
-              key={room.id}
-              type="button"
-              className={`lawn-hub__room lawn-hub__room--${room.tone}`}
-              onClick={() => setActiveRoom(room.id)}
-            >
-              <span className="lawn-hub__room-icon" aria-hidden="true">
-                {room.icon}
-              </span>
-              <span className="lawn-hub__room-copy">
-                <span className="lawn-hub__room-title">{room.title}</span>
-              </span>
-              <span className="lawn-hub__room-meta">{room.meta}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="lawn-hub__tools" aria-label="Tools">
-        <div className="lawn-hub__tool-grid">
-          <button
-            type="button"
-            onClick={() => void runFullCloudSync()}
-            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
-            className="lawn-hub__tool"
-            title={
-              cloudSyncStatus === 'synced' && lastCloudSyncAt
-                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
-                : 'Sync schedule to cloud'
-            }
-          >
-            <span aria-hidden="true">
-              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
-            </span>
-            <span>{syncLabel ?? 'Synced'}</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('materials')} className="lawn-hub__tool">
-            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
-            <span>Materials</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('guides')} className="lawn-hub__tool">
-            <span aria-hidden="true">📚</span>
-            <span>Guides</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('settings')} className="lawn-hub__tool">
-            <span aria-hidden="true">⚙️</span>
-            <span>Setup</span>
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-</file>
-
-<file path="src/components/lawn/LawnMainView.jsx">
-import React from 'react';
-import MaintenancePanel from './MaintenancePanel';
-import SeasonTimeline from './SeasonTimeline';
-import LawnWorkflow from './LawnWorkflow';
-import LawnHub from './LawnHub';
-import LawnAlerts from './LawnAlerts';
-
-/**
- * Room chrome for sectioned themes — keeps deep-link DOM ids mounted inside the active room.
- * @param {{
- *   app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>,
- *   title: string,
- *   children: React.ReactNode,
- * }} props
- */
-function LawnRoomFrame({ app, title, children }) {
-  return (
-    <div className="lawn-room">
-      <div className="lawn-room__bar">
-        <button
-          type="button"
-          className="lawn-room__back"
-          onClick={() => app.setActiveRoom('hub')}
-        >
-          ← Home
-        </button>
-        <h2 className="lawn-room__title">{title}</h2>
-        <button
-          type="button"
-          className="lawn-room__setup"
-          onClick={() => app.setActiveScreen('settings')}
-        >
-          Setup
-        </button>
-      </div>
-      <LawnAlerts app={app} />
-      <div className="lawn-room__body">{children}</div>
-    </div>
-  );
-}
-
-/**
- * Main content switcher: classic long page vs sectioned rooms.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-export default function LawnMainView({ app }) {
-  const { activeTheme, activeRoom } = app;
-
-  if (activeTheme.layout === 'classic') {
-    return <LawnWorkflow app={app} />;
-  }
-
-  if (activeRoom === 'maintenance') {
-    return (
-      <LawnRoomFrame app={app} title="Maintenance">
-        <MaintenancePanel app={app} />
-      </LawnRoomFrame>
-    );
-  }
-
-  if (activeRoom === 'seasonal') {
-    return (
-      <LawnRoomFrame app={app} title="Seasonal Pack">
-        <SeasonTimeline app={app} />
-      </LawnRoomFrame>
-    );
-  }
-
-  return (
-    <>
-      <LawnAlerts app={app} />
-      <LawnHub app={app} />
-    </>
-  );
-}
-</file>
-
 <file path="src/components/lawn/LawnMaterials.jsx">
 import React, { useMemo, useState } from 'react';
 
@@ -2625,6 +2390,241 @@ export default async function handler(req, res) {
 }
 </file>
 
+<file path="src/components/lawn/LawnHub.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatSyncTimeAgo } from '../../utils/lawnDates';
+import { CalculatorIcon } from './LawnMaterials';
+
+/**
+ * Hub home for sectioned themes.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnHub({ app }) {
+  const {
+    sqm,
+    length,
+    width,
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    setActiveScreen,
+    setActiveRoom,
+    mowingDue,
+    wateringDue,
+    verticutDue,
+    gypsumDue,
+    seedEstablishmentActive,
+    petLockoutActive,
+    springPackIncomplete,
+    incompleteSpringSteps,
+    currentSeason,
+    weatherStatusText,
+    weatherLocationLabel,
+  } = app;
+
+  const dueCount = [mowingDue, wateringDue, verticutDue, gypsumDue].filter(Boolean).length;
+
+  const syncLabel =
+    cloudSyncStatus === 'pulling'
+      ? 'Pull…'
+      : cloudSyncStatus === 'pushing'
+        ? 'Push…'
+        : cloudSyncStatus === 'error'
+          ? 'Retry'
+          : cloudSyncStatus === 'idle'
+            ? 'Sync'
+            : null;
+
+  const rooms = [
+    {
+      id: 'maintenance',
+      title: 'Maintenance',
+      meta: dueCount > 0 ? `${dueCount} due` : seedEstablishmentActive ? 'Seed lock' : 'Up to date',
+      tone: dueCount > 0 || seedEstablishmentActive ? 'alert' : 'ok',
+      icon: '✂️',
+    },
+    {
+      id: 'seasonal',
+      title: 'Seasonal Pack',
+      meta: springPackIncomplete
+        ? `${incompleteSpringSteps.length} Spring left`
+        : SEASONS[currentSeason]?.name ?? 'Open',
+      tone: springPackIncomplete ? 'warn' : 'ok',
+      icon: '📋',
+    },
+  ];
+
+  return (
+    <div className="lawn-hub">
+      <header className="lawn-hub__hero">
+        <h2 className="lawn-hub__title">
+          <span className="lawn-hub__sqm">{sqm} SQM</span>
+        </h2>
+        <p className="lawn-hub__lede">
+          <span className="lawn-hub__dims">
+            {length}m × {width}m
+          </span>
+        </p>
+      </header>
+
+      {(petLockoutActive || springPackIncomplete) && (
+        <div className="lawn-hub__notices" aria-live="polite">
+          {petLockoutActive && (
+            <p className="lawn-hub__notice lawn-hub__notice--alert">
+              Chemical drying — pets off the lawn for now.
+            </p>
+          )}
+          {springPackIncomplete && (
+            <p className="lawn-hub__notice lawn-hub__notice--warn">
+              Spring Pack still in progress — open Seasonal Pack to finish.
+            </p>
+          )}
+        </div>
+      )}
+
+      <section className="lawn-hub__weather" aria-label="Weather">
+        <p className="lawn-hub__weather-text">
+          {weatherLocationLabel}: {weatherStatusText}
+        </p>
+      </section>
+
+      <section className="lawn-hub__rooms" aria-label="Sections">
+        <div className="lawn-hub__room-grid">
+          {rooms.map((room) => (
+            <button
+              key={room.id}
+              type="button"
+              className={`lawn-hub__room lawn-hub__room--${room.tone}`}
+              onClick={() => setActiveRoom(room.id)}
+            >
+              <span className="lawn-hub__room-icon" aria-hidden="true">
+                {room.icon}
+              </span>
+              <span className="lawn-hub__room-copy">
+                <span className="lawn-hub__room-title">{room.title}</span>
+              </span>
+              <span className="lawn-hub__room-meta">{room.meta}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="lawn-hub__tools" aria-label="Tools">
+        <div className="lawn-hub__tool-grid">
+          <button
+            type="button"
+            onClick={() => void runFullCloudSync()}
+            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
+            className="lawn-hub__tool"
+            title={
+              cloudSyncStatus === 'synced' && lastCloudSyncAt
+                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
+                : 'Sync schedule to cloud'
+            }
+          >
+            <span aria-hidden="true">
+              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
+            </span>
+            <span>{syncLabel ?? 'Synced'}</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('materials')} className="lawn-hub__tool">
+            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
+            <span>Materials</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('guides')} className="lawn-hub__tool">
+            <span aria-hidden="true">📚</span>
+            <span>Guides</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('settings')} className="lawn-hub__tool">
+            <span aria-hidden="true">⚙️</span>
+            <span>Setup</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/lawn/LawnMainView.jsx">
+import React from 'react';
+import MaintenancePanel from './MaintenancePanel';
+import SeasonTimeline from './SeasonTimeline';
+import LawnWorkflow from './LawnWorkflow';
+import LawnHub from './LawnHub';
+import LawnAlerts from './LawnAlerts';
+
+/**
+ * Room chrome for sectioned themes — keeps deep-link DOM ids mounted inside the active room.
+ * @param {{
+ *   app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>,
+ *   title: string,
+ *   children: React.ReactNode,
+ * }} props
+ */
+function LawnRoomFrame({ app, title, children }) {
+  return (
+    <div className="lawn-room">
+      <div className="lawn-room__bar">
+        <button
+          type="button"
+          className="lawn-room__back"
+          onClick={() => app.setActiveRoom('hub')}
+        >
+          ← Home
+        </button>
+        <h2 className="lawn-room__title">{title}</h2>
+        <button
+          type="button"
+          className="lawn-room__setup"
+          onClick={() => app.setActiveScreen('settings')}
+        >
+          Setup
+        </button>
+      </div>
+      <LawnAlerts app={app} />
+      <div className="lawn-room__body">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Main content switcher: classic long page vs sectioned rooms.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnMainView({ app }) {
+  const { activeTheme, activeRoom } = app;
+
+  if (activeTheme.layout === 'classic') {
+    return <LawnWorkflow app={app} />;
+  }
+
+  if (activeRoom === 'maintenance') {
+    return (
+      <LawnRoomFrame app={app} title="Maintenance">
+        <MaintenancePanel app={app} />
+      </LawnRoomFrame>
+    );
+  }
+
+  if (activeRoom === 'seasonal') {
+    return (
+      <LawnRoomFrame app={app} title="Seasonal Pack">
+        <SeasonTimeline app={app} />
+      </LawnRoomFrame>
+    );
+  }
+
+  return (
+    <>
+      <LawnAlerts app={app} />
+      <LawnHub app={app} />
+    </>
+  );
+}
+</file>
+
 <file path="src/lib/googleSignIn.js">
 import {
   APP_OAUTH_LABEL,
@@ -3750,14 +3750,6 @@ export function withTaskUserId(row, userId) {
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-}
-
-.lawn-hub__room-blurb {
-  display: block;
-  margin-top: 0.2rem;
-  font-size: 0.72rem;
-  line-height: 1.35;
-  color: var(--lawn-muted);
 }
 
 .lawn-hub__room-meta {
@@ -7823,106 +7815,6 @@ export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
 }
 </file>
 
-<file path="src/App.jsx">
-import React from 'react';
-import AppUpdatePrompt from './components/AppUpdatePrompt';
-import LawnCareApp from './components/lawn/LawnCareApp';
-import LoginPage from './pages/LoginPage';
-import { useAuth } from './state/AuthContext';
-import { getLawnTheme, LAWN_THEME_STORAGE_KEY, readStoredLawnThemeId } from './data/lawnThemes';
-
-function useDocumentLawnTheme() {
-  const [themeId, setThemeId] = React.useState(() => readStoredLawnThemeId());
-
-  React.useEffect(() => {
-    const onStorage = (event) => {
-      if (event.key === LAWN_THEME_STORAGE_KEY && event.newValue) {
-        setThemeId(event.newValue);
-      }
-    };
-    const onThemeChange = (event) => {
-      if (event?.detail?.themeId) setThemeId(event.detail.themeId);
-    };
-    window.addEventListener('storage', onStorage);
-    window.addEventListener('lawn-theme-change', onThemeChange);
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('lawn-theme-change', onThemeChange);
-    };
-  }, []);
-
-  return getLawnTheme(themeId);
-}
-
-export default function App() {
-  const { isAuthenticated, loading, signOut, user } = useAuth();
-  const theme = useDocumentLawnTheme();
-
-  if (loading || !isAuthenticated) {
-    return (
-      <>
-        <AppUpdatePrompt />
-        <LoginPage loading={loading} />
-      </>
-    );
-  }
-
-  return (
-    <>
-      <AppUpdatePrompt />
-      <div
-        className="lawn-app-page min-h-screen py-4 sm:py-8"
-        data-lawn-theme={theme.id}
-        data-lawn-layout={theme.layout}
-        style={{
-          ['--lawn-font-display']: theme.fontDisplay,
-          ['--lawn-font-body']: theme.fontBody,
-        }}
-      >
-        <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
-          <header className="lawn-app-header text-center mb-6">
-            <div className="flex items-center justify-end mb-2">
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                className="lawn-sign-out inline-flex items-center justify-center w-10 h-10 rounded-xl border"
-                aria-label="Sign out"
-                title={user?.email ? `Sign out (${user.email})` : 'Sign out'}
-              >
-                <svg
-                  className="w-5 h-5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-              </button>
-            </div>
-            <h1 className="lawn-app-brand">Lawn Pack</h1>
-            <p className="lawn-app-subhead">Companion</p>
-          </header>
-
-          <main>
-            <LawnCareApp />
-          </main>
-
-          <footer className="lawn-app-footer text-center text-[10px] mt-6 font-semibold">
-            Lawn Pack Companion
-          </footer>
-        </div>
-      </div>
-    </>
-  );
-}
-</file>
-
 <file path="src/server/runLawnCloudSync.js">
 /**
  * Server-side full lawn sync (same pipeline as Lawn app “Sync” button).
@@ -8178,6 +8070,106 @@ export async function runLawnCloudSync() {
   );
 
   return { ok: true, taskCount: compiledTasks.length };
+}
+</file>
+
+<file path="src/App.jsx">
+import React from 'react';
+import AppUpdatePrompt from './components/AppUpdatePrompt';
+import LawnCareApp from './components/lawn/LawnCareApp';
+import LoginPage from './pages/LoginPage';
+import { useAuth } from './state/AuthContext';
+import { getLawnTheme, LAWN_THEME_STORAGE_KEY, readStoredLawnThemeId } from './data/lawnThemes';
+
+function useDocumentLawnTheme() {
+  const [themeId, setThemeId] = React.useState(() => readStoredLawnThemeId());
+
+  React.useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key === LAWN_THEME_STORAGE_KEY && event.newValue) {
+        setThemeId(event.newValue);
+      }
+    };
+    const onThemeChange = (event) => {
+      if (event?.detail?.themeId) setThemeId(event.detail.themeId);
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('lawn-theme-change', onThemeChange);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('lawn-theme-change', onThemeChange);
+    };
+  }, []);
+
+  return getLawnTheme(themeId);
+}
+
+export default function App() {
+  const { isAuthenticated, loading, signOut, user } = useAuth();
+  const theme = useDocumentLawnTheme();
+
+  if (loading || !isAuthenticated) {
+    return (
+      <>
+        <AppUpdatePrompt />
+        <LoginPage loading={loading} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <AppUpdatePrompt />
+      <div
+        className="lawn-app-page min-h-screen py-4 sm:py-8"
+        data-lawn-theme={theme.id}
+        data-lawn-layout={theme.layout}
+        style={{
+          ['--lawn-font-display']: theme.fontDisplay,
+          ['--lawn-font-body']: theme.fontBody,
+        }}
+      >
+        <div className="w-full max-w-xl mx-auto px-3 sm:px-4">
+          <header className="lawn-app-header text-center mb-6">
+            <div className="flex items-center justify-end mb-2">
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="lawn-sign-out inline-flex items-center justify-center w-10 h-10 rounded-xl border"
+                aria-label="Sign out"
+                title={user?.email ? `Sign out (${user.email})` : 'Sign out'}
+              >
+                <svg
+                  className="w-5 h-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
+            </div>
+            <h1 className="lawn-app-brand">Lawn Pack</h1>
+            <p className="lawn-app-subhead">Companion</p>
+          </header>
+
+          <main>
+            <LawnCareApp />
+          </main>
+
+          <footer className="lawn-app-footer text-center text-[10px] mt-6 font-semibold">
+            Lawn Pack Companion
+          </footer>
+        </div>
+      </div>
+    </>
+  );
 }
 </file>
 
