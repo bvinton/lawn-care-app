@@ -83,6 +83,7 @@ import {
   LAWN_THEME_STORAGE_KEY,
   readStoredLawnThemeId,
   resolveFocusRoom,
+  isSectionedLayout,
 } from '../data/lawnThemes';
 import {
   getPostSeedRecoveryMowerHeightRecommendation,
@@ -152,7 +153,9 @@ export function useLawnCareApp() {
   const [weatherLocationSaving, setWeatherLocationSaving] = useState(false);
   const [activeScreen, setActiveScreen] = useState('main');
   const [themeId, setThemeIdState] = useState(() => readStoredLawnThemeId());
-  const [activeRoom, setActiveRoom] = useState(/** @type {'hub' | 'maintenance' | 'seasonal'} */ ('hub'));
+  const [activeRoom, setActiveRoom] = useState(
+    /** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ ('hub')
+  );
   const activeTheme = getLawnTheme(themeId);
 
   const setThemeId = useCallback((nextId) => {
@@ -1122,7 +1125,7 @@ export function useLawnCareApp() {
     }
 
     const room = resolveFocusRoom(focusRaw);
-    if (activeTheme.layout === 'rooms' && room) {
+    if (isSectionedLayout(activeTheme.layout) && room) {
       setActiveRoom(room);
       setActiveScreen('main');
     }
@@ -1136,7 +1139,7 @@ export function useLawnCareApp() {
     const pack = parsePackStepFocus(focusRaw);
     if (pack && currentSeason !== pack.season) return;
 
-    if (activeTheme.layout === 'rooms') {
+    if (isSectionedLayout(activeTheme.layout)) {
       const room = resolveFocusRoom(focusRaw);
       if (room && activeRoom !== room) return;
     }

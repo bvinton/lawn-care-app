@@ -5,6 +5,7 @@ import {
   useRegisterBackHandler,
 } from '../../hooks/useMobileBackNavigation';
 import { pushAppHistoryState } from '../../utils/backNavigation';
+import { isSectionedLayout } from '../../data/lawnThemes';
 import LawnSettings from './LawnSettings';
 import LawnMainView from './LawnMainView';
 import LawnGuides from './LawnGuides';
@@ -13,16 +14,17 @@ import SprinklerLightbox from './SprinklerLightbox';
 
 export default function LawnCareApp() {
   const app = useLawnCareApp();
+  const sectioned = isSectionedLayout(app.activeTheme.layout);
 
   const isAtRoot = useCallback(
     () =>
       app.activeScreen === 'main' &&
-      (app.activeTheme.layout === 'classic' || app.activeRoom === 'hub') &&
+      (!sectioned || app.activeRoom === 'hub') &&
       !app.enlargedSprinkler &&
       !app.showLevellingGuide,
     [
       app.activeScreen,
-      app.activeTheme.layout,
+      sectioned,
       app.activeRoom,
       app.enlargedSprinkler,
       app.showLevellingGuide,
@@ -31,12 +33,12 @@ export default function LawnCareApp() {
 
   const onReturnToMain = useCallback(() => {
     app.setActiveScreen('main');
-    if (app.activeTheme.layout === 'rooms') {
+    if (sectioned) {
       app.setActiveRoom('hub');
     }
     app.setShowLevellingGuide(false);
     app.setEnlargedSprinkler(null);
-  }, [app]);
+  }, [app, sectioned]);
 
   useMobileBackNavigation({ isAtRoot, onReturnToMain });
 
@@ -47,10 +49,10 @@ export default function LawnCareApp() {
   }, [app.activeScreen]);
 
   useEffect(() => {
-    if (app.activeTheme.layout === 'rooms' && app.activeRoom !== 'hub' && app.activeScreen === 'main') {
+    if (sectioned && app.activeRoom !== 'hub' && app.activeScreen === 'main') {
       pushAppHistoryState({ room: app.activeRoom });
     }
-  }, [app.activeRoom, app.activeTheme.layout, app.activeScreen]);
+  }, [app.activeRoom, sectioned, app.activeScreen]);
 
   useEffect(() => {
     if (app.enlargedSprinkler) {
@@ -81,16 +83,12 @@ export default function LawnCareApp() {
   }, Boolean(app.showLevellingGuide));
 
   useRegisterBackHandler(() => {
-    if (
-      app.activeTheme.layout === 'rooms' &&
-      app.activeScreen === 'main' &&
-      app.activeRoom !== 'hub'
-    ) {
+    if (sectioned && app.activeScreen === 'main' && app.activeRoom !== 'hub') {
       app.setActiveRoom('hub');
       return true;
     }
     return false;
-  }, app.activeTheme.layout === 'rooms' && app.activeScreen === 'main' && app.activeRoom !== 'hub');
+  }, sectioned && app.activeScreen === 'main' && app.activeRoom !== 'hub');
 
   return (
     <div

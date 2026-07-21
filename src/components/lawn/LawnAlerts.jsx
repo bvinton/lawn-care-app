@@ -1,6 +1,7 @@
 import React from 'react';
 import { SEASONS } from '../../data/LawnPackData';
 import { formatDisplayDate } from '../../utils/lawnDates';
+import { isSectionedLayout } from '../../data/lawnThemes';
 
 /** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
 export default function LawnAlerts({ app }) {
@@ -28,7 +29,7 @@ export default function LawnAlerts({ app }) {
   const openSpringPack = () => {
     setCurrentSeason('SPRING');
     setSeasonManuallySelected(true);
-    if (activeTheme.layout === 'rooms') {
+    if (isSectionedLayout(activeTheme.layout)) {
       setActiveRoom('seasonal');
     }
   };

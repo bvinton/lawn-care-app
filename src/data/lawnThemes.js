@@ -1,4 +1,4 @@
-/** @typedef {'classic' | 'rooms'} LawnThemeLayout */
+/** @typedef {'classic' | 'rooms' | 'tabs' | 'today'} LawnThemeLayout */
 
 /**
  * @typedef {Object} LawnTheme
@@ -30,9 +30,9 @@ export const LAWN_THEMES = [
   {
     id: 'atelier',
     name: 'Atelier',
-    tagline: 'Sectioned rooms · calm workshop',
+    tagline: 'Home hub · separate rooms',
     description:
-      'Home hub with separate rooms for Maintenance and Seasonal Pack. Soft moss tones, clear places for each job.',
+      'Calm moss look. Home screen with Maintenance and Seasonal Pack as separate rooms you open one at a time.',
     layout: 'rooms',
     swatches: ['#1a3a2a', '#c5d9c8', '#f3f7f4', '#2f6b4f'],
     fontDisplay: '"Bricolage Grotesque", Georgia, serif',
@@ -41,22 +41,22 @@ export const LAWN_THEMES = [
   {
     id: 'signal',
     name: 'Signal',
-    tagline: 'Sectioned rooms · neat & crisp',
+    tagline: 'Bottom tabs · status board',
     description:
-      'Same roomed layout with cooler slate/sage and tighter typography — built for a neat-freak glance.',
-    layout: 'rooms',
-    swatches: ['#0f172a', '#94a3b8', '#f1f5f9', '#3f6f5a'],
+      'Cool slate utility layout. Persistent bottom tabs (Status, Care, Pack, More) and a dense status board — not a room hub.',
+    layout: 'tabs',
+    swatches: ['#0b1220', '#64748b', '#e2e8f0', '#0f766e'],
     fontDisplay: '"Space Grotesk", "Segoe UI", sans-serif',
     fontBody: '"IBM Plex Sans", "Segoe UI", sans-serif',
   },
   {
     id: 'canopy',
     name: 'Canopy',
-    tagline: 'Sectioned rooms · outdoor atmosphere',
+    tagline: 'Today queue · top segments',
     description:
-      'Roomed layout with deeper greens and a leafy backdrop so each section feels like its own space.',
-    layout: 'rooms',
-    swatches: ['#052e16', '#86efac', '#ecfdf5', '#166534'],
+      'Deep green, immersive. Starts on a Today queue of what’s due, with Care / Pack as top segments — different navigation and colour world.',
+    layout: 'today',
+    swatches: ['#03160d', '#14532d', '#ecfdf5', '#4ade80'],
     fontDisplay: '"Fraunces", Georgia, serif',
     fontBody: '"Karla", "Segoe UI", sans-serif',
   },
@@ -64,9 +64,17 @@ export const LAWN_THEMES = [
 
 export const DEFAULT_LAWN_THEME_ID = 'classic';
 
+/** Layouts that use section navigation via activeRoom (not the classic long page). */
+export const SECTIONED_LAYOUTS = new Set(['rooms', 'tabs', 'today']);
+
 /** @param {string | null | undefined} id */
 export function getLawnTheme(id) {
   return LAWN_THEMES.find((theme) => theme.id === id) ?? LAWN_THEMES[0];
+}
+
+/** @param {string | null | undefined} layout */
+export function isSectionedLayout(layout) {
+  return SECTIONED_LAYOUTS.has(layout);
 }
 
 /** @returns {string} */
@@ -81,7 +89,7 @@ export function readStoredLawnThemeId() {
 }
 
 /**
- * Map a Tasks deep-link focus target to a rooms section.
+ * Map a Tasks deep-link focus target to a section room.
  * @param {string | null | undefined} focusRaw
  * @returns {'hub' | 'maintenance' | 'seasonal' | null}
  */

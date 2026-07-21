@@ -139,6 +139,8 @@ src/
       LawnMainView.jsx
       LawnMaterials.jsx
       LawnSettings.jsx
+      LawnStatusBoard.jsx
+      LawnTodayBoard.jsx
       LawnWorkflow.jsx
       MaintenancePanel.jsx
       SeasonTimeline.jsx
@@ -208,6 +210,349 @@ vite.config.js
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/components/lawn/LawnStatusBoard.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
+
+/**
+ * Signal layout — dense status board (not a room hub).
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnStatusBoard({ app }) {
+  const {
+    sqm,
+    length,
+    width,
+    mowingDue,
+    wateringDue,
+    verticutDue,
+    gypsumDue,
+    seedEstablishmentActive,
+    mowingNextDate,
+    wateringNextDate,
+    verticutNextDate,
+    gypsumDueDate,
+    currentSeason,
+    springPackIncomplete,
+    incompleteSpringSteps,
+    weatherStatusText,
+    weatherLocationLabel,
+    currentSoilTemp,
+    setActiveRoom,
+    petLockoutActive,
+    petLockoutHoursRemaining,
+  } = app;
+
+  const cells = [
+    {
+      id: 'mow',
+      label: 'Mow',
+      due: mowingDue,
+      detail: seedEstablishmentActive ? 'Locked' : mowingNextDate ? `Next ${mowingNextDate}` : '—',
+      go: 'maintenance',
+    },
+    {
+      id: 'water',
+      label: 'Water',
+      due: wateringDue,
+      detail: wateringNextDate ? `Next ${wateringNextDate}` : '—',
+      go: 'maintenance',
+    },
+    {
+      id: 'verticut',
+      label: 'Verticut',
+      due: verticutDue,
+      detail: verticutNextDate ? `Next ${verticutNextDate}` : '—',
+      go: 'maintenance',
+    },
+    {
+      id: 'gypsum',
+      label: 'Gypsum',
+      due: gypsumDue,
+      detail: gypsumDueDate ? formatDisplayDate(gypsumDueDate) : '—',
+      go: 'maintenance',
+    },
+  ];
+
+  return (
+    <div className="lawn-signal">
+      <header className="lawn-signal__head">
+        <div>
+          <p className="lawn-signal__kicker">{weatherLocationLabel}</p>
+          <h2 className="lawn-signal__title">{sqm} m²</h2>
+        </div>
+        <div className="lawn-signal__meta">
+          <span>
+            {length}×{width}m
+          </span>
+          <span>{currentSoilTemp != null ? `${currentSoilTemp.toFixed(0)}°C soil` : 'Soil —'}</span>
+        </div>
+      </header>
+
+      <p className="lawn-signal__weather">{weatherStatusText}</p>
+
+      {(petLockoutActive || springPackIncomplete) && (
+        <div className="lawn-signal__flags">
+          {petLockoutActive && (
+            <p className="lawn-signal__flag">Pets off · {petLockoutHoursRemaining}h</p>
+          )}
+          {springPackIncomplete && (
+            <button
+              type="button"
+              className="lawn-signal__flag lawn-signal__flag--btn"
+              onClick={() => setActiveRoom('seasonal')}
+            >
+              Spring Pack · {incompleteSpringSteps.length} left
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="lawn-signal__grid" role="list">
+        {cells.map((cell) => (
+          <button
+            key={cell.id}
+            type="button"
+            role="listitem"
+            className={`lawn-signal__cell${cell.due ? ' is-due' : ''}`}
+            onClick={() => setActiveRoom(cell.go)}
+          >
+            <span className="lawn-signal__cell-label">{cell.label}</span>
+            <span className="lawn-signal__cell-state">{cell.due ? 'Due' : 'OK'}</span>
+            <span className="lawn-signal__cell-detail">{cell.detail}</span>
+          </button>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        className="lawn-signal__season"
+        onClick={() => setActiveRoom('seasonal')}
+      >
+        <span>{SEASONS[currentSeason]?.name ?? 'Season'}</span>
+        <span aria-hidden="true">→</span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Tools pane for Signal "More" tab.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export function LawnSignalMore({ app }) {
+  const {
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    setActiveScreen,
+  } = app;
+
+  const syncLabel =
+    cloudSyncStatus === 'pulling'
+      ? 'Pulling…'
+      : cloudSyncStatus === 'pushing'
+        ? 'Pushing…'
+        : cloudSyncStatus === 'error'
+          ? 'Retry sync'
+          : cloudSyncStatus === 'synced' && lastCloudSyncAt
+            ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)}`
+            : 'Sync';
+
+  const items = [
+    {
+      key: 'sync',
+      label: syncLabel,
+      onClick: () => void runFullCloudSync(),
+      disabled: cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing',
+    },
+    { key: 'materials', label: 'Materials', onClick: () => setActiveScreen('materials') },
+    { key: 'guides', label: 'Guides', onClick: () => setActiveScreen('guides') },
+    { key: 'settings', label: 'Setup', onClick: () => setActiveScreen('settings') },
+  ];
+
+  return (
+    <div className="lawn-signal-more">
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          className="lawn-signal-more__row"
+          onClick={item.onClick}
+          disabled={Boolean(item.disabled)}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/lawn/LawnTodayBoard.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
+
+/**
+ * Canopy layout — today queue (due-first), not a room hub or tab board.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnTodayBoard({ app }) {
+  const {
+    sqm,
+    mowingDue,
+    wateringDue,
+    verticutDue,
+    gypsumDue,
+    seedEstablishmentActive,
+    seedDaysRemaining,
+    mowingNextDate,
+    wateringNextDate,
+    verticutNextDate,
+    gypsumDueDate,
+    currentSeason,
+    springPackIncomplete,
+    incompleteSpringSteps,
+    weatherStatusText,
+    weatherLocationLabel,
+    setActiveRoom,
+    setActiveScreen,
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    petLockoutActive,
+    petLockoutHoursRemaining,
+    todayStr,
+  } = app;
+
+  /** @type {{ id: string, title: string, detail: string, go: 'maintenance' | 'seasonal' | 'settings', urgent: boolean }[]} */
+  const queue = [];
+
+  if (petLockoutActive) {
+    queue.push({
+      id: 'pets',
+      title: 'Pet lockout',
+      detail: `Safe in ${petLockoutHoursRemaining}h`,
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (seedEstablishmentActive) {
+    queue.push({
+      id: 'seed',
+      title: 'No mowing',
+      detail: `${seedDaysRemaining} day${seedDaysRemaining !== 1 ? 's' : ''} left on seed lock`,
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (mowingDue && !seedEstablishmentActive) {
+    queue.push({
+      id: 'mow',
+      title: 'Mow',
+      detail: mowingNextDate ? `Was due ${mowingNextDate}` : 'Due',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (wateringDue) {
+    queue.push({
+      id: 'water',
+      title: 'Water',
+      detail: wateringNextDate ? `Was due ${wateringNextDate}` : 'Due',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (verticutDue) {
+    queue.push({
+      id: 'verticut',
+      title: 'Verticut',
+      detail: verticutNextDate ? `Was due ${verticutNextDate}` : 'Due',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (gypsumDue) {
+    queue.push({
+      id: 'gypsum',
+      title: 'Gypsum',
+      detail: gypsumDueDate ? formatDisplayDate(gypsumDueDate) : 'Due',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (springPackIncomplete) {
+    queue.push({
+      id: 'spring',
+      title: 'Spring Pack',
+      detail: `${incompleteSpringSteps.length} step${incompleteSpringSteps.length !== 1 ? 's' : ''} left`,
+      go: 'seasonal',
+      urgent: true,
+    });
+  }
+
+  if (queue.length === 0) {
+    queue.push({
+      id: 'clear',
+      title: 'Nothing due',
+      detail: `${SEASONS[currentSeason]?.name ?? 'Season'} · ${sqm} m²`,
+      go: 'maintenance',
+      urgent: false,
+    });
+  }
+
+  const dateLabel = formatDisplayDate(todayStr);
+  const syncBusy = cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing';
+
+  return (
+    <div className="lawn-canopy">
+      <header className="lawn-canopy__hero">
+        <p className="lawn-canopy__date">{dateLabel}</p>
+        <h2 className="lawn-canopy__place">{weatherLocationLabel}</h2>
+        <p className="lawn-canopy__weather">{weatherStatusText}</p>
+      </header>
+
+      <ol className="lawn-canopy__queue">
+        {queue.map((item) => (
+          <li key={item.id}>
+            <button
+              type="button"
+              className={`lawn-canopy__item${item.urgent ? ' is-urgent' : ''}`}
+              onClick={() => setActiveRoom(item.go)}
+            >
+              <span className="lawn-canopy__item-title">{item.title}</span>
+              <span className="lawn-canopy__item-detail">{item.detail}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      <div className="lawn-canopy__dock">
+        <button type="button" onClick={() => void runFullCloudSync()} disabled={syncBusy}>
+          {syncBusy
+            ? 'Syncing…'
+            : cloudSyncStatus === 'synced' && lastCloudSyncAt
+              ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)}`
+              : 'Sync'}
+        </button>
+        <button type="button" onClick={() => setActiveScreen('materials')}>
+          Materials
+        </button>
+        <button type="button" onClick={() => setActiveScreen('guides')}>
+          Guides
+        </button>
+        <button type="button" onClick={() => setActiveScreen('settings')}>
+          Setup
+        </button>
+      </div>
+    </div>
+  );
+}
+</file>
 
 <file path=".cursor/rules/git-workflow.mdc">
 ---
@@ -638,6 +983,7 @@ for (const { name, size } of sizes) {
 import React from 'react';
 import { SEASONS } from '../../data/LawnPackData';
 import { formatDisplayDate } from '../../utils/lawnDates';
+import { isSectionedLayout } from '../../data/lawnThemes';
 
 /** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
 export default function LawnAlerts({ app }) {
@@ -665,7 +1011,7 @@ export default function LawnAlerts({ app }) {
   const openSpringPack = () => {
     setCurrentSeason('SPRING');
     setSeasonManuallySelected(true);
-    if (activeTheme.layout === 'rooms') {
+    if (isSectionedLayout(activeTheme.layout)) {
       setActiveRoom('seasonal');
     }
   };
@@ -1200,7 +1546,7 @@ export default function AppUpdatePrompt() {
 </file>
 
 <file path="src/data/lawnThemes.js">
-/** @typedef {'classic' | 'rooms'} LawnThemeLayout */
+/** @typedef {'classic' | 'rooms' | 'tabs' | 'today'} LawnThemeLayout */
 
 /**
  * @typedef {Object} LawnTheme
@@ -1232,9 +1578,9 @@ export const LAWN_THEMES = [
   {
     id: 'atelier',
     name: 'Atelier',
-    tagline: 'Sectioned rooms · calm workshop',
+    tagline: 'Home hub · separate rooms',
     description:
-      'Home hub with separate rooms for Maintenance and Seasonal Pack. Soft moss tones, clear places for each job.',
+      'Calm moss look. Home screen with Maintenance and Seasonal Pack as separate rooms you open one at a time.',
     layout: 'rooms',
     swatches: ['#1a3a2a', '#c5d9c8', '#f3f7f4', '#2f6b4f'],
     fontDisplay: '"Bricolage Grotesque", Georgia, serif',
@@ -1243,22 +1589,22 @@ export const LAWN_THEMES = [
   {
     id: 'signal',
     name: 'Signal',
-    tagline: 'Sectioned rooms · neat & crisp',
+    tagline: 'Bottom tabs · status board',
     description:
-      'Same roomed layout with cooler slate/sage and tighter typography — built for a neat-freak glance.',
-    layout: 'rooms',
-    swatches: ['#0f172a', '#94a3b8', '#f1f5f9', '#3f6f5a'],
+      'Cool slate utility layout. Persistent bottom tabs (Status, Care, Pack, More) and a dense status board — not a room hub.',
+    layout: 'tabs',
+    swatches: ['#0b1220', '#64748b', '#e2e8f0', '#0f766e'],
     fontDisplay: '"Space Grotesk", "Segoe UI", sans-serif',
     fontBody: '"IBM Plex Sans", "Segoe UI", sans-serif',
   },
   {
     id: 'canopy',
     name: 'Canopy',
-    tagline: 'Sectioned rooms · outdoor atmosphere',
+    tagline: 'Today queue · top segments',
     description:
-      'Roomed layout with deeper greens and a leafy backdrop so each section feels like its own space.',
-    layout: 'rooms',
-    swatches: ['#052e16', '#86efac', '#ecfdf5', '#166534'],
+      'Deep green, immersive. Starts on a Today queue of what’s due, with Care / Pack as top segments — different navigation and colour world.',
+    layout: 'today',
+    swatches: ['#03160d', '#14532d', '#ecfdf5', '#4ade80'],
     fontDisplay: '"Fraunces", Georgia, serif',
     fontBody: '"Karla", "Segoe UI", sans-serif',
   },
@@ -1266,9 +1612,17 @@ export const LAWN_THEMES = [
 
 export const DEFAULT_LAWN_THEME_ID = 'classic';
 
+/** Layouts that use section navigation via activeRoom (not the classic long page). */
+export const SECTIONED_LAYOUTS = new Set(['rooms', 'tabs', 'today']);
+
 /** @param {string | null | undefined} id */
 export function getLawnTheme(id) {
   return LAWN_THEMES.find((theme) => theme.id === id) ?? LAWN_THEMES[0];
+}
+
+/** @param {string | null | undefined} layout */
+export function isSectionedLayout(layout) {
+  return SECTIONED_LAYOUTS.has(layout);
 }
 
 /** @returns {string} */
@@ -1283,7 +1637,7 @@ export function readStoredLawnThemeId() {
 }
 
 /**
- * Map a Tasks deep-link focus target to a rooms section.
+ * Map a Tasks deep-link focus target to a section room.
  * @param {string | null | undefined} focusRaw
  * @returns {'hub' | 'maintenance' | 'seasonal' | null}
  */
@@ -2554,26 +2908,28 @@ import SeasonTimeline from './SeasonTimeline';
 import LawnWorkflow from './LawnWorkflow';
 import LawnHub from './LawnHub';
 import LawnAlerts from './LawnAlerts';
+import LawnStatusBoard, { LawnSignalMore } from './LawnStatusBoard';
+import LawnTodayBoard from './LawnTodayBoard';
 
 /**
- * Room chrome for sectioned themes — keeps deep-link DOM ids mounted inside the active room.
  * @param {{
  *   app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>,
  *   title: string,
+ *   onBack?: (() => void) | null,
  *   children: React.ReactNode,
  * }} props
  */
-function LawnRoomFrame({ app, title, children }) {
+function LawnRoomFrame({ app, title, onBack = null, children }) {
   return (
     <div className="lawn-room">
       <div className="lawn-room__bar">
-        <button
-          type="button"
-          className="lawn-room__back"
-          onClick={() => app.setActiveRoom('hub')}
-        >
-          ← Home
-        </button>
+        {onBack ? (
+          <button type="button" className="lawn-room__back" onClick={onBack}>
+            ← Back
+          </button>
+        ) : (
+          <span className="lawn-room__back lawn-room__back--spacer" aria-hidden="true" />
+        )}
         <h2 className="lawn-room__title">{title}</h2>
         <button
           type="button"
@@ -2590,19 +2946,146 @@ function LawnRoomFrame({ app, title, children }) {
 }
 
 /**
- * Main content switcher: classic long page vs sectioned rooms.
+ * Signal — bottom tabs.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+function LawnTabsLayout({ app }) {
+  const { activeRoom, setActiveRoom } = app;
+  const tab = activeRoom === 'maintenance' || activeRoom === 'seasonal' || activeRoom === 'more'
+    ? activeRoom
+    : 'hub';
+
+  const tabs = [
+    { id: 'hub', label: 'Status' },
+    { id: 'maintenance', label: 'Care' },
+    { id: 'seasonal', label: 'Pack' },
+    { id: 'more', label: 'More' },
+  ];
+
+  let body = null;
+  if (tab === 'maintenance') {
+    body = (
+      <div className="lawn-panel-surface">
+        <MaintenancePanel app={app} />
+      </div>
+    );
+  } else if (tab === 'seasonal') {
+    body = (
+      <div className="lawn-panel-surface">
+        <SeasonTimeline app={app} />
+      </div>
+    );
+  } else if (tab === 'more') {
+    body = <LawnSignalMore app={app} />;
+  } else {
+    body = (
+      <>
+        <LawnAlerts app={app} />
+        <LawnStatusBoard app={app} />
+      </>
+    );
+  }
+
+  return (
+    <div className="lawn-tabs">
+      <div className="lawn-tabs__body">{body}</div>
+      <nav className="lawn-tabs__nav" aria-label="Primary">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`lawn-tabs__tab${tab === item.id ? ' is-active' : ''}`}
+            onClick={() => setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))}
+            aria-current={tab === item.id ? 'page' : undefined}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+/**
+ * Canopy — top segments + today queue.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+function LawnTodayLayout({ app }) {
+  const { activeRoom, setActiveRoom } = app;
+  const segment =
+    activeRoom === 'maintenance' || activeRoom === 'seasonal' ? activeRoom : 'hub';
+
+  const segments = [
+    { id: 'hub', label: 'Today' },
+    { id: 'maintenance', label: 'Care' },
+    { id: 'seasonal', label: 'Pack' },
+  ];
+
+  return (
+    <div className="lawn-today-layout">
+      <nav className="lawn-today-layout__segments" aria-label="Primary">
+        {segments.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`lawn-today-layout__seg${segment === item.id ? ' is-active' : ''}`}
+            onClick={() => setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal'} */ (item.id))}
+            aria-current={segment === item.id ? 'page' : undefined}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+      <div className="lawn-today-layout__body">
+        {segment === 'maintenance' ? (
+          <>
+            <LawnAlerts app={app} />
+            <div className="lawn-panel-surface">
+              <MaintenancePanel app={app} />
+            </div>
+          </>
+        ) : segment === 'seasonal' ? (
+          <>
+            <LawnAlerts app={app} />
+            <div className="lawn-panel-surface">
+              <SeasonTimeline app={app} />
+            </div>
+          </>
+        ) : (
+          <>
+            <LawnAlerts app={app} />
+            <LawnTodayBoard app={app} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Main content switcher across classic / rooms / tabs / today.
  * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
  */
 export default function LawnMainView({ app }) {
-  const { activeTheme, activeRoom } = app;
+  const { activeTheme, activeRoom, setActiveRoom } = app;
+  const layout = activeTheme.layout;
 
-  if (activeTheme.layout === 'classic') {
+  if (layout === 'classic') {
     return <LawnWorkflow app={app} />;
   }
 
+  if (layout === 'tabs') {
+    return <LawnTabsLayout app={app} />;
+  }
+
+  if (layout === 'today') {
+    return <LawnTodayLayout app={app} />;
+  }
+
+  // rooms (Atelier)
   if (activeRoom === 'maintenance') {
     return (
-      <LawnRoomFrame app={app} title="Maintenance">
+      <LawnRoomFrame app={app} title="Maintenance" onBack={() => setActiveRoom('hub')}>
         <MaintenancePanel app={app} />
       </LawnRoomFrame>
     );
@@ -2610,7 +3093,7 @@ export default function LawnMainView({ app }) {
 
   if (activeRoom === 'seasonal') {
     return (
-      <LawnRoomFrame app={app} title="Seasonal Pack">
+      <LawnRoomFrame app={app} title="Seasonal Pack" onBack={() => setActiveRoom('hub')}>
         <SeasonTimeline app={app} />
       </LawnRoomFrame>
     );
@@ -3451,423 +3934,6 @@ export function withTaskUserId(row, userId) {
     return row;
   }
   return { ...row, user_id: userId };
-}
-</file>
-
-<file path="src/index.css">
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --lawn-font-display: "Segoe UI", system-ui, sans-serif;
-  --lawn-font-body: "Segoe UI", system-ui, sans-serif;
-  --lawn-page-bg: #f3f4f6;
-  --lawn-page-ink: #052e16;
-  --lawn-shell-bg: #ffffff;
-  --lawn-shell-border: #dcfce7;
-  --lawn-shell-radius: 0.75rem;
-  --lawn-shell-shadow: 0 4px 14px rgba(20, 83, 45, 0.08);
-  --lawn-accent: #166534;
-  --lawn-accent-soft: #dcfce7;
-  --lawn-muted: #4b5563;
-  --lawn-hub-room-bg: #ffffff;
-  --lawn-hub-room-border: #e5e7eb;
-}
-
-.lawn-focus-highlight {
-  outline: 3px solid #16a34a;
-  outline-offset: 4px;
-  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
-  transition: outline 0.25s ease, box-shadow 0.25s ease;
-}
-
-.lawn-app-page {
-  background: var(--lawn-page-bg);
-  color: var(--lawn-page-ink);
-  font-family: var(--lawn-font-body);
-}
-
-.lawn-app-brand {
-  font-family: var(--lawn-font-display);
-  font-size: 1.75rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--lawn-page-ink);
-  line-height: 1.1;
-}
-
-.lawn-app-subhead {
-  margin-top: 0.25rem;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--lawn-accent);
-}
-
-.lawn-app-footer {
-  color: color-mix(in srgb, var(--lawn-muted) 80%, transparent);
-}
-
-.lawn-sign-out {
-  border-color: color-mix(in srgb, var(--lawn-page-ink) 12%, transparent);
-  background: color-mix(in srgb, var(--lawn-shell-bg) 92%, white);
-  color: var(--lawn-muted);
-}
-
-.lawn-app-shell {
-  background: var(--lawn-shell-bg);
-  border: 1px solid var(--lawn-shell-border);
-  border-radius: var(--lawn-shell-radius);
-  box-shadow: var(--lawn-shell-shadow);
-  padding: 1rem;
-  font-family: var(--lawn-font-body);
-}
-
-@media (min-width: 640px) {
-  .lawn-app-shell {
-    padding: 1.5rem;
-  }
-}
-
-/* —— Classic keeps the original dense feel —— */
-[data-lawn-theme='classic'] {
-  --lawn-page-bg: #f3f4f6;
-  --lawn-page-ink: #052e16;
-  --lawn-shell-bg: #ffffff;
-  --lawn-shell-border: #dcfce7;
-  --lawn-accent: #166534;
-  --lawn-accent-soft: #dcfce7;
-}
-
-/* —— Atelier: calm moss workshop, sectioned —— */
-[data-lawn-theme='atelier'] {
-  --lawn-page-bg:
-    radial-gradient(1200px 500px at 10% -10%, #d7e8db 0%, transparent 55%),
-    linear-gradient(165deg, #eef5f0 0%, #dce8df 48%, #cfdfd3 100%);
-  --lawn-page-ink: #1a3a2a;
-  --lawn-shell-bg: rgba(255, 255, 255, 0.82);
-  --lawn-shell-border: rgba(47, 107, 79, 0.18);
-  --lawn-shell-radius: 1.25rem;
-  --lawn-shell-shadow: 0 18px 40px rgba(26, 58, 42, 0.1);
-  --lawn-accent: #2f6b4f;
-  --lawn-accent-soft: #c5d9c8;
-  --lawn-muted: #3f5a4b;
-  --lawn-hub-room-bg: rgba(255, 255, 255, 0.92);
-  --lawn-hub-room-border: rgba(47, 107, 79, 0.16);
-}
-
-/* —— Signal: crisp slate/sage neat freak —— */
-[data-lawn-theme='signal'] {
-  --lawn-page-bg:
-    linear-gradient(180deg, #e8eef2 0%, #f1f5f9 40%, #dde5ec 100%);
-  --lawn-page-ink: #0f172a;
-  --lawn-shell-bg: #f8fafc;
-  --lawn-shell-border: #cbd5e1;
-  --lawn-shell-radius: 0.5rem;
-  --lawn-shell-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 12px 28px rgba(15, 23, 42, 0.06);
-  --lawn-accent: #3f6f5a;
-  --lawn-accent-soft: #d7e4dc;
-  --lawn-muted: #475569;
-  --lawn-hub-room-bg: #ffffff;
-  --lawn-hub-room-border: #cbd5e1;
-}
-
-[data-lawn-theme='signal'] .lawn-app-brand {
-  letter-spacing: -0.05em;
-  font-weight: 700;
-}
-
-[data-lawn-theme='signal'] .lawn-app-shell {
-  border-width: 1px;
-}
-
-/* —— Canopy: deeper outdoor atmosphere —— */
-[data-lawn-theme='canopy'] {
-  --lawn-page-bg:
-    radial-gradient(900px 420px at 80% 0%, rgba(134, 239, 172, 0.35), transparent 60%),
-    linear-gradient(160deg, #064e3b 0%, #0b3d2e 42%, #052e16 100%);
-  --lawn-page-ink: #ecfdf5;
-  --lawn-shell-bg: rgba(236, 253, 245, 0.96);
-  --lawn-shell-border: rgba(167, 243, 208, 0.45);
-  --lawn-shell-radius: 1.5rem;
-  --lawn-shell-shadow: 0 24px 50px rgba(0, 0, 0, 0.28);
-  --lawn-accent: #166534;
-  --lawn-accent-soft: #bbf7d0;
-  --lawn-muted: #334155;
-  --lawn-hub-room-bg: #ffffff;
-  --lawn-hub-room-border: rgba(22, 101, 52, 0.15);
-}
-
-[data-lawn-theme='canopy'] .lawn-app-brand,
-[data-lawn-theme='canopy'] .lawn-app-subhead,
-[data-lawn-theme='canopy'] .lawn-app-footer,
-[data-lawn-theme='canopy'] .lawn-sign-out {
-  color: #ecfdf5;
-}
-
-[data-lawn-theme='canopy'] .lawn-app-subhead {
-  color: #86efac;
-}
-
-[data-lawn-theme='canopy'] .lawn-sign-out {
-  border-color: rgba(236, 253, 245, 0.25);
-  background: rgba(5, 46, 22, 0.35);
-}
-
-[data-lawn-theme='canopy'] .lawn-app-footer {
-  color: rgba(236, 253, 245, 0.55);
-}
-
-/* Inner content on canopy stays dark-on-light */
-[data-lawn-theme='canopy'] .lawn-app-shell {
-  color: #0f172a;
-}
-
-/* —— Hub / rooms —— */
-.lawn-hub__hero {
-  margin-bottom: 1.25rem;
-  animation: lawn-rise 420ms ease-out both;
-}
-
-.lawn-hub__eyebrow {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--lawn-accent);
-  margin-bottom: 0.35rem;
-}
-
-.lawn-hub__title {
-  font-family: var(--lawn-font-display);
-  font-size: 1.55rem;
-  font-weight: 750;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  color: var(--lawn-page-ink);
-}
-
-[data-lawn-theme='canopy'] .lawn-hub__title,
-[data-lawn-theme='atelier'] .lawn-hub__title,
-[data-lawn-theme='signal'] .lawn-hub__title {
-  color: inherit;
-}
-
-.lawn-hub__lede {
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.lawn-hub__sqm {
-  font-weight: 800;
-  font-size: 0.95rem;
-}
-
-.lawn-hub__dims {
-  font-size: 0.8rem;
-  color: var(--lawn-muted);
-}
-
-.lawn-hub__weather,
-.lawn-hub__rooms,
-.lawn-hub__tools,
-.lawn-hub__notices {
-  margin-bottom: 1.15rem;
-  animation: lawn-rise 480ms ease-out both;
-}
-
-.lawn-hub__rooms {
-  animation-delay: 60ms;
-}
-
-.lawn-hub__tools {
-  animation-delay: 120ms;
-}
-
-.lawn-hub__weather {
-  border: 1px solid var(--lawn-hub-room-border);
-  background: color-mix(in srgb, var(--lawn-accent-soft) 35%, white);
-  border-radius: 0.9rem;
-  padding: 0.85rem 1rem;
-}
-
-.lawn-hub__weather-text {
-  font-size: 0.8rem;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-.lawn-hub__room-grid,
-.lawn-hub__tool-grid {
-  display: grid;
-  gap: 0.65rem;
-}
-
-.lawn-hub__room {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0.75rem;
-  align-items: center;
-  text-align: left;
-  border: 1px solid var(--lawn-hub-room-border);
-  background: var(--lawn-hub-room-bg);
-  border-radius: 1rem;
-  padding: 0.95rem 1rem;
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
-}
-
-.lawn-hub__room:hover,
-.lawn-hub__room:focus-visible {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--lawn-accent) 45%, var(--lawn-hub-room-border));
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-  outline: none;
-}
-
-.lawn-hub__room--alert {
-  border-color: #f59e0b;
-  background: #fffbeb;
-}
-
-.lawn-hub__room--warn {
-  border-color: #fbbf24;
-  background: #fffbeb;
-}
-
-.lawn-hub__room-icon {
-  font-size: 1.25rem;
-  line-height: 1;
-}
-
-.lawn-hub__room-title {
-  display: block;
-  font-family: var(--lawn-font-display);
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.lawn-hub__room-meta {
-  font-size: 0.65rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--lawn-accent);
-  white-space: nowrap;
-}
-
-.lawn-hub__tool-grid {
-  grid-template-columns: 1fr 1fr;
-}
-
-.lawn-hub__tool {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  min-height: 2.6rem;
-  border-radius: 0.85rem;
-  border: 1px solid var(--lawn-hub-room-border);
-  background: var(--lawn-hub-room-bg);
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: inherit;
-  transition: background 140ms ease, border-color 140ms ease;
-}
-
-.lawn-hub__tool:hover {
-  border-color: color-mix(in srgb, var(--lawn-accent) 40%, var(--lawn-hub-room-border));
-  background: color-mix(in srgb, var(--lawn-accent-soft) 45%, white);
-}
-
-.lawn-hub__notice {
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 0.75rem;
-  padding: 0.65rem 0.8rem;
-  margin-bottom: 0.5rem;
-}
-
-.lawn-hub__notice--alert {
-  background: #fff7ed;
-  border: 1px solid #fdba74;
-  color: #9a3412;
-}
-
-.lawn-hub__notice--warn {
-  background: #fffbeb;
-  border: 1px solid #fcd34d;
-  color: #92400e;
-}
-
-.lawn-room__bar {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--lawn-hub-room-border);
-}
-
-.lawn-room__back,
-.lawn-room__setup {
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.45rem 0.7rem;
-  border-radius: 0.65rem;
-  border: 1px solid var(--lawn-hub-room-border);
-  background: color-mix(in srgb, var(--lawn-accent-soft) 40%, white);
-  color: inherit;
-}
-
-.lawn-room__title {
-  font-family: var(--lawn-font-display);
-  text-align: center;
-  font-size: 1.05rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-}
-
-[data-lawn-theme='signal'] .lawn-hub__room,
-[data-lawn-theme='signal'] .lawn-hub__tool,
-[data-lawn-theme='signal'] .lawn-hub__weather {
-  border-radius: 0.4rem;
-}
-
-[data-lawn-theme='atelier'] .lawn-hub__room {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-/* In sectioned rooms, stack each maintenance tracker full-width — one job per block */
-[data-lawn-layout='rooms'] #maintenance-panel .grid.lg\:grid-cols-3 {
-  grid-template-columns: 1fr;
-}
-
-@keyframes lawn-rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lawn-hub__hero,
-  .lawn-hub__weather,
-  .lawn-hub__rooms,
-  .lawn-hub__tools,
-  .lawn-hub__notices {
-    animation: none;
-  }
 }
 </file>
 
@@ -4993,6 +5059,771 @@ export function applyLawnFocusFromUrl(options = {}) {
 }
 </file>
 
+<file path="src/index.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --lawn-font-display: "Segoe UI", system-ui, sans-serif;
+  --lawn-font-body: "Segoe UI", system-ui, sans-serif;
+  --lawn-page-bg: #f3f4f6;
+  --lawn-page-ink: #052e16;
+  --lawn-shell-bg: #ffffff;
+  --lawn-shell-border: #dcfce7;
+  --lawn-shell-radius: 0.75rem;
+  --lawn-shell-shadow: 0 4px 14px rgba(20, 83, 45, 0.08);
+  --lawn-accent: #166534;
+  --lawn-accent-soft: #dcfce7;
+  --lawn-muted: #4b5563;
+  --lawn-hub-room-bg: #ffffff;
+  --lawn-hub-room-border: #e5e7eb;
+}
+
+.lawn-focus-highlight {
+  outline: 3px solid #16a34a;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
+  transition: outline 0.25s ease, box-shadow 0.25s ease;
+}
+
+.lawn-app-page {
+  background: var(--lawn-page-bg);
+  color: var(--lawn-page-ink);
+  font-family: var(--lawn-font-body);
+}
+
+.lawn-app-brand {
+  font-family: var(--lawn-font-display);
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--lawn-page-ink);
+  line-height: 1.1;
+}
+
+.lawn-app-subhead {
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--lawn-accent);
+}
+
+.lawn-app-footer {
+  color: color-mix(in srgb, var(--lawn-muted) 80%, transparent);
+}
+
+.lawn-sign-out {
+  border-color: color-mix(in srgb, var(--lawn-page-ink) 12%, transparent);
+  background: color-mix(in srgb, var(--lawn-shell-bg) 92%, white);
+  color: var(--lawn-muted);
+}
+
+.lawn-app-shell {
+  background: var(--lawn-shell-bg);
+  border: 1px solid var(--lawn-shell-border);
+  border-radius: var(--lawn-shell-radius);
+  box-shadow: var(--lawn-shell-shadow);
+  padding: 1rem;
+  font-family: var(--lawn-font-body);
+}
+
+@media (min-width: 640px) {
+  .lawn-app-shell {
+    padding: 1.5rem;
+  }
+}
+
+/* —— Classic keeps the original dense feel —— */
+[data-lawn-theme='classic'] {
+  --lawn-page-bg: #f3f4f6;
+  --lawn-page-ink: #052e16;
+  --lawn-shell-bg: #ffffff;
+  --lawn-shell-border: #dcfce7;
+  --lawn-accent: #166534;
+  --lawn-accent-soft: #dcfce7;
+}
+
+/* —— Atelier: calm moss workshop, sectioned —— */
+[data-lawn-theme='atelier'] {
+  --lawn-page-bg:
+    radial-gradient(1200px 500px at 10% -10%, #d7e8db 0%, transparent 55%),
+    linear-gradient(165deg, #eef5f0 0%, #dce8df 48%, #cfdfd3 100%);
+  --lawn-page-ink: #1a3a2a;
+  --lawn-shell-bg: rgba(255, 255, 255, 0.82);
+  --lawn-shell-border: rgba(47, 107, 79, 0.18);
+  --lawn-shell-radius: 1.25rem;
+  --lawn-shell-shadow: 0 18px 40px rgba(26, 58, 42, 0.1);
+  --lawn-accent: #2f6b4f;
+  --lawn-accent-soft: #c5d9c8;
+  --lawn-muted: #3f5a4b;
+  --lawn-hub-room-bg: rgba(255, 255, 255, 0.92);
+  --lawn-hub-room-border: rgba(47, 107, 79, 0.16);
+}
+
+/* —— Signal: cool utility, bottom tabs + status grid —— */
+[data-lawn-theme='signal'] {
+  --lawn-page-bg: #0b1220;
+  --lawn-page-ink: #e2e8f0;
+  --lawn-shell-bg: #111827;
+  --lawn-shell-border: #1f2937;
+  --lawn-shell-radius: 0.35rem;
+  --lawn-shell-shadow: 0 0 0 1px rgba(148, 163, 184, 0.08);
+  --lawn-accent: #2dd4bf;
+  --lawn-accent-soft: #134e4a;
+  --lawn-muted: #94a3b8;
+  --lawn-hub-room-bg: #0f172a;
+  --lawn-hub-room-border: #334155;
+}
+
+[data-lawn-theme='signal'] .lawn-app-brand {
+  letter-spacing: -0.06em;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+[data-lawn-theme='signal'] .lawn-app-subhead {
+  color: #2dd4bf;
+}
+
+[data-lawn-theme='signal'] .lawn-app-footer,
+[data-lawn-theme='signal'] .lawn-sign-out {
+  color: #94a3b8;
+}
+
+[data-lawn-theme='signal'] .lawn-sign-out {
+  border-color: #334155;
+  background: #0f172a;
+}
+
+[data-lawn-theme='signal'] .lawn-app-shell {
+  color: #e2e8f0;
+  padding-bottom: 0.5rem;
+}
+
+[data-lawn-theme='signal'] .lawn-focus-highlight {
+  outline-color: #2dd4bf;
+  box-shadow: 0 0 0 6px rgba(45, 212, 191, 0.2);
+}
+
+/* —— Canopy: immersive dark green, today-first —— */
+[data-lawn-theme='canopy'] {
+  --lawn-page-bg:
+    radial-gradient(800px 380px at 70% -5%, rgba(74, 222, 128, 0.18), transparent 55%),
+    linear-gradient(165deg, #03160d 0%, #052e16 45%, #0a1f14 100%);
+  --lawn-page-ink: #ecfdf5;
+  --lawn-shell-bg: transparent;
+  --lawn-shell-border: transparent;
+  --lawn-shell-radius: 0;
+  --lawn-shell-shadow: none;
+  --lawn-accent: #4ade80;
+  --lawn-accent-soft: #14532d;
+  --lawn-muted: #a7f3d0;
+  --lawn-hub-room-bg: rgba(6, 40, 23, 0.72);
+  --lawn-hub-room-border: rgba(74, 222, 128, 0.22);
+}
+
+[data-lawn-theme='canopy'] .lawn-app-brand,
+[data-lawn-theme='canopy'] .lawn-app-subhead,
+[data-lawn-theme='canopy'] .lawn-app-footer,
+[data-lawn-theme='canopy'] .lawn-sign-out {
+  color: #ecfdf5;
+}
+
+[data-lawn-theme='canopy'] .lawn-app-subhead {
+  color: #86efac;
+}
+
+[data-lawn-theme='canopy'] .lawn-sign-out {
+  border-color: rgba(236, 253, 245, 0.22);
+  background: rgba(5, 46, 22, 0.45);
+}
+
+[data-lawn-theme='canopy'] .lawn-app-footer {
+  color: rgba(236, 253, 245, 0.5);
+}
+
+[data-lawn-theme='canopy'] .lawn-app-shell {
+  color: #ecfdf5;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+[data-lawn-theme='canopy'] .lawn-focus-highlight {
+  outline-color: #4ade80;
+  box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.25);
+}
+
+/* —— Hub / rooms (Atelier) —— */
+.lawn-hub__hero {
+  margin-bottom: 1.25rem;
+  animation: lawn-rise 420ms ease-out both;
+}
+
+.lawn-hub__title {
+  font-family: var(--lawn-font-display);
+  font-size: 1.55rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: inherit;
+}
+
+.lawn-hub__lede {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lawn-hub__sqm {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.lawn-hub__dims {
+  font-size: 0.8rem;
+  color: var(--lawn-muted);
+}
+
+.lawn-hub__weather,
+.lawn-hub__rooms,
+.lawn-hub__tools,
+.lawn-hub__notices {
+  margin-bottom: 1.15rem;
+  animation: lawn-rise 480ms ease-out both;
+}
+
+.lawn-hub__rooms {
+  animation-delay: 60ms;
+}
+
+.lawn-hub__tools {
+  animation-delay: 120ms;
+}
+
+.lawn-hub__weather {
+  border: 1px solid var(--lawn-hub-room-border);
+  background: color-mix(in srgb, var(--lawn-accent-soft) 35%, white);
+  border-radius: 0.9rem;
+  padding: 0.85rem 1rem;
+}
+
+.lawn-hub__weather-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.lawn-hub__room-grid,
+.lawn-hub__tool-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lawn-hub__room {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: var(--lawn-hub-room-bg);
+  border-radius: 1rem;
+  padding: 0.95rem 1rem;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.lawn-hub__room:hover,
+.lawn-hub__room:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lawn-accent) 45%, var(--lawn-hub-room-border));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  outline: none;
+}
+
+.lawn-hub__room--alert {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.lawn-hub__room--warn {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.lawn-hub__room-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.lawn-hub__room-title {
+  display: block;
+  font-family: var(--lawn-font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lawn-hub__room-meta {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--lawn-accent);
+  white-space: nowrap;
+}
+
+.lawn-hub__tool-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.lawn-hub__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.6rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: var(--lawn-hub-room-bg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: inherit;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.lawn-hub__tool:hover {
+  border-color: color-mix(in srgb, var(--lawn-accent) 40%, var(--lawn-hub-room-border));
+  background: color-mix(in srgb, var(--lawn-accent-soft) 45%, white);
+}
+
+.lawn-hub__notice {
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.lawn-hub__notice--alert {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+}
+
+.lawn-hub__notice--warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.lawn-room__bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--lawn-hub-room-border);
+}
+
+.lawn-room__back,
+.lawn-room__setup {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: color-mix(in srgb, var(--lawn-accent-soft) 40%, white);
+  color: inherit;
+}
+
+.lawn-room__back--spacer {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.lawn-room__title {
+  font-family: var(--lawn-font-display);
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+[data-lawn-theme='atelier'] .lawn-hub__room {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* —— Signal status board + tabs —— */
+.lawn-tabs {
+  display: flex;
+  flex-direction: column;
+  min-height: 28rem;
+}
+
+.lawn-tabs__body {
+  flex: 1;
+  padding-bottom: 0.75rem;
+}
+
+.lawn-tabs__nav {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.25rem;
+  margin: 0.5rem -0.25rem 0;
+  padding: 0.4rem;
+  border: 1px solid #334155;
+  background: #0b1220;
+  border-radius: 0.35rem;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+}
+
+.lawn-tabs__tab {
+  min-height: 2.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  border-radius: 0.25rem;
+  border: 1px solid transparent;
+}
+
+.lawn-tabs__tab.is-active {
+  color: #0b1220;
+  background: #2dd4bf;
+  border-color: #2dd4bf;
+}
+
+.lawn-signal__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #334155;
+}
+
+.lawn-signal__kicker {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.lawn-signal__title {
+  font-family: var(--lawn-font-display);
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  margin-top: 0.2rem;
+}
+
+.lawn-signal__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.lawn-signal__weather {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  margin-bottom: 0.85rem;
+}
+
+.lawn-signal__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.lawn-signal__flag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #f59e0b;
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.35);
+}
+
+.lawn-signal__flag--btn {
+  cursor: pointer;
+}
+
+.lawn-signal__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.lawn-signal__cell {
+  text-align: left;
+  border: 1px solid #334155;
+  background: #0f172a;
+  padding: 0.7rem 0.75rem;
+  min-height: 5.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.lawn-signal__cell.is-due {
+  border-color: #f59e0b;
+  background: #1c1917;
+}
+
+.lawn-signal__cell-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.lawn-signal__cell-state {
+  font-family: var(--lawn-font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.lawn-signal__cell.is-due .lawn-signal__cell-state {
+  color: #fbbf24;
+}
+
+.lawn-signal__cell-detail {
+  margin-top: auto;
+  font-size: 0.68rem;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.lawn-signal__season {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #334155;
+  background: #0f172a;
+  padding: 0.75rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.lawn-signal-more {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.lawn-signal-more__row {
+  text-align: left;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #334155;
+  background: #0f172a;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.lawn-signal-more__row:disabled {
+  opacity: 0.55;
+}
+
+.lawn-panel-surface {
+  background: #f8fafc;
+  color: #0f172a;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+[data-lawn-theme='canopy'] .lawn-panel-surface {
+  background: rgba(236, 253, 245, 0.96);
+  border-color: rgba(167, 243, 208, 0.35);
+  border-radius: 1rem;
+}
+
+/* Signal panels that still use light utility cards (maintenance) */
+[data-lawn-theme='signal'] .lawn-panel-surface {
+  background: #f1f5f9;
+  border-color: #334155;
+  border-radius: 0.35rem;
+}
+
+/* —— Canopy today layout —— */
+.lawn-today-layout__segments {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.3rem;
+  border-radius: 999px;
+  background: rgba(4, 47, 28, 0.75);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+}
+
+.lawn-today-layout__seg {
+  min-height: 2.35rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #a7f3d0;
+}
+
+.lawn-today-layout__seg.is-active {
+  background: #4ade80;
+  color: #052e16;
+}
+
+.lawn-canopy__hero {
+  margin-bottom: 1.25rem;
+  padding: 1.1rem 1rem 1.25rem;
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(145deg, rgba(20, 83, 45, 0.55), rgba(6, 40, 23, 0.35));
+  border: 1px solid rgba(74, 222, 128, 0.18);
+  animation: lawn-rise 450ms ease-out both;
+}
+
+.lawn-canopy__date {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #86efac;
+}
+
+.lawn-canopy__place {
+  margin-top: 0.35rem;
+  font-family: var(--lawn-font-display);
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.lawn-canopy__weather {
+  margin-top: 0.55rem;
+  font-size: 0.85rem;
+  color: #bbf7d0;
+  line-height: 1.35;
+}
+
+.lawn-canopy__queue {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.lawn-canopy__item {
+  width: 100%;
+  text-align: left;
+  padding: 1rem 1.05rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(167, 243, 208, 0.18);
+  background: rgba(6, 40, 23, 0.65);
+  display: grid;
+  gap: 0.25rem;
+  animation: lawn-rise 500ms ease-out both;
+}
+
+.lawn-canopy__item.is-urgent {
+  border-color: rgba(250, 204, 21, 0.45);
+  background: rgba(66, 32, 6, 0.55);
+}
+
+.lawn-canopy__item-title {
+  font-family: var(--lawn-font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lawn-canopy__item-detail {
+  font-size: 0.78rem;
+  color: #a7f3d0;
+}
+
+.lawn-canopy__dock {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.lawn-canopy__dock button {
+  min-height: 2.5rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(167, 243, 208, 0.2);
+  background: rgba(4, 47, 28, 0.7);
+  color: #ecfdf5;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.lawn-canopy__dock button:disabled {
+  opacity: 0.55;
+}
+
+/* Stack maintenance trackers in sectioned layouts */
+[data-lawn-layout='rooms'] #maintenance-panel .grid.lg\:grid-cols-3,
+[data-lawn-layout='tabs'] #maintenance-panel .grid.lg\:grid-cols-3,
+[data-lawn-layout='today'] #maintenance-panel .grid.lg\:grid-cols-3 {
+  grid-template-columns: 1fr;
+}
+
+/* Canopy: keep dense forms readable on dark shell */
+[data-lawn-theme='canopy'] .lawn-panel-surface {
+  color: #0f172a;
+}
+
+@keyframes lawn-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lawn-hub__hero,
+  .lawn-hub__weather,
+  .lawn-hub__rooms,
+  .lawn-hub__tools,
+  .lawn-hub__notices,
+  .lawn-canopy__hero,
+  .lawn-canopy__item {
+    animation: none;
+  }
+}
+</file>
+
 <file path="index.html">
 <!doctype html>
 <html lang="en-GB">
@@ -5068,6 +5899,7 @@ import {
   useRegisterBackHandler,
 } from '../../hooks/useMobileBackNavigation';
 import { pushAppHistoryState } from '../../utils/backNavigation';
+import { isSectionedLayout } from '../../data/lawnThemes';
 import LawnSettings from './LawnSettings';
 import LawnMainView from './LawnMainView';
 import LawnGuides from './LawnGuides';
@@ -5076,16 +5908,17 @@ import SprinklerLightbox from './SprinklerLightbox';
 
 export default function LawnCareApp() {
   const app = useLawnCareApp();
+  const sectioned = isSectionedLayout(app.activeTheme.layout);
 
   const isAtRoot = useCallback(
     () =>
       app.activeScreen === 'main' &&
-      (app.activeTheme.layout === 'classic' || app.activeRoom === 'hub') &&
+      (!sectioned || app.activeRoom === 'hub') &&
       !app.enlargedSprinkler &&
       !app.showLevellingGuide,
     [
       app.activeScreen,
-      app.activeTheme.layout,
+      sectioned,
       app.activeRoom,
       app.enlargedSprinkler,
       app.showLevellingGuide,
@@ -5094,12 +5927,12 @@ export default function LawnCareApp() {
 
   const onReturnToMain = useCallback(() => {
     app.setActiveScreen('main');
-    if (app.activeTheme.layout === 'rooms') {
+    if (sectioned) {
       app.setActiveRoom('hub');
     }
     app.setShowLevellingGuide(false);
     app.setEnlargedSprinkler(null);
-  }, [app]);
+  }, [app, sectioned]);
 
   useMobileBackNavigation({ isAtRoot, onReturnToMain });
 
@@ -5110,10 +5943,10 @@ export default function LawnCareApp() {
   }, [app.activeScreen]);
 
   useEffect(() => {
-    if (app.activeTheme.layout === 'rooms' && app.activeRoom !== 'hub' && app.activeScreen === 'main') {
+    if (sectioned && app.activeRoom !== 'hub' && app.activeScreen === 'main') {
       pushAppHistoryState({ room: app.activeRoom });
     }
-  }, [app.activeRoom, app.activeTheme.layout, app.activeScreen]);
+  }, [app.activeRoom, sectioned, app.activeScreen]);
 
   useEffect(() => {
     if (app.enlargedSprinkler) {
@@ -5144,16 +5977,12 @@ export default function LawnCareApp() {
   }, Boolean(app.showLevellingGuide));
 
   useRegisterBackHandler(() => {
-    if (
-      app.activeTheme.layout === 'rooms' &&
-      app.activeScreen === 'main' &&
-      app.activeRoom !== 'hub'
-    ) {
+    if (sectioned && app.activeScreen === 'main' && app.activeRoom !== 'hub') {
       app.setActiveRoom('hub');
       return true;
     }
     return false;
-  }, app.activeTheme.layout === 'rooms' && app.activeScreen === 'main' && app.activeRoom !== 'hub');
+  }, sectioned && app.activeScreen === 'main' && app.activeRoom !== 'hub');
 
   return (
     <div
@@ -9598,6 +10427,7 @@ import {
   LAWN_THEME_STORAGE_KEY,
   readStoredLawnThemeId,
   resolveFocusRoom,
+  isSectionedLayout,
 } from '../data/lawnThemes';
 import {
   getPostSeedRecoveryMowerHeightRecommendation,
@@ -9667,7 +10497,9 @@ export function useLawnCareApp() {
   const [weatherLocationSaving, setWeatherLocationSaving] = useState(false);
   const [activeScreen, setActiveScreen] = useState('main');
   const [themeId, setThemeIdState] = useState(() => readStoredLawnThemeId());
-  const [activeRoom, setActiveRoom] = useState(/** @type {'hub' | 'maintenance' | 'seasonal'} */ ('hub'));
+  const [activeRoom, setActiveRoom] = useState(
+    /** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ ('hub')
+  );
   const activeTheme = getLawnTheme(themeId);
 
   const setThemeId = useCallback((nextId) => {
@@ -10637,7 +11469,7 @@ export function useLawnCareApp() {
     }
 
     const room = resolveFocusRoom(focusRaw);
-    if (activeTheme.layout === 'rooms' && room) {
+    if (isSectionedLayout(activeTheme.layout) && room) {
       setActiveRoom(room);
       setActiveScreen('main');
     }
@@ -10651,7 +11483,7 @@ export function useLawnCareApp() {
     const pack = parsePackStepFocus(focusRaw);
     if (pack && currentSeason !== pack.season) return;
 
-    if (activeTheme.layout === 'rooms') {
+    if (isSectionedLayout(activeTheme.layout)) {
       const room = resolveFocusRoom(focusRaw);
       if (room && activeRoom !== room) return;
     }
