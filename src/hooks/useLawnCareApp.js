@@ -337,6 +337,9 @@ export function useLawnCareApp() {
   const mowingNextDueIso = maintenanceSchedule.mowingNextDueIso;
   const wateringNextDueIso = maintenanceSchedule.wateringNextDueIso;
   const mowingLockedUntilIso = maintenanceSchedule.mowingLockedUntilIso;
+  const seedRecoveryActive = maintenanceSchedule.seedRecoveryActive;
+  const recoveryDaysRemaining = maintenanceSchedule.recoveryDaysRemaining;
+  const recoveryEndsOnIso = maintenanceSchedule.recoveryEndsOnIso;
   const isVerticutSeason = maintenanceSchedule.isVerticutSeason;
   const renovationHoldActive = maintenanceSchedule.renovationHoldActive;
   const verticutLockedUntilIso = maintenanceSchedule.verticutLockedUntilIso;
@@ -1405,6 +1408,9 @@ export function useLawnCareApp() {
     mowingNextDueIso,
     wateringNextDueIso,
     mowingLockedUntilIso,
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
     isVerticutSeason,
     renovationHoldActive,
     verticutLockedUntilIso,

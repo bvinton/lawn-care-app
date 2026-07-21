@@ -23472,32 +23472,57 @@ function getSeedState(todayStr, springSeedDate, establishmentExtraDays = 0) {
   const mowingLockedUntilIso = seedEstablishmentActive && springSeedDate ? addDaysToDateString(springSeedDate, totalEstablishmentDays) : null;
   return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
 }
-function daysBetweenIso2(todayStr, pastIso) {
-  const start = /* @__PURE__ */ new Date(`${pastIso}T12:00:00`);
-  const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
-  return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
-}
-function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
-  const temp = currentSoilTemp;
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) {
-      return SEED_RECOVERY_MOWING_DAYS;
-    }
+function getSeedRecoveryState(todayStr, springSeedDate, establishmentExtraDays = 0) {
+  if (!springSeedDate) {
+    return {
+      seedRecoveryActive: false,
+      daysSinceSeed: null,
+      recoveryDaysRemaining: 0,
+      recoveryEndsOnIso: null
+    };
   }
+  const daysSinceSeed = daysBetweenIso2(todayStr, springSeedDate);
+  const lockEndsAfterDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
+  const recoveryEndsAfterDays = SEED_RECOVERY_WINDOW_DAYS + establishmentExtraDays;
+  const seedRecoveryActive = daysSinceSeed > lockEndsAfterDays && daysSinceSeed < recoveryEndsAfterDays;
+  const recoveryEndsOnIso = addDaysToDateString(springSeedDate, recoveryEndsAfterDays);
+  const recoveryDaysRemaining = seedRecoveryActive ? Math.max(0, recoveryEndsAfterDays - daysSinceSeed) : 0;
+  return {
+    seedRecoveryActive,
+    daysSinceSeed,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso
+  };
+}
+function getGrowthRateMowingDays(currentSoilTemp) {
+  const temp = currentSoilTemp;
   if (temp !== null && temp < 8) return 14;
   if (temp !== null && temp < 12) return 10;
   if (temp !== null && temp >= 15) return 5;
   return 7;
 }
+function daysBetweenIso2(todayStr, pastIso) {
+  const start = /* @__PURE__ */ new Date(`${pastIso}T12:00:00`);
+  const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
+  return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
+}
+function formatShortUkDate(isoDate) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const dd = String(day).padStart(2, "0");
+  const mm = String(month).padStart(2, "0");
+  return `${dd}/${mm}/${year}`;
+}
+function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
+  const { seedRecoveryActive } = getSeedRecoveryState(todayStr, springSeedDate);
+  if (seedRecoveryActive) return SEED_RECOVERY_MOWING_DAYS;
+  return getGrowthRateMowingDays(currentSoilTemp);
+}
 function getDynamicWateringDays(forecastedRainSumNearTerm, currentSoilTemp, springSeedDate, seedEstablishmentActive, todayStr, recentPastRainSum = 0) {
   const temp = currentSoilTemp;
   const rain = forecastedRainSumNearTerm;
   if (seedEstablishmentActive) return 1;
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) return 2;
-  }
+  const { seedRecoveryActive } = getSeedRecoveryState(todayStr, springSeedDate);
+  if (seedRecoveryActive) return 2;
   if (recentPastRainSum >= 8) return 5;
   if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) return 4;
   if (temp !== null && temp > 20 && rain < 2) return 2;
@@ -23522,22 +23547,36 @@ function getScheduleReason(input) {
   const mowReasons = [];
   const waterReasons = [];
   const verticutReasons = [];
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) {
+  const {
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso
+  } = getSeedRecoveryState(todayStr, springSeedDate);
+  if (seedRecoveryActive && recoveryEndsOnIso) {
+    const endsLabel = formatShortUkDate(recoveryEndsOnIso);
+    const dayWord = recoveryDaysRemaining === 1 ? "day" : "days";
+    const growthRateDays = getGrowthRateMowingDays(temp);
+    const warmWouldCutMoreOften = growthRateDays < SEED_RECOVERY_MOWING_DAYS;
+    mowReasons.push(
+      `spring overseed still establishing \u2014 keep weekly cuts for ${recoveryDaysRemaining} more ${dayWord} (until ${endsLabel})`
+    );
+    if (warmWouldCutMoreOften) {
       mowReasons.push(
-        `${SEED_RECOVERY_MOWING_DAYS}-day recovery cuts \u2014 gradually lower height each mow`
+        `warm soil would normally mean every ${growthRateDays} days, but hold weekly so new roots aren't stressed`
       );
-      waterReasons.push("enhanced watering during turf recovery");
     }
+    mowReasons.push("gradually lower height each cut");
+    waterReasons.push("enhanced watering during turf recovery");
   }
   if (seedEstablishmentActive) {
     waterReasons.push("daily watering during seed establishment");
   }
-  if (temp !== null && temp >= 15) {
-    mowReasons.push(`${temp.toFixed(0)}\xB0C soil \u2013 active growth`);
-  } else if (temp !== null && temp < 10) {
-    mowReasons.push(`${temp.toFixed(0)}\xB0C soil \u2013 slower growth`);
+  if (!seedRecoveryActive) {
+    if (temp !== null && temp >= 15) {
+      mowReasons.push(`${temp.toFixed(0)}\xB0C soil \u2013 active growth`);
+    } else if (temp !== null && temp < 10) {
+      mowReasons.push(`${temp.toFixed(0)}\xB0C soil \u2013 slower growth`);
+    }
   }
   if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) {
     waterReasons.push(
@@ -23592,6 +23631,11 @@ function buildMaintenanceSchedule(input) {
     springSeedDate,
     establishmentExtraDays
   );
+  const {
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso
+  } = getSeedRecoveryState(todayStr, springSeedDate, establishmentExtraDays);
   const isDormantSeason = isDormantSeasonForDate(todayStr);
   const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
   const dynamicWateringDays = getDynamicWateringDays(
@@ -23639,6 +23683,9 @@ function buildMaintenanceSchedule(input) {
     isDormantSeason,
     isNatureProvidingFullSoak,
     seedEstablishmentActive,
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
     mowingLockedUntilIso,
     mowingNextDueIso,
     wateringNextDueIso,
