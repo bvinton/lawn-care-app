@@ -2,9 +2,442 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --lawn-font-display: "Segoe UI", system-ui, sans-serif;
+  --lawn-font-body: "Segoe UI", system-ui, sans-serif;
+  --lawn-page-bg: #f3f4f6;
+  --lawn-page-ink: #052e16;
+  --lawn-shell-bg: #ffffff;
+  --lawn-shell-border: #dcfce7;
+  --lawn-shell-radius: 0.75rem;
+  --lawn-shell-shadow: 0 4px 14px rgba(20, 83, 45, 0.08);
+  --lawn-accent: #166534;
+  --lawn-accent-soft: #dcfce7;
+  --lawn-muted: #4b5563;
+  --lawn-hub-room-bg: #ffffff;
+  --lawn-hub-room-border: #e5e7eb;
+}
+
 .lawn-focus-highlight {
   outline: 3px solid #16a34a;
   outline-offset: 4px;
   box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
   transition: outline 0.25s ease, box-shadow 0.25s ease;
+}
+
+.lawn-app-page {
+  background: var(--lawn-page-bg);
+  color: var(--lawn-page-ink);
+  font-family: var(--lawn-font-body);
+}
+
+.lawn-app-brand {
+  font-family: var(--lawn-font-display);
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--lawn-page-ink);
+  line-height: 1.1;
+}
+
+.lawn-app-subhead {
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--lawn-accent);
+}
+
+.lawn-app-footer {
+  color: color-mix(in srgb, var(--lawn-muted) 80%, transparent);
+}
+
+.lawn-sign-out {
+  border-color: color-mix(in srgb, var(--lawn-page-ink) 12%, transparent);
+  background: color-mix(in srgb, var(--lawn-shell-bg) 92%, white);
+  color: var(--lawn-muted);
+}
+
+.lawn-app-shell {
+  background: var(--lawn-shell-bg);
+  border: 1px solid var(--lawn-shell-border);
+  border-radius: var(--lawn-shell-radius);
+  box-shadow: var(--lawn-shell-shadow);
+  padding: 1rem;
+  font-family: var(--lawn-font-body);
+}
+
+@media (min-width: 640px) {
+  .lawn-app-shell {
+    padding: 1.5rem;
+  }
+}
+
+/* —— Classic keeps the original dense feel —— */
+[data-lawn-theme='classic'] {
+  --lawn-page-bg: #f3f4f6;
+  --lawn-page-ink: #052e16;
+  --lawn-shell-bg: #ffffff;
+  --lawn-shell-border: #dcfce7;
+  --lawn-accent: #166534;
+  --lawn-accent-soft: #dcfce7;
+}
+
+/* —— Atelier: calm moss workshop, sectioned —— */
+[data-lawn-theme='atelier'] {
+  --lawn-page-bg:
+    radial-gradient(1200px 500px at 10% -10%, #d7e8db 0%, transparent 55%),
+    linear-gradient(165deg, #eef5f0 0%, #dce8df 48%, #cfdfd3 100%);
+  --lawn-page-ink: #1a3a2a;
+  --lawn-shell-bg: rgba(255, 255, 255, 0.82);
+  --lawn-shell-border: rgba(47, 107, 79, 0.18);
+  --lawn-shell-radius: 1.25rem;
+  --lawn-shell-shadow: 0 18px 40px rgba(26, 58, 42, 0.1);
+  --lawn-accent: #2f6b4f;
+  --lawn-accent-soft: #c5d9c8;
+  --lawn-muted: #3f5a4b;
+  --lawn-hub-room-bg: rgba(255, 255, 255, 0.92);
+  --lawn-hub-room-border: rgba(47, 107, 79, 0.16);
+}
+
+/* —— Signal: crisp slate/sage neat freak —— */
+[data-lawn-theme='signal'] {
+  --lawn-page-bg:
+    linear-gradient(180deg, #e8eef2 0%, #f1f5f9 40%, #dde5ec 100%);
+  --lawn-page-ink: #0f172a;
+  --lawn-shell-bg: #f8fafc;
+  --lawn-shell-border: #cbd5e1;
+  --lawn-shell-radius: 0.5rem;
+  --lawn-shell-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 12px 28px rgba(15, 23, 42, 0.06);
+  --lawn-accent: #3f6f5a;
+  --lawn-accent-soft: #d7e4dc;
+  --lawn-muted: #475569;
+  --lawn-hub-room-bg: #ffffff;
+  --lawn-hub-room-border: #cbd5e1;
+}
+
+[data-lawn-theme='signal'] .lawn-app-brand {
+  letter-spacing: -0.05em;
+  font-weight: 700;
+}
+
+[data-lawn-theme='signal'] .lawn-app-shell {
+  border-width: 1px;
+}
+
+/* —— Canopy: deeper outdoor atmosphere —— */
+[data-lawn-theme='canopy'] {
+  --lawn-page-bg:
+    radial-gradient(900px 420px at 80% 0%, rgba(134, 239, 172, 0.35), transparent 60%),
+    linear-gradient(160deg, #064e3b 0%, #0b3d2e 42%, #052e16 100%);
+  --lawn-page-ink: #ecfdf5;
+  --lawn-shell-bg: rgba(236, 253, 245, 0.96);
+  --lawn-shell-border: rgba(167, 243, 208, 0.45);
+  --lawn-shell-radius: 1.5rem;
+  --lawn-shell-shadow: 0 24px 50px rgba(0, 0, 0, 0.28);
+  --lawn-accent: #166534;
+  --lawn-accent-soft: #bbf7d0;
+  --lawn-muted: #334155;
+  --lawn-hub-room-bg: #ffffff;
+  --lawn-hub-room-border: rgba(22, 101, 52, 0.15);
+}
+
+[data-lawn-theme='canopy'] .lawn-app-brand,
+[data-lawn-theme='canopy'] .lawn-app-subhead,
+[data-lawn-theme='canopy'] .lawn-app-footer,
+[data-lawn-theme='canopy'] .lawn-sign-out {
+  color: #ecfdf5;
+}
+
+[data-lawn-theme='canopy'] .lawn-app-subhead {
+  color: #86efac;
+}
+
+[data-lawn-theme='canopy'] .lawn-sign-out {
+  border-color: rgba(236, 253, 245, 0.25);
+  background: rgba(5, 46, 22, 0.35);
+}
+
+[data-lawn-theme='canopy'] .lawn-app-footer {
+  color: rgba(236, 253, 245, 0.55);
+}
+
+/* Inner content on canopy stays dark-on-light */
+[data-lawn-theme='canopy'] .lawn-app-shell {
+  color: #0f172a;
+}
+
+/* —— Hub / rooms —— */
+.lawn-hub__hero {
+  margin-bottom: 1.25rem;
+  animation: lawn-rise 420ms ease-out both;
+}
+
+.lawn-hub__eyebrow {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--lawn-accent);
+  margin-bottom: 0.35rem;
+}
+
+.lawn-hub__title {
+  font-family: var(--lawn-font-display);
+  font-size: 1.55rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--lawn-page-ink);
+}
+
+[data-lawn-theme='canopy'] .lawn-hub__title,
+[data-lawn-theme='atelier'] .lawn-hub__title,
+[data-lawn-theme='signal'] .lawn-hub__title {
+  color: inherit;
+}
+
+.lawn-hub__lede {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lawn-hub__sqm {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.lawn-hub__dims {
+  font-size: 0.8rem;
+  color: var(--lawn-muted);
+}
+
+.lawn-hub__theme-note {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--lawn-muted);
+}
+
+.lawn-hub__section-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lawn-muted);
+  margin-bottom: 0.5rem;
+}
+
+.lawn-hub__weather,
+.lawn-hub__rooms,
+.lawn-hub__tools,
+.lawn-hub__notices {
+  margin-bottom: 1.15rem;
+  animation: lawn-rise 480ms ease-out both;
+}
+
+.lawn-hub__rooms {
+  animation-delay: 60ms;
+}
+
+.lawn-hub__tools {
+  animation-delay: 120ms;
+}
+
+.lawn-hub__weather {
+  border: 1px solid var(--lawn-hub-room-border);
+  background: color-mix(in srgb, var(--lawn-accent-soft) 35%, white);
+  border-radius: 0.9rem;
+  padding: 0.85rem 1rem;
+}
+
+.lawn-hub__weather-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.lawn-hub__room-grid,
+.lawn-hub__tool-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lawn-hub__room {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: var(--lawn-hub-room-bg);
+  border-radius: 1rem;
+  padding: 0.95rem 1rem;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.lawn-hub__room:hover,
+.lawn-hub__room:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lawn-accent) 45%, var(--lawn-hub-room-border));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  outline: none;
+}
+
+.lawn-hub__room--alert {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.lawn-hub__room--warn {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.lawn-hub__room-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.lawn-hub__room-title {
+  display: block;
+  font-family: var(--lawn-font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lawn-hub__room-blurb {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--lawn-muted);
+}
+
+.lawn-hub__room-meta {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--lawn-accent);
+  white-space: nowrap;
+}
+
+.lawn-hub__tool-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.lawn-hub__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.6rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: var(--lawn-hub-room-bg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: inherit;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.lawn-hub__tool:hover {
+  border-color: color-mix(in srgb, var(--lawn-accent) 40%, var(--lawn-hub-room-border));
+  background: color-mix(in srgb, var(--lawn-accent-soft) 45%, white);
+}
+
+.lawn-hub__notice {
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.lawn-hub__notice--alert {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+}
+
+.lawn-hub__notice--warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.lawn-room__bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--lawn-hub-room-border);
+}
+
+.lawn-room__back,
+.lawn-room__setup {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: color-mix(in srgb, var(--lawn-accent-soft) 40%, white);
+  color: inherit;
+}
+
+.lawn-room__title {
+  font-family: var(--lawn-font-display);
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.lawn-room__seasonal-intro {
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--lawn-accent-soft) 50%, white);
+  border: 1px solid var(--lawn-hub-room-border);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--lawn-muted);
+}
+
+[data-lawn-theme='signal'] .lawn-hub__room,
+[data-lawn-theme='signal'] .lawn-hub__tool,
+[data-lawn-theme='signal'] .lawn-hub__weather {
+  border-radius: 0.4rem;
+}
+
+[data-lawn-theme='atelier'] .lawn-hub__room {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+@keyframes lawn-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lawn-hub__hero,
+  .lawn-hub__weather,
+  .lawn-hub__rooms,
+  .lawn-hub__tools,
+  .lawn-hub__notices {
+    animation: none;
+  }
 }

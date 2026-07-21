@@ -79,6 +79,12 @@ import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '..
 import { compileAllLawnTasks } from '../utils/compileLawnTasks';
 import { applyLawnFocusFromUrl, getFocusFromUrl, parsePackStepFocus } from '../utils/lawnDeepLink';
 import {
+  getLawnTheme,
+  LAWN_THEME_STORAGE_KEY,
+  readStoredLawnThemeId,
+  resolveFocusRoom,
+} from '../data/lawnThemes';
+import {
   getPostSeedRecoveryMowerHeightRecommendation,
   getSeasonalMowerHeightRecommendation,
 } from '../utils/lawnMowerHeight';
@@ -145,6 +151,20 @@ export function useLawnCareApp() {
   );
   const [weatherLocationSaving, setWeatherLocationSaving] = useState(false);
   const [activeScreen, setActiveScreen] = useState('main');
+  const [themeId, setThemeIdState] = useState(() => readStoredLawnThemeId());
+  const [activeRoom, setActiveRoom] = useState(/** @type {'hub' | 'maintenance' | 'seasonal'} */ ('hub'));
+  const activeTheme = getLawnTheme(themeId);
+
+  const setThemeId = useCallback((nextId) => {
+    setThemeIdState(nextId);
+    try {
+      window.dispatchEvent(
+        new CustomEvent('lawn-theme-change', { detail: { themeId: nextId } })
+      );
+    } catch {
+      /* ignore */
+    }
+  }, []);
   const [showLevellingGuide, setShowLevellingGuide] = useState(false);
   const [jsonCopied, setJsonCopied] = useState(false);
   const [lawnTasksSnapshot, setLawnTasksSnapshot] = useState(
@@ -1081,6 +1101,14 @@ export function useLawnCareApp() {
   ]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(LAWN_THEME_STORAGE_KEY, themeId);
+    } catch {
+      /* ignore */
+    }
+  }, [themeId]);
+
+  useEffect(() => {
     if (!maintenanceHydrated || !userLogsHydrated) return;
 
     const focusRaw = getFocusFromUrl();
@@ -1089,17 +1117,36 @@ export function useLawnCareApp() {
       setCurrentSeason(pack.season);
       setSeasonManuallySelected(true);
     }
-  }, [maintenanceHydrated, userLogsHydrated]);
+
+    const room = resolveFocusRoom(focusRaw);
+    if (activeTheme.layout === 'rooms' && room) {
+      setActiveRoom(room);
+      setActiveScreen('main');
+    }
+  }, [maintenanceHydrated, userLogsHydrated, activeTheme.layout]);
 
   useEffect(() => {
     if (!maintenanceHydrated || !userLogsHydrated) return;
+    if (activeScreen !== 'main') return;
 
     const focusRaw = getFocusFromUrl();
     const pack = parsePackStepFocus(focusRaw);
     if (pack && currentSeason !== pack.season) return;
 
-    applyLawnFocusFromUrl({ delayMs: 150, retries: 8 });
-  }, [maintenanceHydrated, userLogsHydrated, currentSeason]);
+    if (activeTheme.layout === 'rooms') {
+      const room = resolveFocusRoom(focusRaw);
+      if (room && activeRoom !== room) return;
+    }
+
+    applyLawnFocusFromUrl({ delayMs: 200, retries: 10 });
+  }, [
+    maintenanceHydrated,
+    userLogsHydrated,
+    currentSeason,
+    activeScreen,
+    activeRoom,
+    activeTheme.layout,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1324,6 +1371,11 @@ export function useLawnCareApp() {
     weatherLocationSaving,
     activeScreen,
     setActiveScreen,
+    themeId,
+    setThemeId,
+    activeTheme,
+    activeRoom,
+    setActiveRoom,
     showLevellingGuide,
     setShowLevellingGuide,
     jsonCopied,

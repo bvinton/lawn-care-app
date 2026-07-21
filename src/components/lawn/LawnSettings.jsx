@@ -1,6 +1,7 @@
 import React from 'react';
 import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
 import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
+import { LAWN_THEMES } from '../../data/lawnThemes';
 
 /** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
 export default function LawnSettings({ app }) {
@@ -35,6 +36,9 @@ export default function LawnSettings({ app }) {
     handleResetWeatherLocation,
     setActiveScreen,
     setWeatherLocationError,
+    themeId,
+    setThemeId,
+    setActiveRoom,
   } = app;
 
   return (
@@ -43,7 +47,7 @@ export default function LawnSettings({ app }) {
         <div>
           <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
           <p className="text-sm text-green-700 mt-1">
-            Configure your lawn size, equipment, and surface profile.
+            Configure appearance, lawn size, equipment, and surface profile.
           </p>
         </div>
         <button
@@ -51,11 +55,67 @@ export default function LawnSettings({ app }) {
           onClick={() => setActiveScreen('main')}
           className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
         >
-          ← Back to Workflow
+          ← Back
         </button>
       </div>
 
       <div className="space-y-5">
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+          <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
+          <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
+            Try a different look and layout. Sectioned themes put Maintenance and Seasonal Pack in
+            their own rooms. Classic keeps the original long page — you can always switch back.
+          </p>
+          <div className="grid gap-2">
+            {LAWN_THEMES.map((theme) => {
+              const selected = themeId === theme.id;
+              return (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => {
+                    setThemeId(theme.id);
+                    setActiveRoom('hub');
+                  }}
+                  className={`text-left rounded-xl border p-3 transition-all ${
+                    selected
+                      ? 'border-emerald-600 bg-white ring-2 ring-emerald-500/30'
+                      : 'border-emerald-100 bg-white/80 hover:border-emerald-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900">{theme.name}</p>
+                      <p className="text-[11px] font-semibold text-emerald-800 mt-0.5">
+                        {theme.tagline}
+                      </p>
+                      <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
+                        {theme.description}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md ${
+                        selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {selected ? 'Active' : 'Try'}
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5 mt-3" aria-hidden="true">
+                    {theme.swatches.map((color) => (
+                      <span
+                        key={color}
+                        className="h-4 w-4 rounded-full border border-black/10"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
         <div>
           <label className="block text-sm font-medium text-green-900 mb-1">
             Lawn Length: <span className="font-bold text-green-700">{length}m</span>
@@ -84,7 +144,9 @@ export default function LawnSettings({ app }) {
         </div>
         <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-sm text-green-800">
           <span className="font-black">{sqm} SQM</span>
-          <span className="text-green-600 ml-1.5">({length}m × {width}m)</span>
+          <span className="text-green-600 ml-1.5">
+            ({length}m × {width}m)
+          </span>
         </div>
         <div>
           <label htmlFor="mower-select" className="block text-sm font-medium text-green-900 mb-1">
@@ -155,8 +217,8 @@ export default function LawnSettings({ app }) {
                     <h4 className="text-sm font-bold text-emerald-900">Lawn Levelling Guide</h4>
                     <p className="text-xs text-gray-600 mt-1 leading-relaxed">
                       Choose the method that matches your dip depth. Once levelled, switch your
-                      surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut
-                      height recommendation.
+                      surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut height
+                      recommendation.
                     </p>
                   </div>
                   <button

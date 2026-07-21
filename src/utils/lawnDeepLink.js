@@ -100,11 +100,11 @@ export function scrollToLawnFocus(targetId, options = {}) {
 
 /**
  * Apply ?focus= / #hash from the current URL once the main UI is mounted.
- * @param {{ delayMs?: number, retries?: number }} [options]
+ * @param {{ delayMs?: number, retries?: number, targetId?: string | null }} [options]
  */
 export function applyLawnFocusFromUrl(options = {}) {
   const focusRaw = getFocusFromUrl();
-  const targetId = resolveLawnFocusTarget(focusRaw);
+  const targetId = options.targetId ?? resolveLawnFocusTarget(focusRaw);
   if (!targetId) return;
 
   const delayMs = options.delayMs ?? 300;

@@ -6,7 +6,7 @@ import {
 } from '../../hooks/useMobileBackNavigation';
 import { pushAppHistoryState } from '../../utils/backNavigation';
 import LawnSettings from './LawnSettings';
-import LawnWorkflow from './LawnWorkflow';
+import LawnMainView from './LawnMainView';
 import LawnGuides from './LawnGuides';
 import LawnMaterials from './LawnMaterials';
 import SprinklerLightbox from './SprinklerLightbox';
@@ -17,13 +17,23 @@ export default function LawnCareApp() {
   const isAtRoot = useCallback(
     () =>
       app.activeScreen === 'main' &&
+      (app.activeTheme.layout === 'classic' || app.activeRoom === 'hub') &&
       !app.enlargedSprinkler &&
       !app.showLevellingGuide,
-    [app.activeScreen, app.enlargedSprinkler, app.showLevellingGuide]
+    [
+      app.activeScreen,
+      app.activeTheme.layout,
+      app.activeRoom,
+      app.enlargedSprinkler,
+      app.showLevellingGuide,
+    ]
   );
 
   const onReturnToMain = useCallback(() => {
     app.setActiveScreen('main');
+    if (app.activeTheme.layout === 'rooms') {
+      app.setActiveRoom('hub');
+    }
     app.setShowLevellingGuide(false);
     app.setEnlargedSprinkler(null);
   }, [app]);
@@ -35,6 +45,12 @@ export default function LawnCareApp() {
       pushAppHistoryState({ screen: app.activeScreen });
     }
   }, [app.activeScreen]);
+
+  useEffect(() => {
+    if (app.activeTheme.layout === 'rooms' && app.activeRoom !== 'hub' && app.activeScreen === 'main') {
+      pushAppHistoryState({ room: app.activeRoom });
+    }
+  }, [app.activeRoom, app.activeTheme.layout, app.activeScreen]);
 
   useEffect(() => {
     if (app.enlargedSprinkler) {
@@ -64,8 +80,24 @@ export default function LawnCareApp() {
     return false;
   }, Boolean(app.showLevellingGuide));
 
+  useRegisterBackHandler(() => {
+    if (
+      app.activeTheme.layout === 'rooms' &&
+      app.activeScreen === 'main' &&
+      app.activeRoom !== 'hub'
+    ) {
+      app.setActiveRoom('hub');
+      return true;
+    }
+    return false;
+  }, app.activeTheme.layout === 'rooms' && app.activeScreen === 'main' && app.activeRoom !== 'hub');
+
   return (
-    <div className="w-full max-w-xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-4 sm:p-6 border border-green-100">
+    <div
+      className="lawn-app-shell w-full max-w-xl mx-auto overflow-hidden"
+      data-lawn-theme={app.activeTheme.id}
+      data-lawn-layout={app.activeTheme.layout}
+    >
       {app.activeScreen === 'settings' ? (
         <LawnSettings app={app} />
       ) : app.activeScreen === 'guides' ? (
@@ -73,7 +105,7 @@ export default function LawnCareApp() {
       ) : app.activeScreen === 'materials' ? (
         <LawnMaterials app={app} />
       ) : (
-        <LawnWorkflow app={app} />
+        <LawnMainView app={app} />
       )}
 
       {app.enlargedSprinkler && (
