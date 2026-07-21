@@ -88,7 +88,7 @@ export default function App() {
           </main>
 
           <footer className="lawn-app-footer text-center text-[10px] mt-6 font-semibold">
-            Switch look &amp; layout anytime in Setup → Appearance
+            Lawn Pack Companion
           </footer>
         </div>
       </div>

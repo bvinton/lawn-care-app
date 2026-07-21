@@ -61,12 +61,6 @@ export default function LawnMainView({ app }) {
   if (activeRoom === 'seasonal') {
     return (
       <LawnRoomFrame app={app} title="Seasonal Pack">
-        <div className="lawn-room__seasonal-intro">
-          <p>
-            Seasonal steps live here on their own — nothing else competing for attention on this
-            page.
-          </p>
-        </div>
         <SeasonTimeline app={app} />
       </LawnRoomFrame>
     );

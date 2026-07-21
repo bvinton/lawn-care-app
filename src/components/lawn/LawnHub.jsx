@@ -4,7 +4,7 @@ import { formatSyncTimeAgo } from '../../utils/lawnDates';
 import { CalculatorIcon } from './LawnMaterials';
 
 /**
- * Hub home for sectioned ("rooms") themes — one place per job, not one long scroll.
+ * Hub home for sectioned themes.
  * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
  */
 export default function LawnHub({ app }) {
@@ -28,7 +28,6 @@ export default function LawnHub({ app }) {
     currentSeason,
     weatherStatusText,
     weatherLocationLabel,
-    activeTheme,
   } = app;
 
   const dueCount = [mowingDue, wateringDue, verticutDue, gypsumDue].filter(Boolean).length;
@@ -48,7 +47,6 @@ export default function LawnHub({ app }) {
     {
       id: 'maintenance',
       title: 'Maintenance',
-      blurb: 'Mow, water, verticut, gypsum — each tracker in its own space.',
       meta: dueCount > 0 ? `${dueCount} due` : seedEstablishmentActive ? 'Seed lock' : 'Up to date',
       tone: dueCount > 0 || seedEstablishmentActive ? 'alert' : 'ok',
       icon: '✂️',
@@ -56,7 +54,6 @@ export default function LawnHub({ app }) {
     {
       id: 'seasonal',
       title: 'Seasonal Pack',
-      blurb: `${SEASONS[currentSeason]?.name ?? 'Season'} timeline — one step at a time.`,
       meta: springPackIncomplete
         ? `${incompleteSpringSteps.length} Spring left`
         : SEASONS[currentSeason]?.name ?? 'Open',
@@ -68,15 +65,14 @@ export default function LawnHub({ app }) {
   return (
     <div className="lawn-hub">
       <header className="lawn-hub__hero">
-        <p className="lawn-hub__eyebrow">Lawn Pack</p>
-        <h2 className="lawn-hub__title">Your lawn, by section</h2>
-        <p className="lawn-hub__lede">
+        <h2 className="lawn-hub__title">
           <span className="lawn-hub__sqm">{sqm} SQM</span>
+        </h2>
+        <p className="lawn-hub__lede">
           <span className="lawn-hub__dims">
             {length}m × {width}m
           </span>
         </p>
-        <p className="lawn-hub__theme-note">{activeTheme.tagline}</p>
       </header>
 
       {(petLockoutActive || springPackIncomplete) && (
@@ -94,15 +90,13 @@ export default function LawnHub({ app }) {
         </div>
       )}
 
-      <section className="lawn-hub__weather" aria-label="Weather snapshot">
-        <p className="lawn-hub__section-label">Today outside</p>
+      <section className="lawn-hub__weather" aria-label="Weather">
         <p className="lawn-hub__weather-text">
           {weatherLocationLabel}: {weatherStatusText}
         </p>
       </section>
 
-      <section className="lawn-hub__rooms" aria-label="App sections">
-        <p className="lawn-hub__section-label">Sections</p>
+      <section className="lawn-hub__rooms" aria-label="Sections">
         <div className="lawn-hub__room-grid">
           {rooms.map((room) => (
             <button
@@ -116,7 +110,6 @@ export default function LawnHub({ app }) {
               </span>
               <span className="lawn-hub__room-copy">
                 <span className="lawn-hub__room-title">{room.title}</span>
-                <span className="lawn-hub__room-blurb">{room.blurb}</span>
               </span>
               <span className="lawn-hub__room-meta">{room.meta}</span>
             </button>
@@ -125,7 +118,6 @@ export default function LawnHub({ app }) {
       </section>
 
       <section className="lawn-hub__tools" aria-label="Tools">
-        <p className="lawn-hub__section-label">Tools</p>
         <div className="lawn-hub__tool-grid">
           <button
             type="button"
