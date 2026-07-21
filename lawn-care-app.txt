@@ -209,497 +209,6 @@ vite.config.js
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/components/lawn/LawnAlerts.jsx">
-import React from 'react';
-import { SEASONS } from '../../data/LawnPackData';
-import { formatDisplayDate } from '../../utils/lawnDates';
-
-/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
-export default function LawnAlerts({ app }) {
-  const {
-    supabaseSyncError,
-    petLockoutActive,
-    petLockoutHoursRemaining,
-    springPackIncomplete,
-    currentSeason,
-    incompleteSpringSteps,
-    calendarSeason,
-    weedolLoggedDate,
-    springRenovationPending,
-    weedolBarrierActive,
-    weedolClearanceDate,
-    weedolDaysRemaining,
-    setCurrentSeason,
-    setSeasonManuallySelected,
-    setActiveRoom,
-    activeTheme,
-    isCatchUpMode,
-    seasonManuallySelected,
-  } = app;
-
-  const openSpringPack = () => {
-    setCurrentSeason('SPRING');
-    setSeasonManuallySelected(true);
-    if (activeTheme.layout === 'rooms') {
-      setActiveRoom('seasonal');
-    }
-  };
-
-  return (
-    <>
-      {supabaseSyncError && (
-        <div
-          className={`mb-4 rounded-lg border p-3 text-xs font-semibold leading-relaxed ${
-            supabaseSyncError.includes('maintenance_link.sql')
-              ? 'border-amber-400 bg-amber-50 text-amber-950'
-              : 'border-red-300 bg-red-50 text-red-800'
-          }`}
-        >
-          {supabaseSyncError.includes('maintenance_link.sql') ||
-          supabaseSyncError.includes('lawn_app_state.sql') ? (
-            <>
-              <p className="font-bold mb-1">One-time database setup</p>
-              <p>{supabaseSyncError}</p>
-              {supabaseSyncError.includes('lawn_app_state.sql') ? (
-                <p className="mt-2 text-[10px]">
-                  Run the SQL file <strong>supabase/lawn_app_state.sql</strong> in Supabase (creates
-                  the lawn progress table).
-                </p>
-              ) : (
-                <p className="mt-2 font-mono text-[10px] break-all">
-                  alter table public.tasks add column if not exists last_completed_date date;
-                </p>
-              )}
-            </>
-          ) : (
-            <>Supabase sync failed: {supabaseSyncError}</>
-          )}
-        </div>
-      )}
-      {petLockoutActive && (
-        <div className="mb-4 rounded-lg border border-orange-300 bg-gradient-to-r from-red-50 to-orange-50 p-3 text-sm font-bold text-orange-900 shadow-sm">
-          🚫 PAWS OFF: Chemical drying in progress. Safe in {petLockoutHoursRemaining} hour
-          {petLockoutHoursRemaining !== 1 ? 's' : ''}.
-        </div>
-      )}
-      {springPackIncomplete && currentSeason !== 'SPRING' && (
-        <div className="mb-4 rounded-lg border border-amber-400 bg-amber-50 p-3 text-xs text-amber-950 leading-relaxed">
-          <p className="font-bold mb-1">
-            📋 Spring Pack still in progress ({incompleteSpringSteps.length} step
-            {incompleteSpringSteps.length !== 1 ? 's' : ''} left)
-          </p>
-          <p className="mb-2">
-            The calendar says {SEASONS[calendarSeason].name}, but you have unfinished Spring work —
-            we won&apos;t skip ahead until those steps are logged.
-          </p>
-          {weedolLoggedDate && springRenovationPending && (
-            <p className="mb-2 font-semibold">
-              {weedolBarrierActive ? (
-                <>
-                  ⏳ Weedol barrier: scarify &amp; seed locked until{' '}
-                  <strong>{formatDisplayDate(weedolClearanceDate)}</strong> ({weedolDaysRemaining}{' '}
-                  day{weedolDaysRemaining !== 1 ? 's' : ''} left).
-                </>
-              ) : (
-                <>
-                  ✅ Weedol clearance passed ({formatDisplayDate(weedolClearanceDate)}) — you can
-                  scarify and seed when ready.
-                </>
-              )}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={openSpringPack}
-            className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-amber-600 text-white hover:bg-amber-700"
-          >
-            Open Spring Pack timeline
-          </button>
-        </div>
-      )}
-      {currentSeason === 'SPRING' && isCatchUpMode && !seasonManuallySelected && (
-        <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs font-semibold text-emerald-900 leading-relaxed">
-          📅 Catch-up mode: calendar is {SEASONS[calendarSeason].name}, but Spring Pack steps remain
-          — complete them before Summer tasks unlock here.
-          {weedolBarrierActive && springRenovationPending && weedolClearanceDate && (
-            <span className="block mt-1 font-bold text-amber-900">
-              ⏳ Weedol barrier until {formatDisplayDate(weedolClearanceDate)} — prep &amp; seed
-              steps below show the countdown.
-            </span>
-          )}
-        </div>
-      )}
-    </>
-  );
-}
-</file>
-
-<file path="src/components/lawn/LawnHub.jsx">
-import React from 'react';
-import { SEASONS } from '../../data/LawnPackData';
-import { formatSyncTimeAgo } from '../../utils/lawnDates';
-import { CalculatorIcon } from './LawnMaterials';
-
-/**
- * Hub home for sectioned ("rooms") themes — one place per job, not one long scroll.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-export default function LawnHub({ app }) {
-  const {
-    sqm,
-    length,
-    width,
-    runFullCloudSync,
-    cloudSyncStatus,
-    lastCloudSyncAt,
-    setActiveScreen,
-    setActiveRoom,
-    mowingDue,
-    wateringDue,
-    verticutDue,
-    gypsumDue,
-    seedEstablishmentActive,
-    petLockoutActive,
-    springPackIncomplete,
-    incompleteSpringSteps,
-    currentSeason,
-    weatherStatusText,
-    weatherLocationLabel,
-    activeTheme,
-  } = app;
-
-  const dueCount = [mowingDue, wateringDue, verticutDue, gypsumDue].filter(Boolean).length;
-
-  const syncLabel =
-    cloudSyncStatus === 'pulling'
-      ? 'Pull…'
-      : cloudSyncStatus === 'pushing'
-        ? 'Push…'
-        : cloudSyncStatus === 'error'
-          ? 'Retry'
-          : cloudSyncStatus === 'idle'
-            ? 'Sync'
-            : null;
-
-  const rooms = [
-    {
-      id: 'maintenance',
-      title: 'Maintenance',
-      blurb: 'Mow, water, verticut, gypsum — each tracker in its own space.',
-      meta: dueCount > 0 ? `${dueCount} due` : seedEstablishmentActive ? 'Seed lock' : 'Up to date',
-      tone: dueCount > 0 || seedEstablishmentActive ? 'alert' : 'ok',
-      icon: '✂️',
-    },
-    {
-      id: 'seasonal',
-      title: 'Seasonal Pack',
-      blurb: `${SEASONS[currentSeason]?.name ?? 'Season'} timeline — one step at a time.`,
-      meta: springPackIncomplete
-        ? `${incompleteSpringSteps.length} Spring left`
-        : SEASONS[currentSeason]?.name ?? 'Open',
-      tone: springPackIncomplete ? 'warn' : 'ok',
-      icon: '📋',
-    },
-  ];
-
-  return (
-    <div className="lawn-hub">
-      <header className="lawn-hub__hero">
-        <p className="lawn-hub__eyebrow">Lawn Pack</p>
-        <h2 className="lawn-hub__title">Your lawn, by section</h2>
-        <p className="lawn-hub__lede">
-          <span className="lawn-hub__sqm">{sqm} SQM</span>
-          <span className="lawn-hub__dims">
-            {length}m × {width}m
-          </span>
-        </p>
-        <p className="lawn-hub__theme-note">{activeTheme.tagline}</p>
-      </header>
-
-      {(petLockoutActive || springPackIncomplete) && (
-        <div className="lawn-hub__notices" aria-live="polite">
-          {petLockoutActive && (
-            <p className="lawn-hub__notice lawn-hub__notice--alert">
-              Chemical drying — pets off the lawn for now.
-            </p>
-          )}
-          {springPackIncomplete && (
-            <p className="lawn-hub__notice lawn-hub__notice--warn">
-              Spring Pack still in progress — open Seasonal Pack to finish.
-            </p>
-          )}
-        </div>
-      )}
-
-      <section className="lawn-hub__weather" aria-label="Weather snapshot">
-        <p className="lawn-hub__section-label">Today outside</p>
-        <p className="lawn-hub__weather-text">
-          {weatherLocationLabel}: {weatherStatusText}
-        </p>
-      </section>
-
-      <section className="lawn-hub__rooms" aria-label="App sections">
-        <p className="lawn-hub__section-label">Sections</p>
-        <div className="lawn-hub__room-grid">
-          {rooms.map((room) => (
-            <button
-              key={room.id}
-              type="button"
-              className={`lawn-hub__room lawn-hub__room--${room.tone}`}
-              onClick={() => setActiveRoom(room.id)}
-            >
-              <span className="lawn-hub__room-icon" aria-hidden="true">
-                {room.icon}
-              </span>
-              <span className="lawn-hub__room-copy">
-                <span className="lawn-hub__room-title">{room.title}</span>
-                <span className="lawn-hub__room-blurb">{room.blurb}</span>
-              </span>
-              <span className="lawn-hub__room-meta">{room.meta}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="lawn-hub__tools" aria-label="Tools">
-        <p className="lawn-hub__section-label">Tools</p>
-        <div className="lawn-hub__tool-grid">
-          <button
-            type="button"
-            onClick={() => void runFullCloudSync()}
-            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
-            className="lawn-hub__tool"
-            title={
-              cloudSyncStatus === 'synced' && lastCloudSyncAt
-                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
-                : 'Sync schedule to cloud'
-            }
-          >
-            <span aria-hidden="true">
-              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
-            </span>
-            <span>{syncLabel ?? 'Synced'}</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('materials')} className="lawn-hub__tool">
-            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
-            <span>Materials</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('guides')} className="lawn-hub__tool">
-            <span aria-hidden="true">📚</span>
-            <span>Guides</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('settings')} className="lawn-hub__tool">
-            <span aria-hidden="true">⚙️</span>
-            <span>Setup</span>
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-</file>
-
-<file path="src/components/lawn/LawnMainView.jsx">
-import React from 'react';
-import MaintenancePanel from './MaintenancePanel';
-import SeasonTimeline from './SeasonTimeline';
-import LawnWorkflow from './LawnWorkflow';
-import LawnHub from './LawnHub';
-import LawnAlerts from './LawnAlerts';
-
-/**
- * Room chrome for sectioned themes — keeps deep-link DOM ids mounted inside the active room.
- * @param {{
- *   app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>,
- *   title: string,
- *   children: React.ReactNode,
- * }} props
- */
-function LawnRoomFrame({ app, title, children }) {
-  return (
-    <div className="lawn-room">
-      <div className="lawn-room__bar">
-        <button
-          type="button"
-          className="lawn-room__back"
-          onClick={() => app.setActiveRoom('hub')}
-        >
-          ← Home
-        </button>
-        <h2 className="lawn-room__title">{title}</h2>
-        <button
-          type="button"
-          className="lawn-room__setup"
-          onClick={() => app.setActiveScreen('settings')}
-        >
-          Setup
-        </button>
-      </div>
-      <LawnAlerts app={app} />
-      <div className="lawn-room__body">{children}</div>
-    </div>
-  );
-}
-
-/**
- * Main content switcher: classic long page vs sectioned rooms.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-export default function LawnMainView({ app }) {
-  const { activeTheme, activeRoom } = app;
-
-  if (activeTheme.layout === 'classic') {
-    return <LawnWorkflow app={app} />;
-  }
-
-  if (activeRoom === 'maintenance') {
-    return (
-      <LawnRoomFrame app={app} title="Maintenance">
-        <MaintenancePanel app={app} />
-      </LawnRoomFrame>
-    );
-  }
-
-  if (activeRoom === 'seasonal') {
-    return (
-      <LawnRoomFrame app={app} title="Seasonal Pack">
-        <div className="lawn-room__seasonal-intro">
-          <p>
-            Seasonal steps live here on their own — nothing else competing for attention on this
-            page.
-          </p>
-        </div>
-        <SeasonTimeline app={app} />
-      </LawnRoomFrame>
-    );
-  }
-
-  return (
-    <>
-      <LawnAlerts app={app} />
-      <LawnHub app={app} />
-    </>
-  );
-}
-</file>
-
-<file path="src/data/lawnThemes.js">
-/** @typedef {'classic' | 'rooms'} LawnThemeLayout */
-
-/**
- * @typedef {Object} LawnTheme
- * @property {string} id
- * @property {string} name
- * @property {string} tagline
- * @property {string} description
- * @property {LawnThemeLayout} layout
- * @property {string[]} swatches
- * @property {string} fontDisplay
- * @property {string} fontBody
- */
-
-export const LAWN_THEME_STORAGE_KEY = 'lawnPackUiTheme';
-
-/** @type {LawnTheme[]} */
-export const LAWN_THEMES = [
-  {
-    id: 'classic',
-    name: 'Classic',
-    tagline: 'Original long page',
-    description:
-      'Everything on one scrolling page — the familiar layout if you want to go back.',
-    layout: 'classic',
-    swatches: ['#14532d', '#dcfce7', '#ffffff', '#e5e7eb'],
-    fontDisplay: '"Segoe UI", system-ui, sans-serif',
-    fontBody: '"Segoe UI", system-ui, sans-serif',
-  },
-  {
-    id: 'atelier',
-    name: 'Atelier',
-    tagline: 'Sectioned rooms · calm workshop',
-    description:
-      'Home hub with separate rooms for Maintenance and Seasonal Pack. Soft moss tones, clear places for each job.',
-    layout: 'rooms',
-    swatches: ['#1a3a2a', '#c5d9c8', '#f3f7f4', '#2f6b4f'],
-    fontDisplay: '"Bricolage Grotesque", Georgia, serif',
-    fontBody: '"Figtree", "Segoe UI", sans-serif',
-  },
-  {
-    id: 'signal',
-    name: 'Signal',
-    tagline: 'Sectioned rooms · neat & crisp',
-    description:
-      'Same roomed layout with cooler slate/sage and tighter typography — built for a neat-freak glance.',
-    layout: 'rooms',
-    swatches: ['#0f172a', '#94a3b8', '#f1f5f9', '#3f6f5a'],
-    fontDisplay: '"Space Grotesk", "Segoe UI", sans-serif',
-    fontBody: '"IBM Plex Sans", "Segoe UI", sans-serif',
-  },
-  {
-    id: 'canopy',
-    name: 'Canopy',
-    tagline: 'Sectioned rooms · outdoor atmosphere',
-    description:
-      'Roomed layout with deeper greens and a leafy backdrop so each section feels like its own space.',
-    layout: 'rooms',
-    swatches: ['#052e16', '#86efac', '#ecfdf5', '#166534'],
-    fontDisplay: '"Fraunces", Georgia, serif',
-    fontBody: '"Karla", "Segoe UI", sans-serif',
-  },
-];
-
-export const DEFAULT_LAWN_THEME_ID = 'classic';
-
-/** @param {string | null | undefined} id */
-export function getLawnTheme(id) {
-  return LAWN_THEMES.find((theme) => theme.id === id) ?? LAWN_THEMES[0];
-}
-
-/** @returns {string} */
-export function readStoredLawnThemeId() {
-  try {
-    const saved = localStorage.getItem(LAWN_THEME_STORAGE_KEY);
-    if (saved && LAWN_THEMES.some((theme) => theme.id === saved)) return saved;
-  } catch {
-    /* ignore */
-  }
-  return DEFAULT_LAWN_THEME_ID;
-}
-
-/**
- * Map a Tasks deep-link focus target to a rooms section.
- * @param {string | null | undefined} focusRaw
- * @returns {'hub' | 'maintenance' | 'seasonal' | null}
- */
-export function resolveFocusRoom(focusRaw) {
-  if (!focusRaw || typeof focusRaw !== 'string') return null;
-  const trimmed = focusRaw.trim().toLowerCase();
-  if (!trimmed) return null;
-
-  if (trimmed.startsWith('step-') || /^step-(spring|summer|autumn|winter)-/.test(trimmed)) {
-    return 'seasonal';
-  }
-
-  if (
-    trimmed === 'maintenance' ||
-    trimmed === 'mow' ||
-    trimmed === 'water' ||
-    trimmed === 'verticut' ||
-    trimmed === 'gypsum' ||
-    trimmed === 'maintenance-panel' ||
-    trimmed === 'maintenance-mowing-tracker' ||
-    trimmed === 'maintenance-watering-tracker' ||
-    trimmed === 'maintenance-verticut-tracker' ||
-    trimmed === 'soil-treatments-tracker' ||
-    trimmed === 'environmental-status-card'
-  ) {
-    return 'maintenance';
-  }
-
-  return null;
-}
-</file>
-
 <file path=".cursor/rules/git-workflow.mdc">
 ---
 description: How to commit and push — use push-all.ps1 to deploy both apps together
@@ -1122,6 +631,380 @@ const sizes = [
 for (const { name, size } of sizes) {
   await sharp(svg).resize(size, size).png().toFile(join(root, 'public', name));
   console.log(`Wrote public/${name}`);
+}
+</file>
+
+<file path="src/components/lawn/LawnAlerts.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatDisplayDate } from '../../utils/lawnDates';
+
+/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
+export default function LawnAlerts({ app }) {
+  const {
+    supabaseSyncError,
+    petLockoutActive,
+    petLockoutHoursRemaining,
+    springPackIncomplete,
+    currentSeason,
+    incompleteSpringSteps,
+    calendarSeason,
+    weedolLoggedDate,
+    springRenovationPending,
+    weedolBarrierActive,
+    weedolClearanceDate,
+    weedolDaysRemaining,
+    setCurrentSeason,
+    setSeasonManuallySelected,
+    setActiveRoom,
+    activeTheme,
+    isCatchUpMode,
+    seasonManuallySelected,
+  } = app;
+
+  const openSpringPack = () => {
+    setCurrentSeason('SPRING');
+    setSeasonManuallySelected(true);
+    if (activeTheme.layout === 'rooms') {
+      setActiveRoom('seasonal');
+    }
+  };
+
+  return (
+    <>
+      {supabaseSyncError && (
+        <div
+          className={`mb-4 rounded-lg border p-3 text-xs font-semibold leading-relaxed ${
+            supabaseSyncError.includes('maintenance_link.sql')
+              ? 'border-amber-400 bg-amber-50 text-amber-950'
+              : 'border-red-300 bg-red-50 text-red-800'
+          }`}
+        >
+          {supabaseSyncError.includes('maintenance_link.sql') ||
+          supabaseSyncError.includes('lawn_app_state.sql') ? (
+            <>
+              <p className="font-bold mb-1">One-time database setup</p>
+              <p>{supabaseSyncError}</p>
+              {supabaseSyncError.includes('lawn_app_state.sql') ? (
+                <p className="mt-2 text-[10px]">
+                  Run the SQL file <strong>supabase/lawn_app_state.sql</strong> in Supabase (creates
+                  the lawn progress table).
+                </p>
+              ) : (
+                <p className="mt-2 font-mono text-[10px] break-all">
+                  alter table public.tasks add column if not exists last_completed_date date;
+                </p>
+              )}
+            </>
+          ) : (
+            <>Supabase sync failed: {supabaseSyncError}</>
+          )}
+        </div>
+      )}
+      {petLockoutActive && (
+        <div className="mb-4 rounded-lg border border-orange-300 bg-gradient-to-r from-red-50 to-orange-50 p-3 text-sm font-bold text-orange-900 shadow-sm">
+          🚫 PAWS OFF: Chemical drying in progress. Safe in {petLockoutHoursRemaining} hour
+          {petLockoutHoursRemaining !== 1 ? 's' : ''}.
+        </div>
+      )}
+      {springPackIncomplete && currentSeason !== 'SPRING' && (
+        <div className="mb-4 rounded-lg border border-amber-400 bg-amber-50 p-3 text-xs text-amber-950 leading-relaxed">
+          <p className="font-bold mb-1">
+            📋 Spring Pack still in progress ({incompleteSpringSteps.length} step
+            {incompleteSpringSteps.length !== 1 ? 's' : ''} left)
+          </p>
+          <p className="mb-2">
+            The calendar says {SEASONS[calendarSeason].name}, but you have unfinished Spring work —
+            we won&apos;t skip ahead until those steps are logged.
+          </p>
+          {weedolLoggedDate && springRenovationPending && (
+            <p className="mb-2 font-semibold">
+              {weedolBarrierActive ? (
+                <>
+                  ⏳ Weedol barrier: scarify &amp; seed locked until{' '}
+                  <strong>{formatDisplayDate(weedolClearanceDate)}</strong> ({weedolDaysRemaining}{' '}
+                  day{weedolDaysRemaining !== 1 ? 's' : ''} left).
+                </>
+              ) : (
+                <>
+                  ✅ Weedol clearance passed ({formatDisplayDate(weedolClearanceDate)}) — you can
+                  scarify and seed when ready.
+                </>
+              )}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={openSpringPack}
+            className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-amber-600 text-white hover:bg-amber-700"
+          >
+            Open Spring Pack timeline
+          </button>
+        </div>
+      )}
+      {currentSeason === 'SPRING' && isCatchUpMode && !seasonManuallySelected && (
+        <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs font-semibold text-emerald-900 leading-relaxed">
+          📅 Catch-up mode: calendar is {SEASONS[calendarSeason].name}, but Spring Pack steps remain
+          — complete them before Summer tasks unlock here.
+          {weedolBarrierActive && springRenovationPending && weedolClearanceDate && (
+            <span className="block mt-1 font-bold text-amber-900">
+              ⏳ Weedol barrier until {formatDisplayDate(weedolClearanceDate)} — prep &amp; seed
+              steps below show the countdown.
+            </span>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+</file>
+
+<file path="src/components/lawn/LawnHub.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatSyncTimeAgo } from '../../utils/lawnDates';
+import { CalculatorIcon } from './LawnMaterials';
+
+/**
+ * Hub home for sectioned ("rooms") themes — one place per job, not one long scroll.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnHub({ app }) {
+  const {
+    sqm,
+    length,
+    width,
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    setActiveScreen,
+    setActiveRoom,
+    mowingDue,
+    wateringDue,
+    verticutDue,
+    gypsumDue,
+    seedEstablishmentActive,
+    petLockoutActive,
+    springPackIncomplete,
+    incompleteSpringSteps,
+    currentSeason,
+    weatherStatusText,
+    weatherLocationLabel,
+    activeTheme,
+  } = app;
+
+  const dueCount = [mowingDue, wateringDue, verticutDue, gypsumDue].filter(Boolean).length;
+
+  const syncLabel =
+    cloudSyncStatus === 'pulling'
+      ? 'Pull…'
+      : cloudSyncStatus === 'pushing'
+        ? 'Push…'
+        : cloudSyncStatus === 'error'
+          ? 'Retry'
+          : cloudSyncStatus === 'idle'
+            ? 'Sync'
+            : null;
+
+  const rooms = [
+    {
+      id: 'maintenance',
+      title: 'Maintenance',
+      blurb: 'Mow, water, verticut, gypsum — each tracker in its own space.',
+      meta: dueCount > 0 ? `${dueCount} due` : seedEstablishmentActive ? 'Seed lock' : 'Up to date',
+      tone: dueCount > 0 || seedEstablishmentActive ? 'alert' : 'ok',
+      icon: '✂️',
+    },
+    {
+      id: 'seasonal',
+      title: 'Seasonal Pack',
+      blurb: `${SEASONS[currentSeason]?.name ?? 'Season'} timeline — one step at a time.`,
+      meta: springPackIncomplete
+        ? `${incompleteSpringSteps.length} Spring left`
+        : SEASONS[currentSeason]?.name ?? 'Open',
+      tone: springPackIncomplete ? 'warn' : 'ok',
+      icon: '📋',
+    },
+  ];
+
+  return (
+    <div className="lawn-hub">
+      <header className="lawn-hub__hero">
+        <p className="lawn-hub__eyebrow">Lawn Pack</p>
+        <h2 className="lawn-hub__title">Your lawn, by section</h2>
+        <p className="lawn-hub__lede">
+          <span className="lawn-hub__sqm">{sqm} SQM</span>
+          <span className="lawn-hub__dims">
+            {length}m × {width}m
+          </span>
+        </p>
+        <p className="lawn-hub__theme-note">{activeTheme.tagline}</p>
+      </header>
+
+      {(petLockoutActive || springPackIncomplete) && (
+        <div className="lawn-hub__notices" aria-live="polite">
+          {petLockoutActive && (
+            <p className="lawn-hub__notice lawn-hub__notice--alert">
+              Chemical drying — pets off the lawn for now.
+            </p>
+          )}
+          {springPackIncomplete && (
+            <p className="lawn-hub__notice lawn-hub__notice--warn">
+              Spring Pack still in progress — open Seasonal Pack to finish.
+            </p>
+          )}
+        </div>
+      )}
+
+      <section className="lawn-hub__weather" aria-label="Weather snapshot">
+        <p className="lawn-hub__section-label">Today outside</p>
+        <p className="lawn-hub__weather-text">
+          {weatherLocationLabel}: {weatherStatusText}
+        </p>
+      </section>
+
+      <section className="lawn-hub__rooms" aria-label="App sections">
+        <p className="lawn-hub__section-label">Sections</p>
+        <div className="lawn-hub__room-grid">
+          {rooms.map((room) => (
+            <button
+              key={room.id}
+              type="button"
+              className={`lawn-hub__room lawn-hub__room--${room.tone}`}
+              onClick={() => setActiveRoom(room.id)}
+            >
+              <span className="lawn-hub__room-icon" aria-hidden="true">
+                {room.icon}
+              </span>
+              <span className="lawn-hub__room-copy">
+                <span className="lawn-hub__room-title">{room.title}</span>
+                <span className="lawn-hub__room-blurb">{room.blurb}</span>
+              </span>
+              <span className="lawn-hub__room-meta">{room.meta}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="lawn-hub__tools" aria-label="Tools">
+        <p className="lawn-hub__section-label">Tools</p>
+        <div className="lawn-hub__tool-grid">
+          <button
+            type="button"
+            onClick={() => void runFullCloudSync()}
+            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
+            className="lawn-hub__tool"
+            title={
+              cloudSyncStatus === 'synced' && lastCloudSyncAt
+                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
+                : 'Sync schedule to cloud'
+            }
+          >
+            <span aria-hidden="true">
+              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
+            </span>
+            <span>{syncLabel ?? 'Synced'}</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('materials')} className="lawn-hub__tool">
+            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
+            <span>Materials</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('guides')} className="lawn-hub__tool">
+            <span aria-hidden="true">📚</span>
+            <span>Guides</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('settings')} className="lawn-hub__tool">
+            <span aria-hidden="true">⚙️</span>
+            <span>Setup</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/lawn/LawnMainView.jsx">
+import React from 'react';
+import MaintenancePanel from './MaintenancePanel';
+import SeasonTimeline from './SeasonTimeline';
+import LawnWorkflow from './LawnWorkflow';
+import LawnHub from './LawnHub';
+import LawnAlerts from './LawnAlerts';
+
+/**
+ * Room chrome for sectioned themes — keeps deep-link DOM ids mounted inside the active room.
+ * @param {{
+ *   app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>,
+ *   title: string,
+ *   children: React.ReactNode,
+ * }} props
+ */
+function LawnRoomFrame({ app, title, children }) {
+  return (
+    <div className="lawn-room">
+      <div className="lawn-room__bar">
+        <button
+          type="button"
+          className="lawn-room__back"
+          onClick={() => app.setActiveRoom('hub')}
+        >
+          ← Home
+        </button>
+        <h2 className="lawn-room__title">{title}</h2>
+        <button
+          type="button"
+          className="lawn-room__setup"
+          onClick={() => app.setActiveScreen('settings')}
+        >
+          Setup
+        </button>
+      </div>
+      <LawnAlerts app={app} />
+      <div className="lawn-room__body">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Main content switcher: classic long page vs sectioned rooms.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnMainView({ app }) {
+  const { activeTheme, activeRoom } = app;
+
+  if (activeTheme.layout === 'classic') {
+    return <LawnWorkflow app={app} />;
+  }
+
+  if (activeRoom === 'maintenance') {
+    return (
+      <LawnRoomFrame app={app} title="Maintenance">
+        <MaintenancePanel app={app} />
+      </LawnRoomFrame>
+    );
+  }
+
+  if (activeRoom === 'seasonal') {
+    return (
+      <LawnRoomFrame app={app} title="Seasonal Pack">
+        <div className="lawn-room__seasonal-intro">
+          <p>
+            Seasonal steps live here on their own — nothing else competing for attention on this
+            page.
+          </p>
+        </div>
+        <SeasonTimeline app={app} />
+      </LawnRoomFrame>
+    );
+  }
+
+  return (
+    <>
+      <LawnAlerts app={app} />
+      <LawnHub app={app} />
+    </>
+  );
 }
 </file>
 
@@ -1562,6 +1445,123 @@ export default function AppUpdatePrompt() {
       </div>
     </div>
   );
+}
+</file>
+
+<file path="src/data/lawnThemes.js">
+/** @typedef {'classic' | 'rooms'} LawnThemeLayout */
+
+/**
+ * @typedef {Object} LawnTheme
+ * @property {string} id
+ * @property {string} name
+ * @property {string} tagline
+ * @property {string} description
+ * @property {LawnThemeLayout} layout
+ * @property {string[]} swatches
+ * @property {string} fontDisplay
+ * @property {string} fontBody
+ */
+
+export const LAWN_THEME_STORAGE_KEY = 'lawnPackUiTheme';
+
+/** @type {LawnTheme[]} */
+export const LAWN_THEMES = [
+  {
+    id: 'classic',
+    name: 'Classic',
+    tagline: 'Original long page',
+    description:
+      'Everything on one scrolling page — the familiar layout if you want to go back.',
+    layout: 'classic',
+    swatches: ['#14532d', '#dcfce7', '#ffffff', '#e5e7eb'],
+    fontDisplay: '"Segoe UI", system-ui, sans-serif',
+    fontBody: '"Segoe UI", system-ui, sans-serif',
+  },
+  {
+    id: 'atelier',
+    name: 'Atelier',
+    tagline: 'Sectioned rooms · calm workshop',
+    description:
+      'Home hub with separate rooms for Maintenance and Seasonal Pack. Soft moss tones, clear places for each job.',
+    layout: 'rooms',
+    swatches: ['#1a3a2a', '#c5d9c8', '#f3f7f4', '#2f6b4f'],
+    fontDisplay: '"Bricolage Grotesque", Georgia, serif',
+    fontBody: '"Figtree", "Segoe UI", sans-serif',
+  },
+  {
+    id: 'signal',
+    name: 'Signal',
+    tagline: 'Sectioned rooms · neat & crisp',
+    description:
+      'Same roomed layout with cooler slate/sage and tighter typography — built for a neat-freak glance.',
+    layout: 'rooms',
+    swatches: ['#0f172a', '#94a3b8', '#f1f5f9', '#3f6f5a'],
+    fontDisplay: '"Space Grotesk", "Segoe UI", sans-serif',
+    fontBody: '"IBM Plex Sans", "Segoe UI", sans-serif',
+  },
+  {
+    id: 'canopy',
+    name: 'Canopy',
+    tagline: 'Sectioned rooms · outdoor atmosphere',
+    description:
+      'Roomed layout with deeper greens and a leafy backdrop so each section feels like its own space.',
+    layout: 'rooms',
+    swatches: ['#052e16', '#86efac', '#ecfdf5', '#166534'],
+    fontDisplay: '"Fraunces", Georgia, serif',
+    fontBody: '"Karla", "Segoe UI", sans-serif',
+  },
+];
+
+export const DEFAULT_LAWN_THEME_ID = 'classic';
+
+/** @param {string | null | undefined} id */
+export function getLawnTheme(id) {
+  return LAWN_THEMES.find((theme) => theme.id === id) ?? LAWN_THEMES[0];
+}
+
+/** @returns {string} */
+export function readStoredLawnThemeId() {
+  try {
+    const saved = localStorage.getItem(LAWN_THEME_STORAGE_KEY);
+    if (saved && LAWN_THEMES.some((theme) => theme.id === saved)) return saved;
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_LAWN_THEME_ID;
+}
+
+/**
+ * Map a Tasks deep-link focus target to a rooms section.
+ * @param {string | null | undefined} focusRaw
+ * @returns {'hub' | 'maintenance' | 'seasonal' | null}
+ */
+export function resolveFocusRoom(focusRaw) {
+  if (!focusRaw || typeof focusRaw !== 'string') return null;
+  const trimmed = focusRaw.trim().toLowerCase();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('step-') || /^step-(spring|summer|autumn|winter)-/.test(trimmed)) {
+    return 'seasonal';
+  }
+
+  if (
+    trimmed === 'maintenance' ||
+    trimmed === 'mow' ||
+    trimmed === 'water' ||
+    trimmed === 'verticut' ||
+    trimmed === 'gypsum' ||
+    trimmed === 'maintenance-panel' ||
+    trimmed === 'maintenance-mowing-tracker' ||
+    trimmed === 'maintenance-watering-tracker' ||
+    trimmed === 'maintenance-verticut-tracker' ||
+    trimmed === 'soil-treatments-tracker' ||
+    trimmed === 'environmental-status-card'
+  ) {
+    return 'maintenance';
+  }
+
+  return null;
 }
 </file>
 
@@ -2675,457 +2675,6 @@ export async function signInWithGoogleAccountPicker(supabase) {
 }
 </file>
 
-<file path="src/index.css">
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --lawn-font-display: "Segoe UI", system-ui, sans-serif;
-  --lawn-font-body: "Segoe UI", system-ui, sans-serif;
-  --lawn-page-bg: #f3f4f6;
-  --lawn-page-ink: #052e16;
-  --lawn-shell-bg: #ffffff;
-  --lawn-shell-border: #dcfce7;
-  --lawn-shell-radius: 0.75rem;
-  --lawn-shell-shadow: 0 4px 14px rgba(20, 83, 45, 0.08);
-  --lawn-accent: #166534;
-  --lawn-accent-soft: #dcfce7;
-  --lawn-muted: #4b5563;
-  --lawn-hub-room-bg: #ffffff;
-  --lawn-hub-room-border: #e5e7eb;
-}
-
-.lawn-focus-highlight {
-  outline: 3px solid #16a34a;
-  outline-offset: 4px;
-  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
-  transition: outline 0.25s ease, box-shadow 0.25s ease;
-}
-
-.lawn-app-page {
-  background: var(--lawn-page-bg);
-  color: var(--lawn-page-ink);
-  font-family: var(--lawn-font-body);
-}
-
-.lawn-app-brand {
-  font-family: var(--lawn-font-display);
-  font-size: 1.75rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--lawn-page-ink);
-  line-height: 1.1;
-}
-
-.lawn-app-subhead {
-  margin-top: 0.25rem;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--lawn-accent);
-}
-
-.lawn-app-footer {
-  color: color-mix(in srgb, var(--lawn-muted) 80%, transparent);
-}
-
-.lawn-sign-out {
-  border-color: color-mix(in srgb, var(--lawn-page-ink) 12%, transparent);
-  background: color-mix(in srgb, var(--lawn-shell-bg) 92%, white);
-  color: var(--lawn-muted);
-}
-
-.lawn-app-shell {
-  background: var(--lawn-shell-bg);
-  border: 1px solid var(--lawn-shell-border);
-  border-radius: var(--lawn-shell-radius);
-  box-shadow: var(--lawn-shell-shadow);
-  padding: 1rem;
-  font-family: var(--lawn-font-body);
-}
-
-@media (min-width: 640px) {
-  .lawn-app-shell {
-    padding: 1.5rem;
-  }
-}
-
-/* —— Classic keeps the original dense feel —— */
-[data-lawn-theme='classic'] {
-  --lawn-page-bg: #f3f4f6;
-  --lawn-page-ink: #052e16;
-  --lawn-shell-bg: #ffffff;
-  --lawn-shell-border: #dcfce7;
-  --lawn-accent: #166534;
-  --lawn-accent-soft: #dcfce7;
-}
-
-/* —— Atelier: calm moss workshop, sectioned —— */
-[data-lawn-theme='atelier'] {
-  --lawn-page-bg:
-    radial-gradient(1200px 500px at 10% -10%, #d7e8db 0%, transparent 55%),
-    linear-gradient(165deg, #eef5f0 0%, #dce8df 48%, #cfdfd3 100%);
-  --lawn-page-ink: #1a3a2a;
-  --lawn-shell-bg: rgba(255, 255, 255, 0.82);
-  --lawn-shell-border: rgba(47, 107, 79, 0.18);
-  --lawn-shell-radius: 1.25rem;
-  --lawn-shell-shadow: 0 18px 40px rgba(26, 58, 42, 0.1);
-  --lawn-accent: #2f6b4f;
-  --lawn-accent-soft: #c5d9c8;
-  --lawn-muted: #3f5a4b;
-  --lawn-hub-room-bg: rgba(255, 255, 255, 0.92);
-  --lawn-hub-room-border: rgba(47, 107, 79, 0.16);
-}
-
-/* —— Signal: crisp slate/sage neat freak —— */
-[data-lawn-theme='signal'] {
-  --lawn-page-bg:
-    linear-gradient(180deg, #e8eef2 0%, #f1f5f9 40%, #dde5ec 100%);
-  --lawn-page-ink: #0f172a;
-  --lawn-shell-bg: #f8fafc;
-  --lawn-shell-border: #cbd5e1;
-  --lawn-shell-radius: 0.5rem;
-  --lawn-shell-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 12px 28px rgba(15, 23, 42, 0.06);
-  --lawn-accent: #3f6f5a;
-  --lawn-accent-soft: #d7e4dc;
-  --lawn-muted: #475569;
-  --lawn-hub-room-bg: #ffffff;
-  --lawn-hub-room-border: #cbd5e1;
-}
-
-[data-lawn-theme='signal'] .lawn-app-brand {
-  letter-spacing: -0.05em;
-  font-weight: 700;
-}
-
-[data-lawn-theme='signal'] .lawn-app-shell {
-  border-width: 1px;
-}
-
-/* —— Canopy: deeper outdoor atmosphere —— */
-[data-lawn-theme='canopy'] {
-  --lawn-page-bg:
-    radial-gradient(900px 420px at 80% 0%, rgba(134, 239, 172, 0.35), transparent 60%),
-    linear-gradient(160deg, #064e3b 0%, #0b3d2e 42%, #052e16 100%);
-  --lawn-page-ink: #ecfdf5;
-  --lawn-shell-bg: rgba(236, 253, 245, 0.96);
-  --lawn-shell-border: rgba(167, 243, 208, 0.45);
-  --lawn-shell-radius: 1.5rem;
-  --lawn-shell-shadow: 0 24px 50px rgba(0, 0, 0, 0.28);
-  --lawn-accent: #166534;
-  --lawn-accent-soft: #bbf7d0;
-  --lawn-muted: #334155;
-  --lawn-hub-room-bg: #ffffff;
-  --lawn-hub-room-border: rgba(22, 101, 52, 0.15);
-}
-
-[data-lawn-theme='canopy'] .lawn-app-brand,
-[data-lawn-theme='canopy'] .lawn-app-subhead,
-[data-lawn-theme='canopy'] .lawn-app-footer,
-[data-lawn-theme='canopy'] .lawn-sign-out {
-  color: #ecfdf5;
-}
-
-[data-lawn-theme='canopy'] .lawn-app-subhead {
-  color: #86efac;
-}
-
-[data-lawn-theme='canopy'] .lawn-sign-out {
-  border-color: rgba(236, 253, 245, 0.25);
-  background: rgba(5, 46, 22, 0.35);
-}
-
-[data-lawn-theme='canopy'] .lawn-app-footer {
-  color: rgba(236, 253, 245, 0.55);
-}
-
-/* Inner content on canopy stays dark-on-light */
-[data-lawn-theme='canopy'] .lawn-app-shell {
-  color: #0f172a;
-}
-
-/* —— Hub / rooms —— */
-.lawn-hub__hero {
-  margin-bottom: 1.25rem;
-  animation: lawn-rise 420ms ease-out both;
-}
-
-.lawn-hub__eyebrow {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--lawn-accent);
-  margin-bottom: 0.35rem;
-}
-
-.lawn-hub__title {
-  font-family: var(--lawn-font-display);
-  font-size: 1.55rem;
-  font-weight: 750;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  color: var(--lawn-page-ink);
-}
-
-[data-lawn-theme='canopy'] .lawn-hub__title,
-[data-lawn-theme='atelier'] .lawn-hub__title,
-[data-lawn-theme='signal'] .lawn-hub__title {
-  color: inherit;
-}
-
-.lawn-hub__lede {
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.lawn-hub__sqm {
-  font-weight: 800;
-  font-size: 0.95rem;
-}
-
-.lawn-hub__dims {
-  font-size: 0.8rem;
-  color: var(--lawn-muted);
-}
-
-.lawn-hub__theme-note {
-  margin-top: 0.35rem;
-  font-size: 0.75rem;
-  color: var(--lawn-muted);
-}
-
-.lawn-hub__section-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--lawn-muted);
-  margin-bottom: 0.5rem;
-}
-
-.lawn-hub__weather,
-.lawn-hub__rooms,
-.lawn-hub__tools,
-.lawn-hub__notices {
-  margin-bottom: 1.15rem;
-  animation: lawn-rise 480ms ease-out both;
-}
-
-.lawn-hub__rooms {
-  animation-delay: 60ms;
-}
-
-.lawn-hub__tools {
-  animation-delay: 120ms;
-}
-
-.lawn-hub__weather {
-  border: 1px solid var(--lawn-hub-room-border);
-  background: color-mix(in srgb, var(--lawn-accent-soft) 35%, white);
-  border-radius: 0.9rem;
-  padding: 0.85rem 1rem;
-}
-
-.lawn-hub__weather-text {
-  font-size: 0.8rem;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-.lawn-hub__room-grid,
-.lawn-hub__tool-grid {
-  display: grid;
-  gap: 0.65rem;
-}
-
-.lawn-hub__room {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0.75rem;
-  align-items: center;
-  text-align: left;
-  border: 1px solid var(--lawn-hub-room-border);
-  background: var(--lawn-hub-room-bg);
-  border-radius: 1rem;
-  padding: 0.95rem 1rem;
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
-}
-
-.lawn-hub__room:hover,
-.lawn-hub__room:focus-visible {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--lawn-accent) 45%, var(--lawn-hub-room-border));
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-  outline: none;
-}
-
-.lawn-hub__room--alert {
-  border-color: #f59e0b;
-  background: #fffbeb;
-}
-
-.lawn-hub__room--warn {
-  border-color: #fbbf24;
-  background: #fffbeb;
-}
-
-.lawn-hub__room-icon {
-  font-size: 1.25rem;
-  line-height: 1;
-}
-
-.lawn-hub__room-title {
-  display: block;
-  font-family: var(--lawn-font-display);
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.lawn-hub__room-blurb {
-  display: block;
-  margin-top: 0.2rem;
-  font-size: 0.72rem;
-  line-height: 1.35;
-  color: var(--lawn-muted);
-}
-
-.lawn-hub__room-meta {
-  font-size: 0.65rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--lawn-accent);
-  white-space: nowrap;
-}
-
-.lawn-hub__tool-grid {
-  grid-template-columns: 1fr 1fr;
-}
-
-.lawn-hub__tool {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  min-height: 2.6rem;
-  border-radius: 0.85rem;
-  border: 1px solid var(--lawn-hub-room-border);
-  background: var(--lawn-hub-room-bg);
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: inherit;
-  transition: background 140ms ease, border-color 140ms ease;
-}
-
-.lawn-hub__tool:hover {
-  border-color: color-mix(in srgb, var(--lawn-accent) 40%, var(--lawn-hub-room-border));
-  background: color-mix(in srgb, var(--lawn-accent-soft) 45%, white);
-}
-
-.lawn-hub__notice {
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 0.75rem;
-  padding: 0.65rem 0.8rem;
-  margin-bottom: 0.5rem;
-}
-
-.lawn-hub__notice--alert {
-  background: #fff7ed;
-  border: 1px solid #fdba74;
-  color: #9a3412;
-}
-
-.lawn-hub__notice--warn {
-  background: #fffbeb;
-  border: 1px solid #fcd34d;
-  color: #92400e;
-}
-
-.lawn-room__bar {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--lawn-hub-room-border);
-}
-
-.lawn-room__back,
-.lawn-room__setup {
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.45rem 0.7rem;
-  border-radius: 0.65rem;
-  border: 1px solid var(--lawn-hub-room-border);
-  background: color-mix(in srgb, var(--lawn-accent-soft) 40%, white);
-  color: inherit;
-}
-
-.lawn-room__title {
-  font-family: var(--lawn-font-display);
-  text-align: center;
-  font-size: 1.05rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-}
-
-.lawn-room__seasonal-intro {
-  margin-bottom: 1rem;
-  padding: 0.75rem 0.9rem;
-  border-radius: 0.85rem;
-  background: color-mix(in srgb, var(--lawn-accent-soft) 50%, white);
-  border: 1px solid var(--lawn-hub-room-border);
-  font-size: 0.78rem;
-  line-height: 1.4;
-  color: var(--lawn-muted);
-}
-
-[data-lawn-theme='signal'] .lawn-hub__room,
-[data-lawn-theme='signal'] .lawn-hub__tool,
-[data-lawn-theme='signal'] .lawn-hub__weather {
-  border-radius: 0.4rem;
-}
-
-[data-lawn-theme='atelier'] .lawn-hub__room {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-/* In sectioned rooms, stack each maintenance tracker full-width — one job per block */
-[data-lawn-layout='rooms'] #maintenance-panel .grid.lg\:grid-cols-3 {
-  grid-template-columns: 1fr;
-}
-
-@keyframes lawn-rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lawn-hub__hero,
-  .lawn-hub__weather,
-  .lawn-hub__rooms,
-  .lawn-hub__tools,
-  .lawn-hub__notices {
-    animation: none;
-  }
-}
-</file>
-
 <file path=".gitignore">
 node_modules/
 dist/
@@ -3779,6 +3328,457 @@ export default function SeasonTimeline({ app }) {
 }
 </file>
 
+<file path="src/index.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --lawn-font-display: "Segoe UI", system-ui, sans-serif;
+  --lawn-font-body: "Segoe UI", system-ui, sans-serif;
+  --lawn-page-bg: #f3f4f6;
+  --lawn-page-ink: #052e16;
+  --lawn-shell-bg: #ffffff;
+  --lawn-shell-border: #dcfce7;
+  --lawn-shell-radius: 0.75rem;
+  --lawn-shell-shadow: 0 4px 14px rgba(20, 83, 45, 0.08);
+  --lawn-accent: #166534;
+  --lawn-accent-soft: #dcfce7;
+  --lawn-muted: #4b5563;
+  --lawn-hub-room-bg: #ffffff;
+  --lawn-hub-room-border: #e5e7eb;
+}
+
+.lawn-focus-highlight {
+  outline: 3px solid #16a34a;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.2);
+  transition: outline 0.25s ease, box-shadow 0.25s ease;
+}
+
+.lawn-app-page {
+  background: var(--lawn-page-bg);
+  color: var(--lawn-page-ink);
+  font-family: var(--lawn-font-body);
+}
+
+.lawn-app-brand {
+  font-family: var(--lawn-font-display);
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--lawn-page-ink);
+  line-height: 1.1;
+}
+
+.lawn-app-subhead {
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--lawn-accent);
+}
+
+.lawn-app-footer {
+  color: color-mix(in srgb, var(--lawn-muted) 80%, transparent);
+}
+
+.lawn-sign-out {
+  border-color: color-mix(in srgb, var(--lawn-page-ink) 12%, transparent);
+  background: color-mix(in srgb, var(--lawn-shell-bg) 92%, white);
+  color: var(--lawn-muted);
+}
+
+.lawn-app-shell {
+  background: var(--lawn-shell-bg);
+  border: 1px solid var(--lawn-shell-border);
+  border-radius: var(--lawn-shell-radius);
+  box-shadow: var(--lawn-shell-shadow);
+  padding: 1rem;
+  font-family: var(--lawn-font-body);
+}
+
+@media (min-width: 640px) {
+  .lawn-app-shell {
+    padding: 1.5rem;
+  }
+}
+
+/* —— Classic keeps the original dense feel —— */
+[data-lawn-theme='classic'] {
+  --lawn-page-bg: #f3f4f6;
+  --lawn-page-ink: #052e16;
+  --lawn-shell-bg: #ffffff;
+  --lawn-shell-border: #dcfce7;
+  --lawn-accent: #166534;
+  --lawn-accent-soft: #dcfce7;
+}
+
+/* —— Atelier: calm moss workshop, sectioned —— */
+[data-lawn-theme='atelier'] {
+  --lawn-page-bg:
+    radial-gradient(1200px 500px at 10% -10%, #d7e8db 0%, transparent 55%),
+    linear-gradient(165deg, #eef5f0 0%, #dce8df 48%, #cfdfd3 100%);
+  --lawn-page-ink: #1a3a2a;
+  --lawn-shell-bg: rgba(255, 255, 255, 0.82);
+  --lawn-shell-border: rgba(47, 107, 79, 0.18);
+  --lawn-shell-radius: 1.25rem;
+  --lawn-shell-shadow: 0 18px 40px rgba(26, 58, 42, 0.1);
+  --lawn-accent: #2f6b4f;
+  --lawn-accent-soft: #c5d9c8;
+  --lawn-muted: #3f5a4b;
+  --lawn-hub-room-bg: rgba(255, 255, 255, 0.92);
+  --lawn-hub-room-border: rgba(47, 107, 79, 0.16);
+}
+
+/* —— Signal: crisp slate/sage neat freak —— */
+[data-lawn-theme='signal'] {
+  --lawn-page-bg:
+    linear-gradient(180deg, #e8eef2 0%, #f1f5f9 40%, #dde5ec 100%);
+  --lawn-page-ink: #0f172a;
+  --lawn-shell-bg: #f8fafc;
+  --lawn-shell-border: #cbd5e1;
+  --lawn-shell-radius: 0.5rem;
+  --lawn-shell-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 12px 28px rgba(15, 23, 42, 0.06);
+  --lawn-accent: #3f6f5a;
+  --lawn-accent-soft: #d7e4dc;
+  --lawn-muted: #475569;
+  --lawn-hub-room-bg: #ffffff;
+  --lawn-hub-room-border: #cbd5e1;
+}
+
+[data-lawn-theme='signal'] .lawn-app-brand {
+  letter-spacing: -0.05em;
+  font-weight: 700;
+}
+
+[data-lawn-theme='signal'] .lawn-app-shell {
+  border-width: 1px;
+}
+
+/* —— Canopy: deeper outdoor atmosphere —— */
+[data-lawn-theme='canopy'] {
+  --lawn-page-bg:
+    radial-gradient(900px 420px at 80% 0%, rgba(134, 239, 172, 0.35), transparent 60%),
+    linear-gradient(160deg, #064e3b 0%, #0b3d2e 42%, #052e16 100%);
+  --lawn-page-ink: #ecfdf5;
+  --lawn-shell-bg: rgba(236, 253, 245, 0.96);
+  --lawn-shell-border: rgba(167, 243, 208, 0.45);
+  --lawn-shell-radius: 1.5rem;
+  --lawn-shell-shadow: 0 24px 50px rgba(0, 0, 0, 0.28);
+  --lawn-accent: #166534;
+  --lawn-accent-soft: #bbf7d0;
+  --lawn-muted: #334155;
+  --lawn-hub-room-bg: #ffffff;
+  --lawn-hub-room-border: rgba(22, 101, 52, 0.15);
+}
+
+[data-lawn-theme='canopy'] .lawn-app-brand,
+[data-lawn-theme='canopy'] .lawn-app-subhead,
+[data-lawn-theme='canopy'] .lawn-app-footer,
+[data-lawn-theme='canopy'] .lawn-sign-out {
+  color: #ecfdf5;
+}
+
+[data-lawn-theme='canopy'] .lawn-app-subhead {
+  color: #86efac;
+}
+
+[data-lawn-theme='canopy'] .lawn-sign-out {
+  border-color: rgba(236, 253, 245, 0.25);
+  background: rgba(5, 46, 22, 0.35);
+}
+
+[data-lawn-theme='canopy'] .lawn-app-footer {
+  color: rgba(236, 253, 245, 0.55);
+}
+
+/* Inner content on canopy stays dark-on-light */
+[data-lawn-theme='canopy'] .lawn-app-shell {
+  color: #0f172a;
+}
+
+/* —— Hub / rooms —— */
+.lawn-hub__hero {
+  margin-bottom: 1.25rem;
+  animation: lawn-rise 420ms ease-out both;
+}
+
+.lawn-hub__eyebrow {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--lawn-accent);
+  margin-bottom: 0.35rem;
+}
+
+.lawn-hub__title {
+  font-family: var(--lawn-font-display);
+  font-size: 1.55rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--lawn-page-ink);
+}
+
+[data-lawn-theme='canopy'] .lawn-hub__title,
+[data-lawn-theme='atelier'] .lawn-hub__title,
+[data-lawn-theme='signal'] .lawn-hub__title {
+  color: inherit;
+}
+
+.lawn-hub__lede {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lawn-hub__sqm {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.lawn-hub__dims {
+  font-size: 0.8rem;
+  color: var(--lawn-muted);
+}
+
+.lawn-hub__theme-note {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--lawn-muted);
+}
+
+.lawn-hub__section-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lawn-muted);
+  margin-bottom: 0.5rem;
+}
+
+.lawn-hub__weather,
+.lawn-hub__rooms,
+.lawn-hub__tools,
+.lawn-hub__notices {
+  margin-bottom: 1.15rem;
+  animation: lawn-rise 480ms ease-out both;
+}
+
+.lawn-hub__rooms {
+  animation-delay: 60ms;
+}
+
+.lawn-hub__tools {
+  animation-delay: 120ms;
+}
+
+.lawn-hub__weather {
+  border: 1px solid var(--lawn-hub-room-border);
+  background: color-mix(in srgb, var(--lawn-accent-soft) 35%, white);
+  border-radius: 0.9rem;
+  padding: 0.85rem 1rem;
+}
+
+.lawn-hub__weather-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.lawn-hub__room-grid,
+.lawn-hub__tool-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lawn-hub__room {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: var(--lawn-hub-room-bg);
+  border-radius: 1rem;
+  padding: 0.95rem 1rem;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.lawn-hub__room:hover,
+.lawn-hub__room:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lawn-accent) 45%, var(--lawn-hub-room-border));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  outline: none;
+}
+
+.lawn-hub__room--alert {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.lawn-hub__room--warn {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.lawn-hub__room-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.lawn-hub__room-title {
+  display: block;
+  font-family: var(--lawn-font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lawn-hub__room-blurb {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--lawn-muted);
+}
+
+.lawn-hub__room-meta {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--lawn-accent);
+  white-space: nowrap;
+}
+
+.lawn-hub__tool-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.lawn-hub__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.6rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: var(--lawn-hub-room-bg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: inherit;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.lawn-hub__tool:hover {
+  border-color: color-mix(in srgb, var(--lawn-accent) 40%, var(--lawn-hub-room-border));
+  background: color-mix(in srgb, var(--lawn-accent-soft) 45%, white);
+}
+
+.lawn-hub__notice {
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.lawn-hub__notice--alert {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+}
+
+.lawn-hub__notice--warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.lawn-room__bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--lawn-hub-room-border);
+}
+
+.lawn-room__back,
+.lawn-room__setup {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: color-mix(in srgb, var(--lawn-accent-soft) 40%, white);
+  color: inherit;
+}
+
+.lawn-room__title {
+  font-family: var(--lawn-font-display);
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.lawn-room__seasonal-intro {
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--lawn-accent-soft) 50%, white);
+  border: 1px solid var(--lawn-hub-room-border);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--lawn-muted);
+}
+
+[data-lawn-theme='signal'] .lawn-hub__room,
+[data-lawn-theme='signal'] .lawn-hub__tool,
+[data-lawn-theme='signal'] .lawn-hub__weather {
+  border-radius: 0.4rem;
+}
+
+[data-lawn-theme='atelier'] .lawn-hub__room {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* In sectioned rooms, stack each maintenance tracker full-width — one job per block */
+[data-lawn-layout='rooms'] #maintenance-panel .grid.lg\:grid-cols-3 {
+  grid-template-columns: 1fr;
+}
+
+@keyframes lawn-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lawn-hub__hero,
+  .lawn-hub__weather,
+  .lawn-hub__rooms,
+  .lawn-hub__tools,
+  .lawn-hub__notices {
+    animation: none;
+  }
+}
+</file>
+
 <file path="src/lib/supabase.js">
 import { createClient } from '@supabase/supabase-js';
 
@@ -3919,130 +3919,6 @@ export function withTaskUserId(row, userId) {
 }
 </file>
 
-<file path="src/utils/lawnDeepLink.js">
-/** Short keys used in ?focus= from the Tasks app */
-export const LAWN_FOCUS_ALIASES = {
-  water: 'maintenance-watering-tracker',
-  mow: 'maintenance-mowing-tracker',
-  verticut: 'maintenance-verticut-tracker',
-  gypsum: 'soil-treatments-tracker',
-  maintenance: 'maintenance-panel',
-};
-
-const PACK_STEP_FOCUS_PATTERN = /^step-(SPRING|SUMMER|AUTUMN|WINTER)-([a-z0-9]+)$/i;
-
-const HIGHLIGHT_CLASS = 'lawn-focus-highlight';
-
-/**
- * @param {string} seasonKey
- * @param {string} stepId
- * @returns {string}
- */
-export function packStepDomId(seasonKey, stepId) {
-  return `step-${seasonKey}-${stepId}`;
-}
-
-/**
- * @param {string | null | undefined} raw
- * @returns {{ season: string, stepId: string, domId: string } | null}
- */
-export function parsePackStepFocus(raw) {
-  if (!raw || typeof raw !== 'string') return null;
-  const match = raw.trim().match(PACK_STEP_FOCUS_PATTERN);
-  if (!match) return null;
-
-  const season = match[1].toUpperCase();
-  const stepId = match[2].toLowerCase();
-  return { season, stepId, domId: packStepDomId(season, stepId) };
-}
-
-/**
- * @param {string | null | undefined} raw
- * @returns {string | null} DOM id to scroll to
- */
-export function resolveLawnFocusTarget(raw) {
-  if (!raw || typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-
-  const alias = LAWN_FOCUS_ALIASES[trimmed.toLowerCase()];
-  if (alias) return alias;
-
-  const pack = parsePackStepFocus(trimmed);
-  if (pack) return pack.domId;
-
-  if (/^[a-z][a-z0-9-]*$/i.test(trimmed)) {
-    return trimmed;
-  }
-
-  return null;
-}
-
-/**
- * @returns {string | null}
- */
-export function getFocusFromUrl() {
-  if (typeof window === 'undefined') return null;
-
-  const params = new URLSearchParams(window.location.search);
-  const fromQuery = params.get('focus');
-  if (fromQuery) return fromQuery;
-
-  const hash = window.location.hash.replace(/^#/, '');
-  if (hash) return hash;
-
-  return null;
-}
-
-/**
- * Scroll to a maintenance / treatment section and briefly highlight it.
- * @param {string} targetId
- * @param {{ delayMs?: number }} [options]
- */
-export function scrollToLawnFocus(targetId, options = {}) {
-  const { delayMs = 400 } = options;
-
-  const run = () => {
-    const el = document.getElementById(targetId);
-    if (!el) return false;
-
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.classList.add(HIGHLIGHT_CLASS);
-    window.setTimeout(() => el.classList.remove(HIGHLIGHT_CLASS), 3200);
-    return true;
-  };
-
-  if (delayMs <= 0) {
-    return run();
-  }
-
-  window.setTimeout(run, delayMs);
-  return true;
-}
-
-/**
- * Apply ?focus= / #hash from the current URL once the main UI is mounted.
- * @param {{ delayMs?: number, retries?: number, targetId?: string | null }} [options]
- */
-export function applyLawnFocusFromUrl(options = {}) {
-  const focusRaw = getFocusFromUrl();
-  const targetId = options.targetId ?? resolveLawnFocusTarget(focusRaw);
-  if (!targetId) return;
-
-  const delayMs = options.delayMs ?? 300;
-  const retries = options.retries ?? 8;
-
-  const attempt = (left) => {
-    if (scrollToLawnFocus(targetId, { delayMs: 0 })) return;
-    if (left > 0) {
-      window.setTimeout(() => attempt(left - 1), 200);
-    }
-  };
-
-  window.setTimeout(() => attempt(retries), delayMs);
-}
-</file>
-
 <file path="src/main.jsx">
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -4078,73 +3954,6 @@ TASKS_OWNER_USER_ID=your-user-uuid-here
 LAWN_SYNC_SECRET=your-random-secret
 </file>
 
-<file path="index.html">
-<!doctype html>
-<html lang="en-GB">
-  <head>
-    <script>
-      (function () {
-        var key = 'lawn-app-sw-reset-v1';
-        try {
-          if (localStorage.getItem(key) === '1') return;
-          localStorage.setItem(key, '1');
-        } catch (e) {
-          return;
-        }
-        var reloadAfterReset = function () {
-          window.location.reload();
-        };
-        var clearCaches = function () {
-          if (!('caches' in window)) {
-            reloadAfterReset();
-            return;
-          }
-          caches
-            .keys()
-            .then(function (keys) {
-              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
-            })
-            .finally(reloadAfterReset);
-        };
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker
-            .getRegistrations()
-            .then(function (regs) {
-              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
-            })
-            .then(clearCaches)
-            .catch(clearCaches);
-        } else {
-          clearCaches();
-        }
-      })();
-    </script>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#14532d" />
-    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;600;700&family=Karla:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>The Lawn Pack Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-</file>
-
 <file path="vercel.json">
 {
   "headers": [
@@ -4173,128 +3982,6 @@ LAWN_SYNC_SECRET=your-random-secret
       "maxDuration": 60
     }
   }
-}
-</file>
-
-<file path="src/components/lawn/LawnCareApp.jsx">
-import React, { useCallback, useEffect } from 'react';
-import { useLawnCareApp } from '../../hooks/useLawnCareApp';
-import {
-  useMobileBackNavigation,
-  useRegisterBackHandler,
-} from '../../hooks/useMobileBackNavigation';
-import { pushAppHistoryState } from '../../utils/backNavigation';
-import LawnSettings from './LawnSettings';
-import LawnMainView from './LawnMainView';
-import LawnGuides from './LawnGuides';
-import LawnMaterials from './LawnMaterials';
-import SprinklerLightbox from './SprinklerLightbox';
-
-export default function LawnCareApp() {
-  const app = useLawnCareApp();
-
-  const isAtRoot = useCallback(
-    () =>
-      app.activeScreen === 'main' &&
-      (app.activeTheme.layout === 'classic' || app.activeRoom === 'hub') &&
-      !app.enlargedSprinkler &&
-      !app.showLevellingGuide,
-    [
-      app.activeScreen,
-      app.activeTheme.layout,
-      app.activeRoom,
-      app.enlargedSprinkler,
-      app.showLevellingGuide,
-    ]
-  );
-
-  const onReturnToMain = useCallback(() => {
-    app.setActiveScreen('main');
-    if (app.activeTheme.layout === 'rooms') {
-      app.setActiveRoom('hub');
-    }
-    app.setShowLevellingGuide(false);
-    app.setEnlargedSprinkler(null);
-  }, [app]);
-
-  useMobileBackNavigation({ isAtRoot, onReturnToMain });
-
-  useEffect(() => {
-    if (app.activeScreen !== 'main') {
-      pushAppHistoryState({ screen: app.activeScreen });
-    }
-  }, [app.activeScreen]);
-
-  useEffect(() => {
-    if (app.activeTheme.layout === 'rooms' && app.activeRoom !== 'hub' && app.activeScreen === 'main') {
-      pushAppHistoryState({ room: app.activeRoom });
-    }
-  }, [app.activeRoom, app.activeTheme.layout, app.activeScreen]);
-
-  useEffect(() => {
-    if (app.enlargedSprinkler) {
-      pushAppHistoryState({ overlay: 'sprinkler' });
-    }
-  }, [app.enlargedSprinkler]);
-
-  useEffect(() => {
-    if (app.showLevellingGuide) {
-      pushAppHistoryState({ overlay: 'levelling' });
-    }
-  }, [app.showLevellingGuide]);
-
-  useRegisterBackHandler(() => {
-    if (app.enlargedSprinkler) {
-      app.setEnlargedSprinkler(null);
-      return true;
-    }
-    return false;
-  }, Boolean(app.enlargedSprinkler));
-
-  useRegisterBackHandler(() => {
-    if (app.showLevellingGuide) {
-      app.setShowLevellingGuide(false);
-      return true;
-    }
-    return false;
-  }, Boolean(app.showLevellingGuide));
-
-  useRegisterBackHandler(() => {
-    if (
-      app.activeTheme.layout === 'rooms' &&
-      app.activeScreen === 'main' &&
-      app.activeRoom !== 'hub'
-    ) {
-      app.setActiveRoom('hub');
-      return true;
-    }
-    return false;
-  }, app.activeTheme.layout === 'rooms' && app.activeScreen === 'main' && app.activeRoom !== 'hub');
-
-  return (
-    <div
-      className="lawn-app-shell w-full max-w-xl mx-auto overflow-hidden"
-      data-lawn-theme={app.activeTheme.id}
-      data-lawn-layout={app.activeTheme.layout}
-    >
-      {app.activeScreen === 'settings' ? (
-        <LawnSettings app={app} />
-      ) : app.activeScreen === 'guides' ? (
-        <LawnGuides setActiveScreen={app.setActiveScreen} />
-      ) : app.activeScreen === 'materials' ? (
-        <LawnMaterials app={app} />
-      ) : (
-        <LawnMainView app={app} />
-      )}
-
-      {app.enlargedSprinkler && (
-        <SprinklerLightbox
-          enlargedSprinkler={app.enlargedSprinkler}
-          onClose={() => app.setEnlargedSprinkler(null)}
-        />
-      )}
-    </div>
-  );
 }
 </file>
 
@@ -4414,121 +4101,6 @@ export default function LawnGuides({ setActiveScreen }) {
           onClose={() => setEnlargedImage(null)}
         />
       )}
-    </>
-  );
-}
-</file>
-
-<file path="src/components/lawn/LawnWorkflow.jsx">
-import React from 'react';
-import { formatSyncTimeAgo } from '../../utils/lawnDates';
-import LawnAlerts from './LawnAlerts';
-import MaintenancePanel from './MaintenancePanel';
-import SeasonTimeline from './SeasonTimeline';
-import { CalculatorIcon } from './LawnMaterials';
-
-/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
-export default function LawnWorkflow({ app }) {
-  const {
-    sqm,
-    length,
-    width,
-    runFullCloudSync,
-    cloudSyncStatus,
-    lastCloudSyncAt,
-    setActiveScreen,
-  } = app;
-
-  const syncLabel =
-    cloudSyncStatus === 'pulling'
-      ? 'Pull…'
-      : cloudSyncStatus === 'pushing'
-        ? 'Push…'
-        : cloudSyncStatus === 'error'
-          ? 'Retry'
-          : cloudSyncStatus === 'idle'
-            ? 'Sync'
-            : null;
-
-  return (
-    <>
-      <LawnAlerts app={app} />
-      <div className="mb-6 border-b pb-4 space-y-3">
-        <div className="min-w-0">
-          <h2 className="text-lg sm:text-xl font-black text-green-800 leading-tight">
-            📋 Lawn Pack Workflow
-          </h2>
-          <p className="text-sm text-green-700 mt-1">
-            <span className="font-black">{sqm} SQM</span>
-            <span className="text-green-600 ml-1.5">
-              ({length}m × {width}m)
-            </span>
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => void runFullCloudSync()}
-            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
-            title={
-              cloudSyncStatus === 'synced' && lastCloudSyncAt
-                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
-                : cloudSyncStatus === 'error'
-                  ? 'Sync problem — tap to retry'
-                  : 'Sync schedule to cloud'
-            }
-            className={`flex w-full items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border text-xs font-bold transition-all disabled:opacity-60 ${
-              cloudSyncStatus === 'synced'
-                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                : cloudSyncStatus === 'error'
-                  ? 'border-red-300 bg-red-50 text-red-700'
-                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
-            }`}
-            aria-label={
-              cloudSyncStatus === 'synced' && lastCloudSyncAt
-                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
-                : 'Sync with shared database'
-            }
-          >
-            <span
-              className={`text-base leading-none ${
-                cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'
-                  ? 'inline-block animate-spin'
-                  : ''
-              }`}
-              aria-hidden="true"
-            >
-              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
-            </span>
-            {syncLabel && <span>{syncLabel}</span>}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveScreen('materials')}
-            className="flex w-full items-center justify-center gap-1.5 text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold py-2.5 px-3 rounded-lg transition-all border border-amber-200"
-          >
-            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
-            <span>Materials</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveScreen('guides')}
-            className="flex w-full items-center justify-center gap-1.5 text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-2.5 px-3 rounded-lg transition-all border border-green-200"
-          >
-            <span>📚 Guides</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveScreen('settings')}
-            className="flex w-full items-center justify-center gap-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2.5 px-3 rounded-lg transition-all"
-          >
-            <span>⚙️ Setup</span>
-          </button>
-        </div>
-      </div>
-
-      <MaintenancePanel app={app} />
-      <SeasonTimeline app={app} />
     </>
   );
 }
@@ -5345,396 +4917,429 @@ export function getLawnAppStateSetupHint() {
 }
 </file>
 
-<file path="src/components/lawn/LawnSettings.jsx">
+<file path="src/utils/lawnDeepLink.js">
+/** Short keys used in ?focus= from the Tasks app */
+export const LAWN_FOCUS_ALIASES = {
+  water: 'maintenance-watering-tracker',
+  mow: 'maintenance-mowing-tracker',
+  verticut: 'maintenance-verticut-tracker',
+  gypsum: 'soil-treatments-tracker',
+  maintenance: 'maintenance-panel',
+};
+
+const PACK_STEP_FOCUS_PATTERN = /^step-(SPRING|SUMMER|AUTUMN|WINTER)-([a-z0-9]+)$/i;
+
+const HIGHLIGHT_CLASS = 'lawn-focus-highlight';
+
+/**
+ * @param {string} seasonKey
+ * @param {string} stepId
+ * @returns {string}
+ */
+export function packStepDomId(seasonKey, stepId) {
+  return `step-${seasonKey}-${stepId}`;
+}
+
+/**
+ * @param {string | null | undefined} raw
+ * @returns {{ season: string, stepId: string, domId: string } | null}
+ */
+export function parsePackStepFocus(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const match = raw.trim().match(PACK_STEP_FOCUS_PATTERN);
+  if (!match) return null;
+
+  const season = match[1].toUpperCase();
+  const stepId = match[2].toLowerCase();
+  return { season, stepId, domId: packStepDomId(season, stepId) };
+}
+
+/**
+ * @param {string | null | undefined} raw
+ * @returns {string | null} DOM id to scroll to
+ */
+export function resolveLawnFocusTarget(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const alias = LAWN_FOCUS_ALIASES[trimmed.toLowerCase()];
+  if (alias) return alias;
+
+  const pack = parsePackStepFocus(trimmed);
+  if (pack) return pack.domId;
+
+  if (/^[a-z][a-z0-9-]*$/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
+}
+
+/**
+ * @returns {string | null}
+ */
+export function getFocusFromUrl() {
+  if (typeof window === 'undefined') return null;
+
+  const params = new URLSearchParams(window.location.search);
+  const fromQuery = params.get('focus');
+  if (fromQuery) return fromQuery;
+
+  const hash = window.location.hash.replace(/^#/, '');
+  if (hash) return hash;
+
+  return null;
+}
+
+/**
+ * Scroll to a maintenance / treatment section and briefly highlight it.
+ * @param {string} targetId
+ * @param {{ delayMs?: number }} [options]
+ */
+export function scrollToLawnFocus(targetId, options = {}) {
+  const { delayMs = 400 } = options;
+
+  const run = () => {
+    const el = document.getElementById(targetId);
+    if (!el) return false;
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add(HIGHLIGHT_CLASS);
+    window.setTimeout(() => el.classList.remove(HIGHLIGHT_CLASS), 3200);
+    return true;
+  };
+
+  if (delayMs <= 0) {
+    return run();
+  }
+
+  window.setTimeout(run, delayMs);
+  return true;
+}
+
+/**
+ * Apply ?focus= / #hash from the current URL once the main UI is mounted.
+ * @param {{ delayMs?: number, retries?: number, targetId?: string | null }} [options]
+ */
+export function applyLawnFocusFromUrl(options = {}) {
+  const focusRaw = getFocusFromUrl();
+  const targetId = options.targetId ?? resolveLawnFocusTarget(focusRaw);
+  if (!targetId) return;
+
+  const delayMs = options.delayMs ?? 300;
+  const retries = options.retries ?? 8;
+
+  const attempt = (left) => {
+    if (scrollToLawnFocus(targetId, { delayMs: 0 })) return;
+    if (left > 0) {
+      window.setTimeout(() => attempt(left - 1), 200);
+    }
+  };
+
+  window.setTimeout(() => attempt(retries), delayMs);
+}
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <script>
+      (function () {
+        var key = 'lawn-app-sw-reset-v1';
+        try {
+          if (localStorage.getItem(key) === '1') return;
+          localStorage.setItem(key, '1');
+        } catch (e) {
+          return;
+        }
+        var reloadAfterReset = function () {
+          window.location.reload();
+        };
+        var clearCaches = function () {
+          if (!('caches' in window)) {
+            reloadAfterReset();
+            return;
+          }
+          caches
+            .keys()
+            .then(function (keys) {
+              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
+            })
+            .finally(reloadAfterReset);
+        };
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (regs) {
+              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+            })
+            .then(clearCaches)
+            .catch(clearCaches);
+        } else {
+          clearCaches();
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;600;700&family=Karla:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>The Lawn Pack Companion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+</file>
+
+<file path="src/components/lawn/LawnCareApp.jsx">
+import React, { useCallback, useEffect } from 'react';
+import { useLawnCareApp } from '../../hooks/useLawnCareApp';
+import {
+  useMobileBackNavigation,
+  useRegisterBackHandler,
+} from '../../hooks/useMobileBackNavigation';
+import { pushAppHistoryState } from '../../utils/backNavigation';
+import LawnSettings from './LawnSettings';
+import LawnMainView from './LawnMainView';
+import LawnGuides from './LawnGuides';
+import LawnMaterials from './LawnMaterials';
+import SprinklerLightbox from './SprinklerLightbox';
+
+export default function LawnCareApp() {
+  const app = useLawnCareApp();
+
+  const isAtRoot = useCallback(
+    () =>
+      app.activeScreen === 'main' &&
+      (app.activeTheme.layout === 'classic' || app.activeRoom === 'hub') &&
+      !app.enlargedSprinkler &&
+      !app.showLevellingGuide,
+    [
+      app.activeScreen,
+      app.activeTheme.layout,
+      app.activeRoom,
+      app.enlargedSprinkler,
+      app.showLevellingGuide,
+    ]
+  );
+
+  const onReturnToMain = useCallback(() => {
+    app.setActiveScreen('main');
+    if (app.activeTheme.layout === 'rooms') {
+      app.setActiveRoom('hub');
+    }
+    app.setShowLevellingGuide(false);
+    app.setEnlargedSprinkler(null);
+  }, [app]);
+
+  useMobileBackNavigation({ isAtRoot, onReturnToMain });
+
+  useEffect(() => {
+    if (app.activeScreen !== 'main') {
+      pushAppHistoryState({ screen: app.activeScreen });
+    }
+  }, [app.activeScreen]);
+
+  useEffect(() => {
+    if (app.activeTheme.layout === 'rooms' && app.activeRoom !== 'hub' && app.activeScreen === 'main') {
+      pushAppHistoryState({ room: app.activeRoom });
+    }
+  }, [app.activeRoom, app.activeTheme.layout, app.activeScreen]);
+
+  useEffect(() => {
+    if (app.enlargedSprinkler) {
+      pushAppHistoryState({ overlay: 'sprinkler' });
+    }
+  }, [app.enlargedSprinkler]);
+
+  useEffect(() => {
+    if (app.showLevellingGuide) {
+      pushAppHistoryState({ overlay: 'levelling' });
+    }
+  }, [app.showLevellingGuide]);
+
+  useRegisterBackHandler(() => {
+    if (app.enlargedSprinkler) {
+      app.setEnlargedSprinkler(null);
+      return true;
+    }
+    return false;
+  }, Boolean(app.enlargedSprinkler));
+
+  useRegisterBackHandler(() => {
+    if (app.showLevellingGuide) {
+      app.setShowLevellingGuide(false);
+      return true;
+    }
+    return false;
+  }, Boolean(app.showLevellingGuide));
+
+  useRegisterBackHandler(() => {
+    if (
+      app.activeTheme.layout === 'rooms' &&
+      app.activeScreen === 'main' &&
+      app.activeRoom !== 'hub'
+    ) {
+      app.setActiveRoom('hub');
+      return true;
+    }
+    return false;
+  }, app.activeTheme.layout === 'rooms' && app.activeScreen === 'main' && app.activeRoom !== 'hub');
+
+  return (
+    <div
+      className="lawn-app-shell w-full max-w-xl mx-auto overflow-hidden"
+      data-lawn-theme={app.activeTheme.id}
+      data-lawn-layout={app.activeTheme.layout}
+    >
+      {app.activeScreen === 'settings' ? (
+        <LawnSettings app={app} />
+      ) : app.activeScreen === 'guides' ? (
+        <LawnGuides setActiveScreen={app.setActiveScreen} />
+      ) : app.activeScreen === 'materials' ? (
+        <LawnMaterials app={app} />
+      ) : (
+        <LawnMainView app={app} />
+      )}
+
+      {app.enlargedSprinkler && (
+        <SprinklerLightbox
+          enlargedSprinkler={app.enlargedSprinkler}
+          onClose={() => app.setEnlargedSprinkler(null)}
+        />
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/lawn/LawnWorkflow.jsx">
 import React from 'react';
-import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
-import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
-import { LAWN_THEMES } from '../../data/lawnThemes';
+import { formatSyncTimeAgo } from '../../utils/lawnDates';
+import LawnAlerts from './LawnAlerts';
+import MaintenancePanel from './MaintenancePanel';
+import SeasonTimeline from './SeasonTimeline';
+import { CalculatorIcon } from './LawnMaterials';
 
 /** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
-export default function LawnSettings({ app }) {
+export default function LawnWorkflow({ app }) {
   const {
-    length,
-    setLength,
-    width,
-    setWidth,
     sqm,
-    mowerModel,
-    setMowerModel,
-    lawnSurface,
-    setLawnSurface,
-    showLevellingGuide,
-    setShowLevellingGuide,
-    selectedEquipment,
-    setSelectedEquipment,
-    weatherLocation,
-    postcodeInput,
-    setPostcodeInput,
-    weatherLocationError,
-    weatherLocationSaving,
-    weatherLocationLabel,
-    selectedSprinkler,
-    setSelectedSprinkler,
-    setEnlargedSprinkler,
-    supabaseSyncError,
-    jsonCopied,
-    handleCopyTasksJson,
-    handleSaveWeatherPostcode,
-    handleUseMyLocationForWeather,
-    handleResetWeatherLocation,
+    length,
+    width,
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
     setActiveScreen,
-    setWeatherLocationError,
-    themeId,
-    setThemeId,
-    setActiveRoom,
   } = app;
+
+  const syncLabel =
+    cloudSyncStatus === 'pulling'
+      ? 'Pull…'
+      : cloudSyncStatus === 'pushing'
+        ? 'Push…'
+        : cloudSyncStatus === 'error'
+          ? 'Retry'
+          : cloudSyncStatus === 'idle'
+            ? 'Sync'
+            : null;
 
   return (
     <>
-      <div className="flex justify-between items-center mb-6 border-b pb-4">
-        <div>
-          <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
+      <LawnAlerts app={app} />
+      <div className="mb-6 border-b pb-4 space-y-3">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-black text-green-800 leading-tight">
+            📋 Lawn Pack Workflow
+          </h2>
           <p className="text-sm text-green-700 mt-1">
-            Configure appearance, lawn size, equipment, and surface profile.
+            <span className="font-black">{sqm} SQM</span>
+            <span className="text-green-600 ml-1.5">
+              ({length}m × {width}m)
+            </span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setActiveScreen('main')}
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
-        >
-          ← Back
-        </button>
-      </div>
-
-      <div className="space-y-5">
-        <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
-          <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
-          <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
-            Try a different look and layout. Sectioned themes put Maintenance and Seasonal Pack in
-            their own rooms. Classic keeps the original long page — you can always switch back.
-          </p>
-          <div className="grid gap-2">
-            {LAWN_THEMES.map((theme) => {
-              const selected = themeId === theme.id;
-              return (
-                <button
-                  key={theme.id}
-                  type="button"
-                  onClick={() => {
-                    setThemeId(theme.id);
-                    setActiveRoom('hub');
-                  }}
-                  className={`text-left rounded-xl border p-3 transition-all ${
-                    selected
-                      ? 'border-emerald-600 bg-white ring-2 ring-emerald-500/30'
-                      : 'border-emerald-100 bg-white/80 hover:border-emerald-300'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-900">{theme.name}</p>
-                      <p className="text-[11px] font-semibold text-emerald-800 mt-0.5">
-                        {theme.tagline}
-                      </p>
-                      <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
-                        {theme.description}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md ${
-                        selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'
-                      }`}
-                    >
-                      {selected ? 'Active' : 'Try'}
-                    </span>
-                  </div>
-                  <div className="flex gap-1.5 mt-3" aria-hidden="true">
-                    {theme.swatches.map((color) => (
-                      <span
-                        key={color}
-                        className="h-4 w-4 rounded-full border border-black/10"
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <div>
-          <label className="block text-sm font-medium text-green-900 mb-1">
-            Lawn Length: <span className="font-bold text-green-700">{length}m</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            value={length}
-            onChange={(e) => setLength(parseInt(e.target.value, 10))}
-            className="w-full accent-green-600"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-green-900 mb-1">
-            Lawn Width: <span className="font-bold text-green-700">{width}m</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            value={width}
-            onChange={(e) => setWidth(parseInt(e.target.value, 10))}
-            className="w-full accent-green-600"
-          />
-        </div>
-        <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-sm text-green-800">
-          <span className="font-black">{sqm} SQM</span>
-          <span className="text-green-600 ml-1.5">
-            ({length}m × {width}m)
-          </span>
-        </div>
-        <div>
-          <label htmlFor="mower-select" className="block text-sm font-medium text-green-900 mb-1">
-            Lawnmower Model
-          </label>
-          <select
-            id="mower-select"
-            value={mowerModel}
-            onChange={(e) => setMowerModel(e.target.value)}
-            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
-          >
-            {Object.values(MOWER_OPTIONS).map((mower) => (
-              <option key={mower.id} value={mower.id}>
-                {mower.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mb-2">
-            <p className="text-sm font-medium text-green-900">Lawn Surface Condition</p>
-            <button
-              type="button"
-              onClick={() => setShowLevellingGuide((open) => !open)}
-              aria-expanded={showLevellingGuide}
-              className="ml-2 text-emerald-600 hover:text-emerald-800 text-xs underline font-medium"
-            >
-              ℹ️ How to fix a bumpy lawn
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {Object.values(LAWN_SURFACE_OPTIONS).map((option) => {
-              const isSelected = lawnSurface === option.id;
-
-              return (
-                <label
-                  key={option.id}
-                  className={`flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer text-sm font-medium transition-all ${
-                    isSelected
-                      ? 'border-green-600 bg-green-100/80 text-green-900 ring-1 ring-green-500/30'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="lawn-surface"
-                    value={option.id}
-                    checked={isSelected}
-                    onChange={(e) => setLawnSurface(e.target.value)}
-                    className="accent-green-600"
-                  />
-                  {option.label}
-                </label>
-              );
-            })}
-          </div>
-          <div
-            className={`grid transition-all duration-300 ease-in-out ${
-              showLevellingGuide
-                ? 'grid-rows-[1fr] opacity-100 mt-3'
-                : 'grid-rows-[0fr] opacity-0 mt-0'
-            }`}
-          >
-            <div className="overflow-hidden">
-              <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-emerald-900">Lawn Levelling Guide</h4>
-                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                      Choose the method that matches your dip depth. Once levelled, switch your
-                      surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut height
-                      recommendation.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowLevellingGuide(false)}
-                    className="shrink-0 text-xs font-bold text-gray-400 hover:text-gray-600"
-                    aria-label="Close levelling guide"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {LEVELLING_GUIDE_METHODS.map((method) => (
-                    <div
-                      key={method.title}
-                      className="rounded-lg border border-green-100 bg-green-50/40 p-3.5"
-                    >
-                      <p className="text-xs font-bold text-green-900 mb-1.5">{method.title}</p>
-                      <p className="text-xs text-gray-600 leading-relaxed">{method.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div>
-          <label htmlFor="equipment-select" className="block text-sm font-bold text-gray-700 mb-1.5">
-            Application Tool Profile:
-          </label>
-          <select
-            id="equipment-select"
-            value={selectedEquipment}
-            onChange={(e) => setSelectedEquipment(e.target.value)}
-            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
-          >
-            {Object.values(EQUIPMENT_OPTIONS).map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
-          <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
-          <p className="text-[11px] text-sky-900/80 mb-3 leading-snug">
-            Rain and soil temperature forecasts use this postcode. Defaults to the Wallsend area
-            until you set your own.
-          </p>
-          <label htmlFor="weather-postcode" className="block text-xs font-semibold text-sky-950 mb-1">
-            UK postcode
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="weather-postcode"
-              type="text"
-              value={postcodeInput}
-              onChange={(event) => {
-                setPostcodeInput(event.target.value.toUpperCase());
-                setWeatherLocationError(null);
-              }}
-              placeholder="NE28 9AB"
-              autoComplete="postal-code"
-              className="flex-1 min-w-0 bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm text-gray-800 font-medium focus:ring-2 focus:ring-sky-400"
-            />
-            <button
-              type="button"
-              onClick={() => void handleSaveWeatherPostcode()}
-              disabled={weatherLocationSaving || !postcodeInput.trim()}
-              className="shrink-0 text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
-            >
-              {weatherLocationSaving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-2">
-            <button
-              type="button"
-              onClick={() => void handleUseMyLocationForWeather()}
-              disabled={weatherLocationSaving}
-              className="text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
-            >
-              📍 Use my location
-            </button>
-            {weatherLocation.source !== 'default' && (
-              <button
-                type="button"
-                onClick={() => void handleResetWeatherLocation()}
-                disabled={weatherLocationSaving}
-                className="text-xs font-semibold py-2 px-3 rounded-lg text-sky-800 hover:bg-sky-100/80 disabled:opacity-50"
-              >
-                Reset to default
-              </button>
-            )}
-          </div>
-          <p className="mt-2 text-xs font-medium text-sky-900">
-            Forecast for: {weatherLocationLabel}
-          </p>
-          {weatherLocationError && (
-            <p className="mt-2 text-xs font-semibold text-red-700">{weatherLocationError}</p>
-          )}
-        </div>
-
-        <div>
-          <p className="block text-sm font-bold text-gray-700 mb-1">
-            Irrigation Profile — Select Your Primary Sprinkler:
-          </p>
-          <p className="text-[11px] text-gray-500 mb-2 leading-snug">
-            Match the photo and description to the sprinkler you own. Tap a photo to enlarge it.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {Object.values(SPRINKLER_OPTIONS).map((sprinkler) => {
-              const isSelected = selectedSprinkler === sprinkler.id;
-
-              return (
-                <button
-                  key={sprinkler.id}
-                  type="button"
-                  onClick={() => setSelectedSprinkler(sprinkler.id)}
-                  className={`text-left rounded-lg border p-3 transition-all ${
-                    isSelected
-                      ? 'border-green-600 bg-green-100/80 shadow-sm ring-1 ring-green-500/30'
-                      : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
-                  }`}
-                >
-                  <img
-                    src={sprinkler.image}
-                    alt={sprinkler.name}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setEnlargedSprinkler({
-                        image: sprinkler.image,
-                        name: sprinkler.name,
-                      });
-                    }}
-                    className="w-16 h-16 object-cover rounded-md mb-2 mx-auto border border-gray-200 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
-                  />
-                  <span className="text-xs font-bold text-gray-900 leading-snug block">
-                    {sprinkler.name}
-                  </span>
-                  <span className="text-[10px] font-semibold text-green-700 block mb-1.5">
-                    ~{sprinkler.ratePerHour}mm / hour
-                  </span>
-                  <p className="text-[10px] text-gray-700 leading-snug mb-1">
-                    {sprinkler.description}
-                  </p>
-                  <p className="text-[10px] text-gray-500 leading-snug italic">
-                    {sprinkler.identification}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="border-t border-green-200 pt-4 mt-2">
-          <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
-          {supabaseSyncError && (
-            <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
-          )}
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={handleCopyTasksJson}
-            className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+            onClick={() => void runFullCloudSync()}
+            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
+            title={
+              cloudSyncStatus === 'synced' && lastCloudSyncAt
+                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
+                : cloudSyncStatus === 'error'
+                  ? 'Sync problem — tap to retry'
+                  : 'Sync schedule to cloud'
+            }
+            className={`flex w-full items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border text-xs font-bold transition-all disabled:opacity-60 ${
+              cloudSyncStatus === 'synced'
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                : cloudSyncStatus === 'error'
+                  ? 'border-red-300 bg-red-50 text-red-700'
+                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+            }`}
+            aria-label={
+              cloudSyncStatus === 'synced' && lastCloudSyncAt
+                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
+                : 'Sync with shared database'
+            }
           >
-            {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
+            <span
+              className={`text-base leading-none ${
+                cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'
+                  ? 'inline-block animate-spin'
+                  : ''
+              }`}
+              aria-hidden="true"
+            >
+              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
+            </span>
+            {syncLabel && <span>{syncLabel}</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('materials')}
+            className="flex w-full items-center justify-center gap-1.5 text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold py-2.5 px-3 rounded-lg transition-all border border-amber-200"
+          >
+            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
+            <span>Materials</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('guides')}
+            className="flex w-full items-center justify-center gap-1.5 text-xs bg-green-50 hover:bg-green-100 text-green-800 font-bold py-2.5 px-3 rounded-lg transition-all border border-green-200"
+          >
+            <span>📚 Guides</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveScreen('settings')}
+            className="flex w-full items-center justify-center gap-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2.5 px-3 rounded-lg transition-all"
+          >
+            <span>⚙️ Setup</span>
           </button>
         </div>
       </div>
+
+      <MaintenancePanel app={app} />
+      <SeasonTimeline app={app} />
     </>
   );
 }
@@ -6945,6 +6550,401 @@ export default defineConfig({
     }),
   ],
 });
+</file>
+
+<file path="src/components/lawn/LawnSettings.jsx">
+import React from 'react';
+import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
+import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
+import { LAWN_THEMES } from '../../data/lawnThemes';
+
+/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
+export default function LawnSettings({ app }) {
+  const {
+    length,
+    setLength,
+    width,
+    setWidth,
+    sqm,
+    mowerModel,
+    setMowerModel,
+    lawnSurface,
+    setLawnSurface,
+    showLevellingGuide,
+    setShowLevellingGuide,
+    selectedEquipment,
+    setSelectedEquipment,
+    weatherLocation,
+    postcodeInput,
+    setPostcodeInput,
+    weatherLocationError,
+    weatherLocationSaving,
+    weatherLocationLabel,
+    selectedSprinkler,
+    setSelectedSprinkler,
+    setEnlargedSprinkler,
+    supabaseSyncError,
+    jsonCopied,
+    handleCopyTasksJson,
+    handleSaveWeatherPostcode,
+    handleUseMyLocationForWeather,
+    handleResetWeatherLocation,
+    setActiveScreen,
+    setWeatherLocationError,
+    themeId,
+    setThemeId,
+    setActiveRoom,
+  } = app;
+
+  return (
+    <>
+      <div className="flex justify-between items-center mb-6 border-b pb-4">
+        <div>
+          <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
+          <p className="text-sm text-green-700 mt-1">
+            Configure appearance, lawn size, equipment, and surface profile.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveScreen('main')}
+          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+        >
+          ← Back
+        </button>
+      </div>
+
+      <div className="space-y-5">
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+          <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
+          <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
+            Try a different look and layout. Sectioned themes put Maintenance and Seasonal Pack in
+            their own rooms. Classic keeps the original long page — you can always switch back.
+          </p>
+          <div className="grid gap-2">
+            {LAWN_THEMES.map((theme) => {
+              const selected = themeId === theme.id;
+              return (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => {
+                    setThemeId(theme.id);
+                    setActiveRoom('hub');
+                  }}
+                  className={`text-left rounded-xl border p-3 transition-all ${
+                    selected
+                      ? 'border-emerald-600 bg-white ring-2 ring-emerald-500/30'
+                      : 'border-emerald-100 bg-white/80 hover:border-emerald-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900">{theme.name}</p>
+                      <p className="text-[11px] font-semibold text-emerald-800 mt-0.5">
+                        {theme.tagline}
+                      </p>
+                      <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
+                        {theme.description}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md ${
+                        selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {selected ? 'Active' : 'Try'}
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5 mt-3" aria-hidden="true">
+                    {theme.swatches.map((color) => (
+                      <span
+                        key={color}
+                        className="h-4 w-4 rounded-full border border-black/10"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <div>
+          <label className="block text-sm font-medium text-green-900 mb-1">
+            Lawn Length: <span className="font-bold text-green-700">{length}m</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            value={length}
+            onChange={(e) => setLength(parseInt(e.target.value, 10))}
+            className="w-full accent-green-600"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-green-900 mb-1">
+            Lawn Width: <span className="font-bold text-green-700">{width}m</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            value={width}
+            onChange={(e) => setWidth(parseInt(e.target.value, 10))}
+            className="w-full accent-green-600"
+          />
+        </div>
+        <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-sm text-green-800">
+          <span className="font-black">{sqm} SQM</span>
+          <span className="text-green-600 ml-1.5">
+            ({length}m × {width}m)
+          </span>
+        </div>
+        <div>
+          <label htmlFor="mower-select" className="block text-sm font-medium text-green-900 mb-1">
+            Lawnmower Model
+          </label>
+          <select
+            id="mower-select"
+            value={mowerModel}
+            onChange={(e) => setMowerModel(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+          >
+            {Object.values(MOWER_OPTIONS).map((mower) => (
+              <option key={mower.id} value={mower.id}>
+                {mower.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mb-2">
+            <p className="text-sm font-medium text-green-900">Lawn Surface Condition</p>
+            <button
+              type="button"
+              onClick={() => setShowLevellingGuide((open) => !open)}
+              aria-expanded={showLevellingGuide}
+              className="ml-2 text-emerald-600 hover:text-emerald-800 text-xs underline font-medium"
+            >
+              ℹ️ How to fix a bumpy lawn
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {Object.values(LAWN_SURFACE_OPTIONS).map((option) => {
+              const isSelected = lawnSurface === option.id;
+
+              return (
+                <label
+                  key={option.id}
+                  className={`flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer text-sm font-medium transition-all ${
+                    isSelected
+                      ? 'border-green-600 bg-green-100/80 text-green-900 ring-1 ring-green-500/30'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="lawn-surface"
+                    value={option.id}
+                    checked={isSelected}
+                    onChange={(e) => setLawnSurface(e.target.value)}
+                    className="accent-green-600"
+                  />
+                  {option.label}
+                </label>
+              );
+            })}
+          </div>
+          <div
+            className={`grid transition-all duration-300 ease-in-out ${
+              showLevellingGuide
+                ? 'grid-rows-[1fr] opacity-100 mt-3'
+                : 'grid-rows-[0fr] opacity-0 mt-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-emerald-900">Lawn Levelling Guide</h4>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Choose the method that matches your dip depth. Once levelled, switch your
+                      surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut height
+                      recommendation.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLevellingGuide(false)}
+                    className="shrink-0 text-xs font-bold text-gray-400 hover:text-gray-600"
+                    aria-label="Close levelling guide"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {LEVELLING_GUIDE_METHODS.map((method) => (
+                    <div
+                      key={method.title}
+                      className="rounded-lg border border-green-100 bg-green-50/40 p-3.5"
+                    >
+                      <p className="text-xs font-bold text-green-900 mb-1.5">{method.title}</p>
+                      <p className="text-xs text-gray-600 leading-relaxed">{method.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label htmlFor="equipment-select" className="block text-sm font-bold text-gray-700 mb-1.5">
+            Application Tool Profile:
+          </label>
+          <select
+            id="equipment-select"
+            value={selectedEquipment}
+            onChange={(e) => setSelectedEquipment(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+          >
+            {Object.values(EQUIPMENT_OPTIONS).map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
+          <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
+          <p className="text-[11px] text-sky-900/80 mb-3 leading-snug">
+            Rain and soil temperature forecasts use this postcode. Defaults to the Wallsend area
+            until you set your own.
+          </p>
+          <label htmlFor="weather-postcode" className="block text-xs font-semibold text-sky-950 mb-1">
+            UK postcode
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="weather-postcode"
+              type="text"
+              value={postcodeInput}
+              onChange={(event) => {
+                setPostcodeInput(event.target.value.toUpperCase());
+                setWeatherLocationError(null);
+              }}
+              placeholder="NE28 9AB"
+              autoComplete="postal-code"
+              className="flex-1 min-w-0 bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm text-gray-800 font-medium focus:ring-2 focus:ring-sky-400"
+            />
+            <button
+              type="button"
+              onClick={() => void handleSaveWeatherPostcode()}
+              disabled={weatherLocationSaving || !postcodeInput.trim()}
+              className="shrink-0 text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+            >
+              {weatherLocationSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => void handleUseMyLocationForWeather()}
+              disabled={weatherLocationSaving}
+              className="text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+            >
+              📍 Use my location
+            </button>
+            {weatherLocation.source !== 'default' && (
+              <button
+                type="button"
+                onClick={() => void handleResetWeatherLocation()}
+                disabled={weatherLocationSaving}
+                className="text-xs font-semibold py-2 px-3 rounded-lg text-sky-800 hover:bg-sky-100/80 disabled:opacity-50"
+              >
+                Reset to default
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-xs font-medium text-sky-900">
+            Forecast for: {weatherLocationLabel}
+          </p>
+          {weatherLocationError && (
+            <p className="mt-2 text-xs font-semibold text-red-700">{weatherLocationError}</p>
+          )}
+        </div>
+
+        <div>
+          <p className="block text-sm font-bold text-gray-700 mb-1">
+            Irrigation Profile — Select Your Primary Sprinkler:
+          </p>
+          <p className="text-[11px] text-gray-500 mb-2 leading-snug">
+            Match the photo and description to the sprinkler you own. Tap a photo to enlarge it.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {Object.values(SPRINKLER_OPTIONS).map((sprinkler) => {
+              const isSelected = selectedSprinkler === sprinkler.id;
+
+              return (
+                <button
+                  key={sprinkler.id}
+                  type="button"
+                  onClick={() => setSelectedSprinkler(sprinkler.id)}
+                  className={`text-left rounded-lg border p-3 transition-all ${
+                    isSelected
+                      ? 'border-green-600 bg-green-100/80 shadow-sm ring-1 ring-green-500/30'
+                      : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
+                  }`}
+                >
+                  <img
+                    src={sprinkler.image}
+                    alt={sprinkler.name}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setEnlargedSprinkler({
+                        image: sprinkler.image,
+                        name: sprinkler.name,
+                      });
+                    }}
+                    className="w-16 h-16 object-cover rounded-md mb-2 mx-auto border border-gray-200 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
+                  />
+                  <span className="text-xs font-bold text-gray-900 leading-snug block">
+                    {sprinkler.name}
+                  </span>
+                  <span className="text-[10px] font-semibold text-green-700 block mb-1.5">
+                    ~{sprinkler.ratePerHour}mm / hour
+                  </span>
+                  <p className="text-[10px] text-gray-700 leading-snug mb-1">
+                    {sprinkler.description}
+                  </p>
+                  <p className="text-[10px] text-gray-500 leading-snug italic">
+                    {sprinkler.identification}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="border-t border-green-200 pt-4 mt-2">
+          <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
+          {supabaseSyncError && (
+            <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
+          )}
+          <button
+            type="button"
+            onClick={handleCopyTasksJson}
+            className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+          >
+            {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
 </file>
 
 <file path="src/services/lawnTaskInboundSync.js">
@@ -8981,6 +8981,495 @@ export function buildMaintenanceSchedule(input) {
 }
 </file>
 
+<file path="src/utils/compileLawnTasks.js">
+import {
+  addDaysToDateString,
+  SEASONS,
+  SEASON_ORDER,
+  makeStepKey,
+  getWorkflowSeasonForDate,
+  getSeasonAnchorDate,
+  cascadeSeasonDates,
+  isSeasonPackComplete,
+} from '../data/LawnPackData';
+import {
+  VERTICUT_BLADE_HEIGHT_RULE,
+  VERTICUT_MOW_PAIRING_NOTE,
+} from '../services/lawnScheduleEngine';
+import { getWateringRainSkipForDueDate, getSeedMistingRainSkipForSession } from '../services/lawnWeather';
+import { VERTICUT_TASK_NAME } from '../services/lawnMaintenanceSync';
+
+const GYPSUM_CYCLE_DAYS = 182;
+
+/**
+ * @param {string | null} lastGypsumDate
+ * @param {string | null | undefined} gypsumPostponedUntil
+ * @param {string} todayStr
+ */
+export function getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr) {
+  const naturalDue = lastGypsumDate
+    ? addDaysToDateString(lastGypsumDate, GYPSUM_CYCLE_DAYS)
+    : todayStr;
+
+  const snoozed =
+    typeof gypsumPostponedUntil === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(gypsumPostponedUntil) &&
+    gypsumPostponedUntil > todayStr;
+
+  const dueDate = snoozed ? gypsumPostponedUntil : naturalDue;
+  const cycleWouldBeDue =
+    !lastGypsumDate || daysBetween(naturalDue, todayStr) >= 0;
+  const gypsumDue = snoozed ? false : cycleWouldBeDue;
+
+  let gypsumDaysRemaining = 0;
+  if (snoozed) {
+    gypsumDaysRemaining = daysBetween(todayStr, gypsumPostponedUntil);
+  } else if (!gypsumDue && lastGypsumDate && daysBetween(naturalDue, todayStr) < 0) {
+    gypsumDaysRemaining = daysBetween(todayStr, naturalDue);
+  }
+
+  return {
+    dueDate,
+    gypsumDue,
+    gypsumDaysRemaining,
+    naturalDue,
+    snoozed,
+    gypsumPostponedUntil: snoozed ? gypsumPostponedUntil : null,
+  };
+}
+
+/** @param {string | Date} from @param {string | Date} to */
+function daysBetween(from, to) {
+  const start = typeof from === 'string' ? new Date(`${from}T12:00:00`) : from;
+  const end = typeof to === 'string' ? new Date(`${to}T12:00:00`) : to;
+  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** @param {string} dueDateIso @param {string} reason */
+function pushRainSkippedWaterTasks(compiledTasks, seedEstablishmentActive, dueDateIso, reason) {
+  if (seedEstablishmentActive) {
+    for (const session of [
+      { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
+      { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
+      { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
+    ]) {
+      compiledTasks.push({
+        id: session.id,
+        title: session.title,
+        dueDate: dueDateIso,
+        status: 'completed',
+        module: 'lawn',
+        reason,
+      });
+    }
+    return;
+  }
+
+  compiledTasks.push({
+    id: 'lawn-water',
+    title: 'Water lawn',
+    dueDate: dueDateIso,
+    status: 'completed',
+    module: 'lawn',
+    reason,
+  });
+}
+
+/**
+ * @param {Object} input
+ * @param {string} input.todayStr
+ * @param {boolean} input.isDormantSeason   - calendar-based (Dec–Feb): grass not growing
+ * @param {boolean} input.isNatureProvidingFullSoak
+ * @param {boolean} [input.soilRecentlyWet]
+ * @param {Array<{ date: string, mm: number }>} [input.dailyForecastByDate]
+ * @param {number} [input.recentPastRainBeforeToday]
+ * @param {number} [input.todayRainMm]
+ * @param {boolean} input.seedEstablishmentActive
+ * @param {string | null} input.mowingLockedUntilIso
+ * @param {string | null} input.mowingNextDueIso    - pre-computed from dynamic interval
+ * @param {string | null} input.wateringNextDueIso  - pre-computed from dynamic interval
+ * @param {boolean} [input.isVerticutSeason]
+ * @param {boolean} [input.renovationHoldActive]
+ * @param {string | null} [input.verticutLockedUntilIso]
+ * @param {boolean} [input.verticutHeatDroughtPaused]
+ * @param {string | null} [input.verticutNextDueIso]
+ * @param {boolean} [input.verticutPairedWithMow]
+ * @param {string | null} [input.lastGypsumDate]
+ * @param {string | null} [input.gypsumPostponedUntil]
+ * @param {{ mow: string | null, water: string | null, verticut?: string | null } | null} [input.scheduleReason]
+ */
+export function compileLawnTasks({
+  todayStr,
+  isDormantSeason,
+  isNatureProvidingFullSoak,
+  soilRecentlyWet = false,
+  dailyForecastByDate = [],
+  recentPastRainBeforeToday = 0,
+  todayRainMm = 0,
+  todayHourlyPrecipMm = [],
+  todayRainObservedMm = 0,
+  seedEstablishmentActive,
+  mowingLockedUntilIso,
+  mowingNextDueIso,
+  wateringNextDueIso,
+  isVerticutSeason = false,
+  renovationHoldActive = false,
+  verticutLockedUntilIso = null,
+  verticutHeatDroughtPaused = false,
+  verticutNextDueIso = null,
+  verticutPairedWithMow = false,
+  lastGypsumDate,
+  gypsumPostponedUntil = null,
+  scheduleReason = null,
+  dynamicMinutes = 0,
+  recentWateringSkips = 0,
+}) {
+  /** @param {string} dueDateIso */
+  const taskStatusFromDue = (dueDateIso) =>
+    daysBetween(dueDateIso, todayStr) >= 0 ? 'urgent' : 'pending';
+
+  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
+  const compiledTasks = [];
+
+  const mowPairedWithVerticut =
+    verticutPairedWithMow &&
+    isVerticutSeason &&
+    !renovationHoldActive &&
+    !verticutHeatDroughtPaused &&
+    verticutNextDueIso &&
+    mowingNextDueIso &&
+    verticutNextDueIso === mowingNextDueIso;
+
+  const buildMowReason = () => {
+    const parts = [];
+    if (mowPairedWithVerticut) {
+      parts.push(VERTICUT_MOW_PAIRING_NOTE);
+    }
+    if (scheduleReason?.mow) {
+      parts.push(scheduleReason.mow);
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
+  };
+
+  const buildVerticutReason = () => {
+    const parts = [VERTICUT_BLADE_HEIGHT_RULE];
+    if (mowPairedWithVerticut) {
+      parts.push(VERTICUT_MOW_PAIRING_NOTE);
+    }
+    if (scheduleReason?.verticut) {
+      parts.push(scheduleReason.verticut);
+    }
+    return parts.join(' · ');
+  };
+
+  if (isDormantSeason) {
+    compiledTasks.push({
+      id: 'lawn-mow',
+      title: 'Mow lawn',
+      dueDate: mowingNextDueIso ?? todayStr,
+      status: 'completed',
+      module: 'lawn',
+      reason: 'Winter dormancy – grass not actively growing',
+    });
+  } else if (seedEstablishmentActive && mowingLockedUntilIso) {
+    compiledTasks.push({
+      id: 'lawn-mow',
+      title: 'Mow lawn',
+      dueDate: mowingLockedUntilIso,
+      status: 'pending',
+      module: 'lawn',
+      reason: 'Seed establishment – do not mow fresh seed',
+    });
+  } else {
+    const mowDueDate = mowingNextDueIso ?? todayStr;
+    compiledTasks.push({
+      id: 'lawn-mow',
+      title: 'Mow lawn',
+      dueDate: mowDueDate,
+      status: taskStatusFromDue(mowDueDate),
+      module: 'lawn',
+      reason: buildMowReason(),
+    });
+  }
+
+  if (!isVerticutSeason) {
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutNextDueIso ?? todayStr,
+      status: 'completed',
+      module: 'lawn',
+      reason: 'Outside active season (Apr 1 – Sep 30)',
+    });
+  } else if (renovationHoldActive && verticutLockedUntilIso) {
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutLockedUntilIso,
+      status: 'pending',
+      module: 'lawn',
+      reason: 'Post-renovation hold – allow 6–8 weeks for root maturation',
+    });
+  } else if (verticutHeatDroughtPaused) {
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutNextDueIso ?? todayStr,
+      status: 'completed',
+      module: 'lawn',
+      reason:
+        scheduleReason?.verticut ??
+        'Paused during extreme heat or drought risk to protect the lawn from stress',
+    });
+  } else {
+    const verticutDueDate = verticutNextDueIso ?? todayStr;
+    compiledTasks.push({
+      id: 'lawn-verticut',
+      title: VERTICUT_TASK_NAME,
+      dueDate: verticutDueDate,
+      status: taskStatusFromDue(verticutDueDate),
+      module: 'lawn',
+      reason: buildVerticutReason(),
+    });
+  }
+
+  if (isDormantSeason) {
+    compiledTasks.push({
+      id: 'lawn-water',
+      title: 'Water lawn',
+      dueDate: wateringNextDueIso ?? todayStr,
+      status: 'completed',
+      module: 'lawn',
+      reason: 'Winter dormancy – watering suspended',
+    });
+  } else {
+    const waterDueDate = wateringNextDueIso ?? todayStr;
+
+    if (seedEstablishmentActive) {
+      const waterStatus = taskStatusFromDue(waterDueDate);
+      const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
+      const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
+      const perSessionText =
+        mistingMins > 0 ? `Run for ${mistingMins} minutes` : 'divide daily duration by 3';
+      const missAdvisory =
+        recentWateringSkips > 0
+          ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? '' : 's'} this week — keep seed bed moist`
+          : null;
+      const mistingReason = [`${baseReason}Light surface misting · ${perSessionText}`, missAdvisory]
+        .filter(Boolean)
+        .join(' · ');
+
+      for (const session of [
+        { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
+        { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
+        { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
+      ]) {
+        const sessionRainSkip = getSeedMistingRainSkipForSession(
+          session.title,
+          waterDueDate,
+          todayStr,
+          todayHourlyPrecipMm,
+          dailyForecastByDate,
+          todayRainMm,
+          todayRainObservedMm
+        );
+
+        if (sessionRainSkip.skip && sessionRainSkip.reason) {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: 'completed',
+            module: 'lawn',
+            reason: sessionRainSkip.reason,
+          });
+        } else {
+          compiledTasks.push({
+            id: session.id,
+            title: session.title,
+            dueDate: waterDueDate,
+            status: waterStatus,
+            module: 'lawn',
+            reason: mistingReason,
+          });
+        }
+      }
+    } else {
+      const rainSkip =
+        dailyForecastByDate.length > 0
+          ? getWateringRainSkipForDueDate(
+              waterDueDate,
+              todayStr,
+              dailyForecastByDate,
+              recentPastRainBeforeToday,
+              todayRainMm,
+              { seedEstablishmentActive: false }
+            )
+          : {
+              skip: isNatureProvidingFullSoak || soilRecentlyWet,
+              reason: isNatureProvidingFullSoak
+                ? 'Heavy rain – nature providing full soak'
+                : soilRecentlyWet
+                  ? 'Recent rain – soil still damp, skip watering'
+                  : null,
+            };
+
+      if (rainSkip.skip && rainSkip.reason) {
+        pushRainSkippedWaterTasks(compiledTasks, false, waterDueDate, rainSkip.reason);
+      } else {
+        compiledTasks.push({
+          id: 'lawn-water',
+          title: 'Water lawn',
+          dueDate: waterDueDate,
+          status: taskStatusFromDue(waterDueDate),
+          module: 'lawn',
+          reason: scheduleReason?.water ?? null,
+        });
+      }
+    }
+  }
+
+  const gypsum = getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr);
+  compiledTasks.push({
+    id: 'lawn-gypsum',
+    title: 'Apply Liquid Gypsum',
+    dueDate: gypsum.dueDate,
+    status: gypsum.gypsumDue ? 'urgent' : taskStatusFromDue(gypsum.dueDate),
+    module: 'lawn',
+    reason: gypsum.snoozed
+      ? `Postponed — remind ${gypsum.dueDate}`
+      : 'Typically every ~6 months for soil drainage',
+  });
+
+  return compiledTasks;
+}
+
+/**
+ * Lawn Pack timeline steps → shared Tasks reminders (Weedol, scarify, seed, etc.).
+ * @param {Object} input
+ * @param {string} input.todayStr
+ * @param {Record<string, string>} input.userLogs
+ * @param {Record<string, Record<string, string>>} input.pendingDates
+ */
+export function compilePackStepTasks({ todayStr, userLogs, pendingDates }) {
+  const workflowSeason = getWorkflowSeasonForDate(todayStr, userLogs);
+  const workflowIndex = SEASON_ORDER.indexOf(workflowSeason);
+
+  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
+  const compiledTasks = [];
+
+  for (let i = 0; i <= workflowIndex; i++) {
+    const seasonKey = SEASON_ORDER[i];
+    const seasonComplete = isSeasonPackComplete(seasonKey, userLogs);
+    const anchor = getSeasonAnchorDate(seasonKey, userLogs, pendingDates);
+    const seasonPending = cascadeSeasonDates(seasonKey, anchor, userLogs, pendingDates);
+
+    for (const step of SEASONS[seasonKey].steps) {
+      const logKey = makeStepKey(seasonKey, step.id);
+      const completedDate = userLogs[logKey] ?? null;
+
+      if (seasonComplete) {
+        if (!completedDate) continue;
+        compiledTasks.push({
+          id: `lawn-pack-${seasonKey}-${step.id}`,
+          title: step.label,
+          dueDate: completedDate,
+          status: 'completed',
+          module: 'lawn',
+          completedDate,
+        });
+        continue;
+      }
+
+      const dueDate = completedDate ?? seasonPending[step.id];
+      if (!dueDate) continue;
+
+      const status = completedDate
+        ? 'completed'
+        : daysBetween(dueDate, todayStr) >= 0
+          ? 'urgent'
+          : 'pending';
+
+      compiledTasks.push({
+        id: `lawn-pack-${seasonKey}-${step.id}`,
+        title: step.label,
+        dueDate,
+        status,
+        module: 'lawn',
+        completedDate: completedDate ?? null,
+      });
+    }
+  }
+
+  return compiledTasks;
+}
+
+/**
+ * Maintenance (mow/water/gypsum) + pack timeline steps for Supabase / Tasks app.
+ * @param {Object} input
+ */
+export function compileAllLawnTasks(input) {
+  const {
+    todayStr,
+    userLogs,
+    pendingDates,
+    isDormantSeason,
+    isNatureProvidingFullSoak,
+    soilRecentlyWet = false,
+    dailyForecastByDate = [],
+    recentPastRainBeforeToday = 0,
+    todayRainMm = 0,
+    todayHourlyPrecipMm = [],
+    todayRainObservedMm = 0,
+    seedEstablishmentActive,
+    mowingLockedUntilIso,
+    mowingNextDueIso,
+    wateringNextDueIso,
+    isVerticutSeason,
+    renovationHoldActive,
+    verticutLockedUntilIso,
+    verticutHeatDroughtPaused,
+    verticutNextDueIso,
+    verticutPairedWithMow,
+    lastGypsumDate,
+    gypsumPostponedUntil = null,
+    scheduleReason = null,
+    dynamicMinutes = 0,
+    recentWateringSkips = 0,
+  } = input;
+
+  return [
+    ...compilePackStepTasks({ todayStr, userLogs, pendingDates }),
+    ...compileLawnTasks({
+      todayStr,
+      isDormantSeason,
+      isNatureProvidingFullSoak,
+      soilRecentlyWet,
+      dailyForecastByDate,
+      recentPastRainBeforeToday,
+      todayRainMm,
+      todayHourlyPrecipMm,
+      todayRainObservedMm,
+      seedEstablishmentActive,
+      mowingLockedUntilIso,
+      mowingNextDueIso,
+      wateringNextDueIso,
+      isVerticutSeason,
+      renovationHoldActive,
+      verticutLockedUntilIso,
+      verticutHeatDroughtPaused,
+      verticutNextDueIso,
+      verticutPairedWithMow,
+      lastGypsumDate,
+      gypsumPostponedUntil,
+      scheduleReason,
+      dynamicMinutes,
+      recentWateringSkips,
+    }),
+  ];
+}
+</file>
+
 <file path="src/hooks/useLawnCareApp.js">
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -10476,495 +10965,6 @@ export function useLawnCareApp() {
     weatherStatusText,
     weatherLocationLabel,
   };
-}
-</file>
-
-<file path="src/utils/compileLawnTasks.js">
-import {
-  addDaysToDateString,
-  SEASONS,
-  SEASON_ORDER,
-  makeStepKey,
-  getWorkflowSeasonForDate,
-  getSeasonAnchorDate,
-  cascadeSeasonDates,
-  isSeasonPackComplete,
-} from '../data/LawnPackData';
-import {
-  VERTICUT_BLADE_HEIGHT_RULE,
-  VERTICUT_MOW_PAIRING_NOTE,
-} from '../services/lawnScheduleEngine';
-import { getWateringRainSkipForDueDate, getSeedMistingRainSkipForSession } from '../services/lawnWeather';
-import { VERTICUT_TASK_NAME } from '../services/lawnMaintenanceSync';
-
-const GYPSUM_CYCLE_DAYS = 182;
-
-/**
- * @param {string | null} lastGypsumDate
- * @param {string | null | undefined} gypsumPostponedUntil
- * @param {string} todayStr
- */
-export function getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr) {
-  const naturalDue = lastGypsumDate
-    ? addDaysToDateString(lastGypsumDate, GYPSUM_CYCLE_DAYS)
-    : todayStr;
-
-  const snoozed =
-    typeof gypsumPostponedUntil === 'string' &&
-    /^\d{4}-\d{2}-\d{2}$/.test(gypsumPostponedUntil) &&
-    gypsumPostponedUntil > todayStr;
-
-  const dueDate = snoozed ? gypsumPostponedUntil : naturalDue;
-  const cycleWouldBeDue =
-    !lastGypsumDate || daysBetween(naturalDue, todayStr) >= 0;
-  const gypsumDue = snoozed ? false : cycleWouldBeDue;
-
-  let gypsumDaysRemaining = 0;
-  if (snoozed) {
-    gypsumDaysRemaining = daysBetween(todayStr, gypsumPostponedUntil);
-  } else if (!gypsumDue && lastGypsumDate && daysBetween(naturalDue, todayStr) < 0) {
-    gypsumDaysRemaining = daysBetween(todayStr, naturalDue);
-  }
-
-  return {
-    dueDate,
-    gypsumDue,
-    gypsumDaysRemaining,
-    naturalDue,
-    snoozed,
-    gypsumPostponedUntil: snoozed ? gypsumPostponedUntil : null,
-  };
-}
-
-/** @param {string | Date} from @param {string | Date} to */
-function daysBetween(from, to) {
-  const start = typeof from === 'string' ? new Date(`${from}T12:00:00`) : from;
-  const end = typeof to === 'string' ? new Date(`${to}T12:00:00`) : to;
-  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-/** @param {string} dueDateIso @param {string} reason */
-function pushRainSkippedWaterTasks(compiledTasks, seedEstablishmentActive, dueDateIso, reason) {
-  if (seedEstablishmentActive) {
-    for (const session of [
-      { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
-      { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
-      { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
-    ]) {
-      compiledTasks.push({
-        id: session.id,
-        title: session.title,
-        dueDate: dueDateIso,
-        status: 'completed',
-        module: 'lawn',
-        reason,
-      });
-    }
-    return;
-  }
-
-  compiledTasks.push({
-    id: 'lawn-water',
-    title: 'Water lawn',
-    dueDate: dueDateIso,
-    status: 'completed',
-    module: 'lawn',
-    reason,
-  });
-}
-
-/**
- * @param {Object} input
- * @param {string} input.todayStr
- * @param {boolean} input.isDormantSeason   - calendar-based (Dec–Feb): grass not growing
- * @param {boolean} input.isNatureProvidingFullSoak
- * @param {boolean} [input.soilRecentlyWet]
- * @param {Array<{ date: string, mm: number }>} [input.dailyForecastByDate]
- * @param {number} [input.recentPastRainBeforeToday]
- * @param {number} [input.todayRainMm]
- * @param {boolean} input.seedEstablishmentActive
- * @param {string | null} input.mowingLockedUntilIso
- * @param {string | null} input.mowingNextDueIso    - pre-computed from dynamic interval
- * @param {string | null} input.wateringNextDueIso  - pre-computed from dynamic interval
- * @param {boolean} [input.isVerticutSeason]
- * @param {boolean} [input.renovationHoldActive]
- * @param {string | null} [input.verticutLockedUntilIso]
- * @param {boolean} [input.verticutHeatDroughtPaused]
- * @param {string | null} [input.verticutNextDueIso]
- * @param {boolean} [input.verticutPairedWithMow]
- * @param {string | null} [input.lastGypsumDate]
- * @param {string | null} [input.gypsumPostponedUntil]
- * @param {{ mow: string | null, water: string | null, verticut?: string | null } | null} [input.scheduleReason]
- */
-export function compileLawnTasks({
-  todayStr,
-  isDormantSeason,
-  isNatureProvidingFullSoak,
-  soilRecentlyWet = false,
-  dailyForecastByDate = [],
-  recentPastRainBeforeToday = 0,
-  todayRainMm = 0,
-  todayHourlyPrecipMm = [],
-  todayRainObservedMm = 0,
-  seedEstablishmentActive,
-  mowingLockedUntilIso,
-  mowingNextDueIso,
-  wateringNextDueIso,
-  isVerticutSeason = false,
-  renovationHoldActive = false,
-  verticutLockedUntilIso = null,
-  verticutHeatDroughtPaused = false,
-  verticutNextDueIso = null,
-  verticutPairedWithMow = false,
-  lastGypsumDate,
-  gypsumPostponedUntil = null,
-  scheduleReason = null,
-  dynamicMinutes = 0,
-  recentWateringSkips = 0,
-}) {
-  /** @param {string} dueDateIso */
-  const taskStatusFromDue = (dueDateIso) =>
-    daysBetween(dueDateIso, todayStr) >= 0 ? 'urgent' : 'pending';
-
-  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
-  const compiledTasks = [];
-
-  const mowPairedWithVerticut =
-    verticutPairedWithMow &&
-    isVerticutSeason &&
-    !renovationHoldActive &&
-    !verticutHeatDroughtPaused &&
-    verticutNextDueIso &&
-    mowingNextDueIso &&
-    verticutNextDueIso === mowingNextDueIso;
-
-  const buildMowReason = () => {
-    const parts = [];
-    if (mowPairedWithVerticut) {
-      parts.push(VERTICUT_MOW_PAIRING_NOTE);
-    }
-    if (scheduleReason?.mow) {
-      parts.push(scheduleReason.mow);
-    }
-    return parts.length > 0 ? parts.join(' · ') : null;
-  };
-
-  const buildVerticutReason = () => {
-    const parts = [VERTICUT_BLADE_HEIGHT_RULE];
-    if (mowPairedWithVerticut) {
-      parts.push(VERTICUT_MOW_PAIRING_NOTE);
-    }
-    if (scheduleReason?.verticut) {
-      parts.push(scheduleReason.verticut);
-    }
-    return parts.join(' · ');
-  };
-
-  if (isDormantSeason) {
-    compiledTasks.push({
-      id: 'lawn-mow',
-      title: 'Mow lawn',
-      dueDate: mowingNextDueIso ?? todayStr,
-      status: 'completed',
-      module: 'lawn',
-      reason: 'Winter dormancy – grass not actively growing',
-    });
-  } else if (seedEstablishmentActive && mowingLockedUntilIso) {
-    compiledTasks.push({
-      id: 'lawn-mow',
-      title: 'Mow lawn',
-      dueDate: mowingLockedUntilIso,
-      status: 'pending',
-      module: 'lawn',
-      reason: 'Seed establishment – do not mow fresh seed',
-    });
-  } else {
-    const mowDueDate = mowingNextDueIso ?? todayStr;
-    compiledTasks.push({
-      id: 'lawn-mow',
-      title: 'Mow lawn',
-      dueDate: mowDueDate,
-      status: taskStatusFromDue(mowDueDate),
-      module: 'lawn',
-      reason: buildMowReason(),
-    });
-  }
-
-  if (!isVerticutSeason) {
-    compiledTasks.push({
-      id: 'lawn-verticut',
-      title: VERTICUT_TASK_NAME,
-      dueDate: verticutNextDueIso ?? todayStr,
-      status: 'completed',
-      module: 'lawn',
-      reason: 'Outside active season (Apr 1 – Sep 30)',
-    });
-  } else if (renovationHoldActive && verticutLockedUntilIso) {
-    compiledTasks.push({
-      id: 'lawn-verticut',
-      title: VERTICUT_TASK_NAME,
-      dueDate: verticutLockedUntilIso,
-      status: 'pending',
-      module: 'lawn',
-      reason: 'Post-renovation hold – allow 6–8 weeks for root maturation',
-    });
-  } else if (verticutHeatDroughtPaused) {
-    compiledTasks.push({
-      id: 'lawn-verticut',
-      title: VERTICUT_TASK_NAME,
-      dueDate: verticutNextDueIso ?? todayStr,
-      status: 'completed',
-      module: 'lawn',
-      reason:
-        scheduleReason?.verticut ??
-        'Paused during extreme heat or drought risk to protect the lawn from stress',
-    });
-  } else {
-    const verticutDueDate = verticutNextDueIso ?? todayStr;
-    compiledTasks.push({
-      id: 'lawn-verticut',
-      title: VERTICUT_TASK_NAME,
-      dueDate: verticutDueDate,
-      status: taskStatusFromDue(verticutDueDate),
-      module: 'lawn',
-      reason: buildVerticutReason(),
-    });
-  }
-
-  if (isDormantSeason) {
-    compiledTasks.push({
-      id: 'lawn-water',
-      title: 'Water lawn',
-      dueDate: wateringNextDueIso ?? todayStr,
-      status: 'completed',
-      module: 'lawn',
-      reason: 'Winter dormancy – watering suspended',
-    });
-  } else {
-    const waterDueDate = wateringNextDueIso ?? todayStr;
-
-    if (seedEstablishmentActive) {
-      const waterStatus = taskStatusFromDue(waterDueDate);
-      const mistingMins = dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0;
-      const baseReason = scheduleReason?.water ? `${scheduleReason.water} · ` : '';
-      const perSessionText =
-        mistingMins > 0 ? `Run for ${mistingMins} minutes` : 'divide daily duration by 3';
-      const missAdvisory =
-        recentWateringSkips > 0
-          ? `Missed ${recentWateringSkips} misting session${recentWateringSkips === 1 ? '' : 's'} this week — keep seed bed moist`
-          : null;
-      const mistingReason = [`${baseReason}Light surface misting · ${perSessionText}`, missAdvisory]
-        .filter(Boolean)
-        .join(' · ');
-
-      for (const session of [
-        { id: 'lawn-water-morning', title: 'Water lawn (Morning)' },
-        { id: 'lawn-water-midday', title: 'Water lawn (Midday)' },
-        { id: 'lawn-water-evening', title: 'Water lawn (Evening)' },
-      ]) {
-        const sessionRainSkip = getSeedMistingRainSkipForSession(
-          session.title,
-          waterDueDate,
-          todayStr,
-          todayHourlyPrecipMm,
-          dailyForecastByDate,
-          todayRainMm,
-          todayRainObservedMm
-        );
-
-        if (sessionRainSkip.skip && sessionRainSkip.reason) {
-          compiledTasks.push({
-            id: session.id,
-            title: session.title,
-            dueDate: waterDueDate,
-            status: 'completed',
-            module: 'lawn',
-            reason: sessionRainSkip.reason,
-          });
-        } else {
-          compiledTasks.push({
-            id: session.id,
-            title: session.title,
-            dueDate: waterDueDate,
-            status: waterStatus,
-            module: 'lawn',
-            reason: mistingReason,
-          });
-        }
-      }
-    } else {
-      const rainSkip =
-        dailyForecastByDate.length > 0
-          ? getWateringRainSkipForDueDate(
-              waterDueDate,
-              todayStr,
-              dailyForecastByDate,
-              recentPastRainBeforeToday,
-              todayRainMm,
-              { seedEstablishmentActive: false }
-            )
-          : {
-              skip: isNatureProvidingFullSoak || soilRecentlyWet,
-              reason: isNatureProvidingFullSoak
-                ? 'Heavy rain – nature providing full soak'
-                : soilRecentlyWet
-                  ? 'Recent rain – soil still damp, skip watering'
-                  : null,
-            };
-
-      if (rainSkip.skip && rainSkip.reason) {
-        pushRainSkippedWaterTasks(compiledTasks, false, waterDueDate, rainSkip.reason);
-      } else {
-        compiledTasks.push({
-          id: 'lawn-water',
-          title: 'Water lawn',
-          dueDate: waterDueDate,
-          status: taskStatusFromDue(waterDueDate),
-          module: 'lawn',
-          reason: scheduleReason?.water ?? null,
-        });
-      }
-    }
-  }
-
-  const gypsum = getGypsumSchedule(lastGypsumDate, gypsumPostponedUntil, todayStr);
-  compiledTasks.push({
-    id: 'lawn-gypsum',
-    title: 'Apply Liquid Gypsum',
-    dueDate: gypsum.dueDate,
-    status: gypsum.gypsumDue ? 'urgent' : taskStatusFromDue(gypsum.dueDate),
-    module: 'lawn',
-    reason: gypsum.snoozed
-      ? `Postponed — remind ${gypsum.dueDate}`
-      : 'Typically every ~6 months for soil drainage',
-  });
-
-  return compiledTasks;
-}
-
-/**
- * Lawn Pack timeline steps → shared Tasks reminders (Weedol, scarify, seed, etc.).
- * @param {Object} input
- * @param {string} input.todayStr
- * @param {Record<string, string>} input.userLogs
- * @param {Record<string, Record<string, string>>} input.pendingDates
- */
-export function compilePackStepTasks({ todayStr, userLogs, pendingDates }) {
-  const workflowSeason = getWorkflowSeasonForDate(todayStr, userLogs);
-  const workflowIndex = SEASON_ORDER.indexOf(workflowSeason);
-
-  /** @type {Array<{ id: string, title: string, dueDate: string, status: 'pending' | 'urgent' | 'completed', module: 'lawn', reason?: string | null }>} */
-  const compiledTasks = [];
-
-  for (let i = 0; i <= workflowIndex; i++) {
-    const seasonKey = SEASON_ORDER[i];
-    const seasonComplete = isSeasonPackComplete(seasonKey, userLogs);
-    const anchor = getSeasonAnchorDate(seasonKey, userLogs, pendingDates);
-    const seasonPending = cascadeSeasonDates(seasonKey, anchor, userLogs, pendingDates);
-
-    for (const step of SEASONS[seasonKey].steps) {
-      const logKey = makeStepKey(seasonKey, step.id);
-      const completedDate = userLogs[logKey] ?? null;
-
-      if (seasonComplete) {
-        if (!completedDate) continue;
-        compiledTasks.push({
-          id: `lawn-pack-${seasonKey}-${step.id}`,
-          title: step.label,
-          dueDate: completedDate,
-          status: 'completed',
-          module: 'lawn',
-          completedDate,
-        });
-        continue;
-      }
-
-      const dueDate = completedDate ?? seasonPending[step.id];
-      if (!dueDate) continue;
-
-      const status = completedDate
-        ? 'completed'
-        : daysBetween(dueDate, todayStr) >= 0
-          ? 'urgent'
-          : 'pending';
-
-      compiledTasks.push({
-        id: `lawn-pack-${seasonKey}-${step.id}`,
-        title: step.label,
-        dueDate,
-        status,
-        module: 'lawn',
-        completedDate: completedDate ?? null,
-      });
-    }
-  }
-
-  return compiledTasks;
-}
-
-/**
- * Maintenance (mow/water/gypsum) + pack timeline steps for Supabase / Tasks app.
- * @param {Object} input
- */
-export function compileAllLawnTasks(input) {
-  const {
-    todayStr,
-    userLogs,
-    pendingDates,
-    isDormantSeason,
-    isNatureProvidingFullSoak,
-    soilRecentlyWet = false,
-    dailyForecastByDate = [],
-    recentPastRainBeforeToday = 0,
-    todayRainMm = 0,
-    todayHourlyPrecipMm = [],
-    todayRainObservedMm = 0,
-    seedEstablishmentActive,
-    mowingLockedUntilIso,
-    mowingNextDueIso,
-    wateringNextDueIso,
-    isVerticutSeason,
-    renovationHoldActive,
-    verticutLockedUntilIso,
-    verticutHeatDroughtPaused,
-    verticutNextDueIso,
-    verticutPairedWithMow,
-    lastGypsumDate,
-    gypsumPostponedUntil = null,
-    scheduleReason = null,
-    dynamicMinutes = 0,
-    recentWateringSkips = 0,
-  } = input;
-
-  return [
-    ...compilePackStepTasks({ todayStr, userLogs, pendingDates }),
-    ...compileLawnTasks({
-      todayStr,
-      isDormantSeason,
-      isNatureProvidingFullSoak,
-      soilRecentlyWet,
-      dailyForecastByDate,
-      recentPastRainBeforeToday,
-      todayRainMm,
-      todayHourlyPrecipMm,
-      todayRainObservedMm,
-      seedEstablishmentActive,
-      mowingLockedUntilIso,
-      mowingNextDueIso,
-      wateringNextDueIso,
-      isVerticutSeason,
-      renovationHoldActive,
-      verticutLockedUntilIso,
-      verticutHeatDroughtPaused,
-      verticutNextDueIso,
-      verticutPairedWithMow,
-      lastGypsumDate,
-      gypsumPostponedUntil,
-      scheduleReason,
-      dynamicMinutes,
-      recentWateringSkips,
-    }),
-  ];
 }
 </file>
 
