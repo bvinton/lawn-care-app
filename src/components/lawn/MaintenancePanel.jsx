@@ -53,6 +53,9 @@ export default function MaintenancePanel({ app }) {
     recommendedSetting,
     isDormantSeason,
     seedEstablishmentActive,
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
     mowingDue,
     mowingWeatherAdvisory,
     daysSinceMow,
@@ -122,6 +125,26 @@ export default function MaintenancePanel({ app }) {
     mowingNextDate ??
     (mowingNextDueIso ? formatDisplayDate(mowingNextDueIso) : null) ??
     (lastMowedDate ? formatUkDate(addDaysToDateString(lastMowedDate, dynamicMowingDays)) : null);
+
+  const seedRecoveryMowingNote = seedRecoveryActive ? (
+    <div className="mt-2 p-2 bg-lime-50 border border-lime-300 rounded text-xs text-lime-950 leading-snug">
+      <p className="font-bold">🌱 Weekly cuts while spring overseed establishes</p>
+      <p className="mt-1">
+        {recoveryDaysRemaining} day{recoveryDaysRemaining !== 1 ? 's' : ''} remaining
+        {recoveryEndsOnIso ? ` (until ${formatUkDate(recoveryEndsOnIso)})` : ''}. Warm, sunny
+        weather makes grass grow fast — resist cutting more often for now so new roots aren&apos;t
+        stressed. After that, the schedule returns to growth-rate mowing (often every 5 days in warm
+        soil).
+      </p>
+    </div>
+  ) : null;
+
+  const mowingIntervalReason =
+    !seedRecoveryActive && scheduleReason.mow ? (
+      <p className="mt-1 text-xs text-blue-700 italic">
+        📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
+      </p>
+    ) : null;
 
   return (
     <section
@@ -224,8 +247,13 @@ export default function MaintenancePanel({ app }) {
                 ? 'bg-red-50 border-red-300'
                 : mowingDue
                   ? 'bg-amber-50 border-amber-300'
-                  : 'bg-white border-gray-200'
+                  : seedRecoveryActive
+                    ? 'bg-lime-50/40 border-lime-200'
+                    : 'bg-white border-gray-200'
           }`}
+          data-seed-recovery-active={seedRecoveryActive ? 'true' : 'false'}
+          data-recovery-days-remaining={seedRecoveryActive ? String(recoveryDaysRemaining) : ''}
+          data-recovery-ends-on={recoveryEndsOnIso ?? ''}
         >
           <p className="text-xs font-bold text-gray-800 mb-1">✂️ Mowing Tracker</p>
 
@@ -290,11 +318,8 @@ export default function MaintenancePanel({ app }) {
                     🔗 {VERTICUT_MOW_PAIRING_NOTE}
                   </p>
                 )}
-                {scheduleReason.mow && (
-                  <p className="mt-1 text-xs text-blue-700 italic">
-                    📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
-                  </p>
-                )}
+                {seedRecoveryMowingNote}
+                {mowingIntervalReason}
               </>
             ) : (
               <>
@@ -315,11 +340,8 @@ export default function MaintenancePanel({ app }) {
                     🔗 {VERTICUT_MOW_PAIRING_NOTE}
                   </p>
                 )}
-                {scheduleReason.mow && (
-                  <p className="mt-1 text-xs text-blue-700 italic">
-                    📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
-                  </p>
-                )}
+                {seedRecoveryMowingNote}
+                {mowingIntervalReason}
                 {mowingNextDate && (
                   <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-800 font-semibold">
                     📅 Next Cut Due: {mowingNextDate}

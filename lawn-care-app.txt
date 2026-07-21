@@ -3328,6 +3328,146 @@ export default function SeasonTimeline({ app }) {
 }
 </file>
 
+<file path="src/lib/supabase.js">
+import { createClient } from '@supabase/supabase-js';
+
+/** @type {import('@supabase/supabase-js').SupabaseClient | null} */
+let browserClient = null;
+
+/** @type {import('@supabase/supabase-js').SupabaseClient | null} */
+let serverClient = null;
+
+function isServerRuntime() {
+  return typeof window === 'undefined';
+}
+
+/**
+ * Initialise Supabase for Vercel /api routes (service role when set).
+ */
+export function initServerSupabase() {
+  if (serverClient) {
+    return serverClient;
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      'Missing SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_* fallbacks) on the server.',
+    );
+  }
+
+  serverClient = createClient(supabaseUrl, supabaseKey);
+  return serverClient;
+}
+
+export function getSupabase() {
+  if (isServerRuntime()) {
+    try {
+      return initServerSupabase();
+    } catch {
+      return null;
+    }
+  }
+
+  if (browserClient) {
+    return browserClient;
+  }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return null;
+  }
+
+  browserClient = createClient(supabaseUrl, supabaseAnonKey);
+  return browserClient;
+}
+
+/**
+ * @param {{ server?: boolean }} [options]
+ */
+export function getSupabaseConfigError(options = {}) {
+  const supabaseUrl = isServerRuntime() || options.server
+    ? process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+    : import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = isServerRuntime() || options.server
+    ? process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+    : import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (options.server || isServerRuntime()) {
+      return 'Missing server Supabase env: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_* fallbacks).';
+    }
+    if (import.meta.env.PROD) {
+      return 'Missing Supabase credentials on this deployment. In Vercel → Project → Settings → Environment Variables, add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for Production, then redeploy.';
+    }
+    return 'Missing Supabase credentials. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local, then restart the dev server.';
+  }
+
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(supabaseUrl)) {
+    return `VITE_SUPABASE_URL looks invalid: "${supabaseUrl}". Use https://<project-ref>.supabase.co from Supabase Dashboard → Project Settings → API.`;
+  }
+
+  return null;
+}
+
+/** @param {unknown} error */
+export function formatSupabaseSyncError(error) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String(/** @type {{ message: unknown }} */ (error).message)
+        : String(error);
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '(not set)';
+
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(message)) {
+    return [
+      'Cannot reach Supabase (network error).',
+      `Configured URL: ${supabaseUrl}`,
+      'Confirm the project ref in Supabase Dashboard → Project Settings → API, update .env.local, then restart npm run dev.',
+      'Also check the project is not paused and your network allows supabase.co.',
+    ].join(' ');
+  }
+
+  return message;
+}
+
+/** UUID for server-side task writes when using the service role (no auth session). */
+export function getTasksOwnerUserId() {
+  return process.env.TASKS_OWNER_USER_ID || null;
+}
+
+/**
+ * Resolve user_id for task rows — authenticated browser session or server env fallback.
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ */
+export async function resolveTaskUserId(supabase) {
+  if (isServerRuntime()) {
+    return getTasksOwnerUserId();
+  }
+
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
+
+/**
+ * Attach user_id to a task payload when available.
+ * @param {Record<string, unknown>} row
+ * @param {string | null | undefined} userId
+ */
+export function withTaskUserId(row, userId) {
+  if (!userId) {
+    return row;
+  }
+  return { ...row, user_id: userId };
+}
+</file>
+
 <file path="src/index.css">
 @tailwind base;
 @tailwind components;
@@ -3776,146 +3916,6 @@ export default function SeasonTimeline({ app }) {
   .lawn-hub__notices {
     animation: none;
   }
-}
-</file>
-
-<file path="src/lib/supabase.js">
-import { createClient } from '@supabase/supabase-js';
-
-/** @type {import('@supabase/supabase-js').SupabaseClient | null} */
-let browserClient = null;
-
-/** @type {import('@supabase/supabase-js').SupabaseClient | null} */
-let serverClient = null;
-
-function isServerRuntime() {
-  return typeof window === 'undefined';
-}
-
-/**
- * Initialise Supabase for Vercel /api routes (service role when set).
- */
-export function initServerSupabase() {
-  if (serverClient) {
-    return serverClient;
-  }
-
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
-      'Missing SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_* fallbacks) on the server.',
-    );
-  }
-
-  serverClient = createClient(supabaseUrl, supabaseKey);
-  return serverClient;
-}
-
-export function getSupabase() {
-  if (isServerRuntime()) {
-    try {
-      return initServerSupabase();
-    } catch {
-      return null;
-    }
-  }
-
-  if (browserClient) {
-    return browserClient;
-  }
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return null;
-  }
-
-  browserClient = createClient(supabaseUrl, supabaseAnonKey);
-  return browserClient;
-}
-
-/**
- * @param {{ server?: boolean }} [options]
- */
-export function getSupabaseConfigError(options = {}) {
-  const supabaseUrl = isServerRuntime() || options.server
-    ? process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
-    : import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = isServerRuntime() || options.server
-    ? process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
-    : import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    if (options.server || isServerRuntime()) {
-      return 'Missing server Supabase env: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_* fallbacks).';
-    }
-    if (import.meta.env.PROD) {
-      return 'Missing Supabase credentials on this deployment. In Vercel → Project → Settings → Environment Variables, add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for Production, then redeploy.';
-    }
-    return 'Missing Supabase credentials. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local, then restart the dev server.';
-  }
-
-  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(supabaseUrl)) {
-    return `VITE_SUPABASE_URL looks invalid: "${supabaseUrl}". Use https://<project-ref>.supabase.co from Supabase Dashboard → Project Settings → API.`;
-  }
-
-  return null;
-}
-
-/** @param {unknown} error */
-export function formatSupabaseSyncError(error) {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'object' && error !== null && 'message' in error
-        ? String(/** @type {{ message: unknown }} */ (error).message)
-        : String(error);
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '(not set)';
-
-  if (/failed to fetch|networkerror|load failed|network request failed/i.test(message)) {
-    return [
-      'Cannot reach Supabase (network error).',
-      `Configured URL: ${supabaseUrl}`,
-      'Confirm the project ref in Supabase Dashboard → Project Settings → API, update .env.local, then restart npm run dev.',
-      'Also check the project is not paused and your network allows supabase.co.',
-    ].join(' ');
-  }
-
-  return message;
-}
-
-/** UUID for server-side task writes when using the service role (no auth session). */
-export function getTasksOwnerUserId() {
-  return process.env.TASKS_OWNER_USER_ID || null;
-}
-
-/**
- * Resolve user_id for task rows — authenticated browser session or server env fallback.
- * @param {import('@supabase/supabase-js').SupabaseClient} supabase
- */
-export async function resolveTaskUserId(supabase) {
-  if (isServerRuntime()) {
-    return getTasksOwnerUserId();
-  }
-
-  const { data } = await supabase.auth.getUser();
-  return data.user?.id ?? null;
-}
-
-/**
- * Attach user_id to a task payload when available.
- * @param {Record<string, unknown>} row
- * @param {string | null | undefined} userId
- */
-export function withTaskUserId(row, userId) {
-  if (!userId) {
-    return row;
-  }
-  return { ...row, user_id: userId };
 }
 </file>
 
@@ -5401,6 +5401,9 @@ export default function MaintenancePanel({ app }) {
     recommendedSetting,
     isDormantSeason,
     seedEstablishmentActive,
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
     mowingDue,
     mowingWeatherAdvisory,
     daysSinceMow,
@@ -5470,6 +5473,26 @@ export default function MaintenancePanel({ app }) {
     mowingNextDate ??
     (mowingNextDueIso ? formatDisplayDate(mowingNextDueIso) : null) ??
     (lastMowedDate ? formatUkDate(addDaysToDateString(lastMowedDate, dynamicMowingDays)) : null);
+
+  const seedRecoveryMowingNote = seedRecoveryActive ? (
+    <div className="mt-2 p-2 bg-lime-50 border border-lime-300 rounded text-xs text-lime-950 leading-snug">
+      <p className="font-bold">🌱 Weekly cuts while spring overseed establishes</p>
+      <p className="mt-1">
+        {recoveryDaysRemaining} day{recoveryDaysRemaining !== 1 ? 's' : ''} remaining
+        {recoveryEndsOnIso ? ` (until ${formatUkDate(recoveryEndsOnIso)})` : ''}. Warm, sunny
+        weather makes grass grow fast — resist cutting more often for now so new roots aren&apos;t
+        stressed. After that, the schedule returns to growth-rate mowing (often every 5 days in warm
+        soil).
+      </p>
+    </div>
+  ) : null;
+
+  const mowingIntervalReason =
+    !seedRecoveryActive && scheduleReason.mow ? (
+      <p className="mt-1 text-xs text-blue-700 italic">
+        📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
+      </p>
+    ) : null;
 
   return (
     <section
@@ -5572,8 +5595,13 @@ export default function MaintenancePanel({ app }) {
                 ? 'bg-red-50 border-red-300'
                 : mowingDue
                   ? 'bg-amber-50 border-amber-300'
-                  : 'bg-white border-gray-200'
+                  : seedRecoveryActive
+                    ? 'bg-lime-50/40 border-lime-200'
+                    : 'bg-white border-gray-200'
           }`}
+          data-seed-recovery-active={seedRecoveryActive ? 'true' : 'false'}
+          data-recovery-days-remaining={seedRecoveryActive ? String(recoveryDaysRemaining) : ''}
+          data-recovery-ends-on={recoveryEndsOnIso ?? ''}
         >
           <p className="text-xs font-bold text-gray-800 mb-1">✂️ Mowing Tracker</p>
 
@@ -5638,11 +5666,8 @@ export default function MaintenancePanel({ app }) {
                     🔗 {VERTICUT_MOW_PAIRING_NOTE}
                   </p>
                 )}
-                {scheduleReason.mow && (
-                  <p className="mt-1 text-xs text-blue-700 italic">
-                    📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
-                  </p>
-                )}
+                {seedRecoveryMowingNote}
+                {mowingIntervalReason}
               </>
             ) : (
               <>
@@ -5663,11 +5688,8 @@ export default function MaintenancePanel({ app }) {
                     🔗 {VERTICUT_MOW_PAIRING_NOTE}
                   </p>
                 )}
-                {scheduleReason.mow && (
-                  <p className="mt-1 text-xs text-blue-700 italic">
-                    📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
-                  </p>
-                )}
+                {seedRecoveryMowingNote}
+                {mowingIntervalReason}
                 {mowingNextDate && (
                   <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-800 font-semibold">
                     📅 Next Cut Due: {mowingNextDate}
@@ -8672,33 +8694,79 @@ export function getSeedState(todayStr, springSeedDate, establishmentExtraDays = 
   return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
 }
 
+/**
+ * After the no-mow lock ends, keep a gentler weekly cadence while overseed roots mature.
+ * Window: day (SEED_ESTABLISHMENT_DAYS + 1) through day (SEED_RECOVERY_WINDOW_DAYS - 1).
+ * @param {string} todayStr
+ * @param {string | null} springSeedDate
+ * @param {number} [establishmentExtraDays]
+ */
+export function getSeedRecoveryState(todayStr, springSeedDate, establishmentExtraDays = 0) {
+  if (!springSeedDate) {
+    return {
+      seedRecoveryActive: false,
+      daysSinceSeed: null,
+      recoveryDaysRemaining: 0,
+      recoveryEndsOnIso: null,
+    };
+  }
+
+  const daysSinceSeed = daysBetweenIso(todayStr, springSeedDate);
+  const lockEndsAfterDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
+  const recoveryEndsAfterDays = SEED_RECOVERY_WINDOW_DAYS + establishmentExtraDays;
+  const seedRecoveryActive =
+    daysSinceSeed > lockEndsAfterDays && daysSinceSeed < recoveryEndsAfterDays;
+  const recoveryEndsOnIso = addDaysToDateString(springSeedDate, recoveryEndsAfterDays);
+  const recoveryDaysRemaining = seedRecoveryActive
+    ? Math.max(0, recoveryEndsAfterDays - daysSinceSeed)
+    : 0;
+
+  return {
+    seedRecoveryActive,
+    daysSinceSeed,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
+  };
+}
+
+/**
+ * Growth-rate interval from soil temperature alone (ignores post-seed recovery).
+ * @param {number | null} currentSoilTemp
+ */
+export function getGrowthRateMowingDays(currentSoilTemp) {
+  const temp = currentSoilTemp;
+  if (temp !== null && temp < 8) return 14;
+  if (temp !== null && temp < 12) return 10;
+  if (temp !== null && temp >= 15) return 5;
+  return 7;
+}
+
 function daysBetweenIso(todayStr, pastIso) {
   const start = new Date(`${pastIso}T12:00:00`);
   const end = new Date(`${todayStr}T12:00:00`);
   return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+/** @param {string} isoDate */
+function formatShortUkDate(isoDate) {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const dd = String(day).padStart(2, '0');
+  const mm = String(month).padStart(2, '0');
+  return `${dd}/${mm}/${year}`;
+}
+
 /**
  * Mowing interval from growth rate (soil temperature) — not rainfall.
  * Rain only affects when it is practical to mow, not whether grass needs cutting.
+ * Post-overseed recovery overrides to a gentler weekly cadence.
  * @param {number | null} currentSoilTemp
  * @param {string | null} springSeedDate
  * @param {string} todayStr
  */
 export function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
-  const temp = currentSoilTemp;
-
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) {
-      return SEED_RECOVERY_MOWING_DAYS;
-    }
-  }
-
-  if (temp !== null && temp < 8) return 14;
-  if (temp !== null && temp < 12) return 10;
-  if (temp !== null && temp >= 15) return 5;
-  return 7;
+  const { seedRecoveryActive } = getSeedRecoveryState(todayStr, springSeedDate);
+  if (seedRecoveryActive) return SEED_RECOVERY_MOWING_DAYS;
+  return getGrowthRateMowingDays(currentSoilTemp);
 }
 
 /**
@@ -8737,10 +8805,8 @@ export function getDynamicWateringDays(
 
   if (seedEstablishmentActive) return 1;
 
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) return 2;
-  }
+  const { seedRecoveryActive } = getSeedRecoveryState(todayStr, springSeedDate);
+  if (seedRecoveryActive) return 2;
 
   if (recentPastRainSum >= 8) return 5;
   if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) return 4;
@@ -8779,25 +8845,41 @@ export function getScheduleReason(input) {
   const mowReasons = [];
   const waterReasons = [];
   const verticutReasons = [];
+  const {
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
+  } = getSeedRecoveryState(todayStr, springSeedDate);
 
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) {
+  if (seedRecoveryActive && recoveryEndsOnIso) {
+    const endsLabel = formatShortUkDate(recoveryEndsOnIso);
+    const dayWord = recoveryDaysRemaining === 1 ? 'day' : 'days';
+    const growthRateDays = getGrowthRateMowingDays(temp);
+    const warmWouldCutMoreOften = growthRateDays < SEED_RECOVERY_MOWING_DAYS;
+
+    mowReasons.push(
+      `spring overseed still establishing — keep weekly cuts for ${recoveryDaysRemaining} more ${dayWord} (until ${endsLabel})`
+    );
+    if (warmWouldCutMoreOften) {
       mowReasons.push(
-        `${SEED_RECOVERY_MOWING_DAYS}-day recovery cuts — gradually lower height each mow`
+        `warm soil would normally mean every ${growthRateDays} days, but hold weekly so new roots aren't stressed`
       );
-      waterReasons.push('enhanced watering during turf recovery');
     }
+    mowReasons.push('gradually lower height each cut');
+    waterReasons.push('enhanced watering during turf recovery');
   }
 
   if (seedEstablishmentActive) {
     waterReasons.push('daily watering during seed establishment');
   }
 
-  if (temp !== null && temp >= 15) {
-    mowReasons.push(`${temp.toFixed(0)}°C soil – active growth`);
-  } else if (temp !== null && temp < 10) {
-    mowReasons.push(`${temp.toFixed(0)}°C soil – slower growth`);
+  // During recovery the weekly cadence is intentional — don't also imply soil temp sets the interval.
+  if (!seedRecoveryActive) {
+    if (temp !== null && temp >= 15) {
+      mowReasons.push(`${temp.toFixed(0)}°C soil – active growth`);
+    } else if (temp !== null && temp < 10) {
+      mowReasons.push(`${temp.toFixed(0)}°C soil – slower growth`);
+    }
   }
 
   if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) {
@@ -8878,6 +8960,11 @@ export function buildMaintenanceSchedule(input) {
     springSeedDate,
     establishmentExtraDays
   );
+  const {
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
+  } = getSeedRecoveryState(todayStr, springSeedDate, establishmentExtraDays);
   const isDormantSeason = isDormantSeasonForDate(todayStr);
 
   const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
@@ -8965,6 +9052,9 @@ export function buildMaintenanceSchedule(input) {
     isDormantSeason,
     isNatureProvidingFullSoak,
     seedEstablishmentActive,
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
     mowingLockedUntilIso,
     mowingNextDueIso,
     wateringNextDueIso,
@@ -9830,6 +9920,9 @@ export function useLawnCareApp() {
   const mowingNextDueIso = maintenanceSchedule.mowingNextDueIso;
   const wateringNextDueIso = maintenanceSchedule.wateringNextDueIso;
   const mowingLockedUntilIso = maintenanceSchedule.mowingLockedUntilIso;
+  const seedRecoveryActive = maintenanceSchedule.seedRecoveryActive;
+  const recoveryDaysRemaining = maintenanceSchedule.recoveryDaysRemaining;
+  const recoveryEndsOnIso = maintenanceSchedule.recoveryEndsOnIso;
   const isVerticutSeason = maintenanceSchedule.isVerticutSeason;
   const renovationHoldActive = maintenanceSchedule.renovationHoldActive;
   const verticutLockedUntilIso = maintenanceSchedule.verticutLockedUntilIso;
@@ -10930,6 +11023,9 @@ export function useLawnCareApp() {
     mowingNextDueIso,
     wateringNextDueIso,
     mowingLockedUntilIso,
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
     isVerticutSeason,
     renovationHoldActive,
     verticutLockedUntilIso,
@@ -35102,32 +35198,57 @@ function getSeedState(todayStr, springSeedDate, establishmentExtraDays = 0) {
   const mowingLockedUntilIso = seedEstablishmentActive && springSeedDate ? addDaysToDateString(springSeedDate, totalEstablishmentDays) : null;
   return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
 }
-function daysBetweenIso2(todayStr, pastIso) {
-  const start = /* @__PURE__ */ new Date(`${pastIso}T12:00:00`);
-  const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
-  return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
-}
-function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
-  const temp = currentSoilTemp;
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) {
-      return SEED_RECOVERY_MOWING_DAYS;
-    }
+function getSeedRecoveryState(todayStr, springSeedDate, establishmentExtraDays = 0) {
+  if (!springSeedDate) {
+    return {
+      seedRecoveryActive: false,
+      daysSinceSeed: null,
+      recoveryDaysRemaining: 0,
+      recoveryEndsOnIso: null
+    };
   }
+  const daysSinceSeed = daysBetweenIso2(todayStr, springSeedDate);
+  const lockEndsAfterDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
+  const recoveryEndsAfterDays = SEED_RECOVERY_WINDOW_DAYS + establishmentExtraDays;
+  const seedRecoveryActive = daysSinceSeed > lockEndsAfterDays && daysSinceSeed < recoveryEndsAfterDays;
+  const recoveryEndsOnIso = addDaysToDateString(springSeedDate, recoveryEndsAfterDays);
+  const recoveryDaysRemaining = seedRecoveryActive ? Math.max(0, recoveryEndsAfterDays - daysSinceSeed) : 0;
+  return {
+    seedRecoveryActive,
+    daysSinceSeed,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso
+  };
+}
+function getGrowthRateMowingDays(currentSoilTemp) {
+  const temp = currentSoilTemp;
   if (temp !== null && temp < 8) return 14;
   if (temp !== null && temp < 12) return 10;
   if (temp !== null && temp >= 15) return 5;
   return 7;
 }
+function daysBetweenIso2(todayStr, pastIso) {
+  const start = /* @__PURE__ */ new Date(`${pastIso}T12:00:00`);
+  const end = /* @__PURE__ */ new Date(`${todayStr}T12:00:00`);
+  return Math.floor((end.getTime() - start.getTime()) / (1e3 * 60 * 60 * 24));
+}
+function formatShortUkDate(isoDate) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const dd = String(day).padStart(2, "0");
+  const mm = String(month).padStart(2, "0");
+  return `${dd}/${mm}/${year}`;
+}
+function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
+  const { seedRecoveryActive } = getSeedRecoveryState(todayStr, springSeedDate);
+  if (seedRecoveryActive) return SEED_RECOVERY_MOWING_DAYS;
+  return getGrowthRateMowingDays(currentSoilTemp);
+}
 function getDynamicWateringDays(forecastedRainSumNearTerm, currentSoilTemp, springSeedDate, seedEstablishmentActive, todayStr, recentPastRainSum = 0) {
   const temp = currentSoilTemp;
   const rain = forecastedRainSumNearTerm;
   if (seedEstablishmentActive) return 1;
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) return 2;
-  }
+  const { seedRecoveryActive } = getSeedRecoveryState(todayStr, springSeedDate);
+  if (seedRecoveryActive) return 2;
   if (recentPastRainSum >= 8) return 5;
   if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) return 4;
   if (temp !== null && temp > 20 && rain < 2) return 2;
@@ -35152,22 +35273,36 @@ function getScheduleReason(input) {
   const mowReasons = [];
   const waterReasons = [];
   const verticutReasons = [];
-  if (springSeedDate) {
-    const sinceSeed = daysBetweenIso2(todayStr, springSeedDate);
-    if (sinceSeed > SEED_ESTABLISHMENT_DAYS && sinceSeed < SEED_RECOVERY_WINDOW_DAYS) {
+  const {
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso
+  } = getSeedRecoveryState(todayStr, springSeedDate);
+  if (seedRecoveryActive && recoveryEndsOnIso) {
+    const endsLabel = formatShortUkDate(recoveryEndsOnIso);
+    const dayWord = recoveryDaysRemaining === 1 ? "day" : "days";
+    const growthRateDays = getGrowthRateMowingDays(temp);
+    const warmWouldCutMoreOften = growthRateDays < SEED_RECOVERY_MOWING_DAYS;
+    mowReasons.push(
+      `spring overseed still establishing \u2014 keep weekly cuts for ${recoveryDaysRemaining} more ${dayWord} (until ${endsLabel})`
+    );
+    if (warmWouldCutMoreOften) {
       mowReasons.push(
-        `${SEED_RECOVERY_MOWING_DAYS}-day recovery cuts \u2014 gradually lower height each mow`
+        `warm soil would normally mean every ${growthRateDays} days, but hold weekly so new roots aren't stressed`
       );
-      waterReasons.push("enhanced watering during turf recovery");
     }
+    mowReasons.push("gradually lower height each cut");
+    waterReasons.push("enhanced watering during turf recovery");
   }
   if (seedEstablishmentActive) {
     waterReasons.push("daily watering during seed establishment");
   }
-  if (temp !== null && temp >= 15) {
-    mowReasons.push(`${temp.toFixed(0)}\xB0C soil \u2013 active growth`);
-  } else if (temp !== null && temp < 10) {
-    mowReasons.push(`${temp.toFixed(0)}\xB0C soil \u2013 slower growth`);
+  if (!seedRecoveryActive) {
+    if (temp !== null && temp >= 15) {
+      mowReasons.push(`${temp.toFixed(0)}\xB0C soil \u2013 active growth`);
+    } else if (temp !== null && temp < 10) {
+      mowReasons.push(`${temp.toFixed(0)}\xB0C soil \u2013 slower growth`);
+    }
   }
   if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) {
     waterReasons.push(
@@ -35222,6 +35357,11 @@ function buildMaintenanceSchedule(input) {
     springSeedDate,
     establishmentExtraDays
   );
+  const {
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso
+  } = getSeedRecoveryState(todayStr, springSeedDate, establishmentExtraDays);
   const isDormantSeason = isDormantSeasonForDate(todayStr);
   const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
   const dynamicWateringDays = getDynamicWateringDays(
@@ -35269,6 +35409,9 @@ function buildMaintenanceSchedule(input) {
     isDormantSeason,
     isNatureProvidingFullSoak,
     seedEstablishmentActive,
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
     mowingLockedUntilIso,
     mowingNextDueIso,
     wateringNextDueIso,
