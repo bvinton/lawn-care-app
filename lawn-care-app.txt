@@ -3362,7 +3362,31 @@ export default function LawnHub({ app }) {
     weatherLocationLabel,
   } = app;
 
-  const dueCount = [mowingDue, wateringDue, verticutDue, gypsumDue].filter(Boolean).length;
+  const dueItems = [
+    mowingDue ? 'Mowing' : null,
+    wateringDue ? 'Watering' : null,
+    verticutDue ? 'Verticut' : null,
+    gypsumDue ? 'Gypsum' : null,
+  ].filter(Boolean);
+  const dueCount = dueItems.length;
+
+  const heroStatus = seedEstablishmentActive
+    ? {
+        title: 'Seed lock',
+        lede: 'Mowing paused while seed establishes.',
+        tone: 'alert',
+      }
+    : dueCount > 0
+      ? {
+          title: dueCount === 1 ? '1 task due' : `${dueCount} tasks due`,
+          lede: dueItems.join(' · '),
+          tone: 'alert',
+        }
+      : {
+          title: 'All clear',
+          lede: 'Nothing due right now.',
+          tone: 'ok',
+        };
 
   const syncLabel =
     cloudSyncStatus === 'pulling'
@@ -3396,14 +3420,21 @@ export default function LawnHub({ app }) {
 
   return (
     <div className="lawn-hub">
-      <header className="lawn-hub__hero">
-        <h2 className="lawn-hub__title">
-          <span className="lawn-hub__sqm">{sqm} SQM</span>
-        </h2>
-        <p className="lawn-hub__lede">
-          <span className="lawn-hub__dims">
-            {length}m × {width}m
-          </span>
+      <header className={`lawn-hub__hero lawn-hub__hero--${heroStatus.tone}`}>
+        <p className="lawn-hub__kicker">Today</p>
+        <h2 className="lawn-hub__title">{heroStatus.title}</h2>
+        <p className="lawn-hub__lede">{heroStatus.lede}</p>
+        {dueCount > 0 && (
+          <button
+            type="button"
+            className="lawn-hub__hero-cta"
+            onClick={() => setActiveRoom('maintenance')}
+          >
+            Open Care
+          </button>
+        )}
+        <p className="lawn-hub__size-meta">
+          {sqm} SQM · {length}m × {width}m
         </p>
       </header>
 
@@ -8568,27 +8599,68 @@ export async function runLawnCloudSync() {
   border-color: rgba(65, 147, 67, 0.28) !important;
 }
 
-/* —— Hub / rooms (Atelier) —— */
+/* —— Hub / rooms (Atelier + Official) —— */
 .lawn-hub__hero {
   margin-bottom: 1.25rem;
   animation: lawn-rise 420ms ease-out both;
 }
 
+.lawn-hub__kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--lawn-muted);
+}
+
 .lawn-hub__title {
   font-family: var(--lawn-font-display);
-  font-size: 1.55rem;
-  font-weight: 750;
+  font-size: 1.7rem;
+  font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.15;
+  line-height: 1.1;
   color: inherit;
+  margin: 0;
 }
 
 .lawn-hub__lede {
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  margin: 0.4rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--lawn-muted);
+}
+
+.lawn-hub__hero-cta {
+  margin-top: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.4rem;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--lawn-accent) 35%, transparent);
+  background: var(--lawn-accent-soft);
+  color: var(--lawn-page-ink);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.lawn-hub__hero-cta:hover {
+  filter: brightness(0.97);
+}
+
+.lawn-hub__size-meta {
+  margin: 0.65rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--lawn-muted) 85%, transparent);
+}
+
+.lawn-hub__hero--alert .lawn-hub__title {
+  color: var(--lawn-page-ink);
 }
 
 .lawn-hub__sqm {
@@ -10208,73 +10280,6 @@ export async function runLawnCloudSync() {
 }
 </file>
 
-<file path="index.html">
-<!doctype html>
-<html lang="en-GB">
-  <head>
-    <script>
-      (function () {
-        var key = 'lawn-app-sw-reset-v8';
-        try {
-          if (localStorage.getItem(key) === '1') return;
-          localStorage.setItem(key, '1');
-        } catch (e) {
-          return;
-        }
-        var reloadAfterReset = function () {
-          window.location.reload();
-        };
-        var clearCaches = function () {
-          if (!('caches' in window)) {
-            reloadAfterReset();
-            return;
-          }
-          caches
-            .keys()
-            .then(function (keys) {
-              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
-            })
-            .finally(reloadAfterReset);
-        };
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker
-            .getRegistrations()
-            .then(function (regs) {
-              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
-            })
-            .then(clearCaches)
-            .catch(clearCaches);
-        } else {
-          clearCaches();
-        }
-      })();
-    </script>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#14532d" />
-    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;600;700;800&family=Figtree:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&family=Literata:opsz,wght@7..72,600;7..72,700&family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700;800&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>The Lawn Pack Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-</file>
-
 <file path="src/services/lawnMaintenanceSync.js">
 import {
   getSupabase,
@@ -10640,6 +10645,73 @@ export async function pullMaintenanceDatesFromSupabase(todayStr) {
   const rows = await fetchLawnMaintenanceRows();
   return inferMaintenanceDatesFromRows(rows, todayStr);
 }
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <script>
+      (function () {
+        var key = 'lawn-app-sw-reset-v8';
+        try {
+          if (localStorage.getItem(key) === '1') return;
+          localStorage.setItem(key, '1');
+        } catch (e) {
+          return;
+        }
+        var reloadAfterReset = function () {
+          window.location.reload();
+        };
+        var clearCaches = function () {
+          if (!('caches' in window)) {
+            reloadAfterReset();
+            return;
+          }
+          caches
+            .keys()
+            .then(function (keys) {
+              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
+            })
+            .finally(reloadAfterReset);
+        };
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (regs) {
+              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+            })
+            .then(clearCaches)
+            .catch(clearCaches);
+        } else {
+          clearCaches();
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;600;700;800&family=Figtree:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&family=Literata:opsz,wght@7..72,600;7..72,700&family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700;800&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>The Lawn Pack Companion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
 </file>
 
 <file path="src/services/lawnScheduleEngine.js">

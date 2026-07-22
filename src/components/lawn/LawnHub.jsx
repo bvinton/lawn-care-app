@@ -30,7 +30,31 @@ export default function LawnHub({ app }) {
     weatherLocationLabel,
   } = app;
 
-  const dueCount = [mowingDue, wateringDue, verticutDue, gypsumDue].filter(Boolean).length;
+  const dueItems = [
+    mowingDue ? 'Mowing' : null,
+    wateringDue ? 'Watering' : null,
+    verticutDue ? 'Verticut' : null,
+    gypsumDue ? 'Gypsum' : null,
+  ].filter(Boolean);
+  const dueCount = dueItems.length;
+
+  const heroStatus = seedEstablishmentActive
+    ? {
+        title: 'Seed lock',
+        lede: 'Mowing paused while seed establishes.',
+        tone: 'alert',
+      }
+    : dueCount > 0
+      ? {
+          title: dueCount === 1 ? '1 task due' : `${dueCount} tasks due`,
+          lede: dueItems.join(' · '),
+          tone: 'alert',
+        }
+      : {
+          title: 'All clear',
+          lede: 'Nothing due right now.',
+          tone: 'ok',
+        };
 
   const syncLabel =
     cloudSyncStatus === 'pulling'
@@ -64,14 +88,21 @@ export default function LawnHub({ app }) {
 
   return (
     <div className="lawn-hub">
-      <header className="lawn-hub__hero">
-        <h2 className="lawn-hub__title">
-          <span className="lawn-hub__sqm">{sqm} SQM</span>
-        </h2>
-        <p className="lawn-hub__lede">
-          <span className="lawn-hub__dims">
-            {length}m × {width}m
-          </span>
+      <header className={`lawn-hub__hero lawn-hub__hero--${heroStatus.tone}`}>
+        <p className="lawn-hub__kicker">Today</p>
+        <h2 className="lawn-hub__title">{heroStatus.title}</h2>
+        <p className="lawn-hub__lede">{heroStatus.lede}</p>
+        {dueCount > 0 && (
+          <button
+            type="button"
+            className="lawn-hub__hero-cta"
+            onClick={() => setActiveRoom('maintenance')}
+          >
+            Open Care
+          </button>
+        )}
+        <p className="lawn-hub__size-meta">
+          {sqm} SQM · {length}m × {width}m
         </p>
       </header>
 
