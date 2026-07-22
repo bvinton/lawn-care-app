@@ -3,8 +3,7 @@ import { SEASONS } from '../../data/LawnPackData';
 import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
 
 /**
- * Canopy — bright daylight timeline. Not a dark shell, not bottom tabs.
- * Vertical due ribbon under a sky hero; Care/Pack open as sheets via floating dock.
+ * Canopy — neon yard board with giant billboard due cards (not sky timeline, not bottom tabs).
  * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
  */
 export default function LawnCanopyBoard({ app }) {
@@ -42,7 +41,7 @@ export default function LawnCanopyBoard({ app }) {
   if (petLockoutActive) {
     queue.push({
       id: 'pets',
-      title: 'Pet lockout',
+      title: 'PETS OFF',
       detail: `Safe in ${petLockoutHoursRemaining}h`,
       go: 'maintenance',
       urgent: true,
@@ -51,8 +50,8 @@ export default function LawnCanopyBoard({ app }) {
   if (seedEstablishmentActive) {
     queue.push({
       id: 'seed',
-      title: 'No mowing',
-      detail: `${seedDaysRemaining} day${seedDaysRemaining !== 1 ? 's' : ''} left on seed lock`,
+      title: 'NO MOW',
+      detail: `${seedDaysRemaining}d seed lock`,
       go: 'maintenance',
       urgent: true,
     });
@@ -60,7 +59,7 @@ export default function LawnCanopyBoard({ app }) {
   if (mowingDue && !seedEstablishmentActive) {
     queue.push({
       id: 'mow',
-      title: 'Mow the lawn',
+      title: 'MOW',
       detail: mowingNextDate ? `Was due ${mowingNextDate}` : 'Due now',
       go: 'maintenance',
       urgent: true,
@@ -69,7 +68,7 @@ export default function LawnCanopyBoard({ app }) {
   if (wateringDue) {
     queue.push({
       id: 'water',
-      title: 'Water',
+      title: 'WATER',
       detail: wateringNextDate ? `Was due ${wateringNextDate}` : 'Due now',
       go: 'maintenance',
       urgent: true,
@@ -78,7 +77,7 @@ export default function LawnCanopyBoard({ app }) {
   if (verticutDue) {
     queue.push({
       id: 'verticut',
-      title: 'Verticut',
+      title: 'VERTICUT',
       detail: verticutNextDate ? `Was due ${verticutNextDate}` : 'Due now',
       go: 'maintenance',
       urgent: true,
@@ -87,7 +86,7 @@ export default function LawnCanopyBoard({ app }) {
   if (gypsumDue) {
     queue.push({
       id: 'gypsum',
-      title: 'Liquid gypsum',
+      title: 'GYPSUM',
       detail: gypsumDueDate ? formatDisplayDate(gypsumDueDate) : 'Due now',
       go: 'maintenance',
       urgent: true,
@@ -96,7 +95,7 @@ export default function LawnCanopyBoard({ app }) {
   if (springPackIncomplete) {
     queue.push({
       id: 'spring',
-      title: 'Spring Pack',
+      title: 'SPRING PACK',
       detail: `${incompleteSpringSteps.length} step${incompleteSpringSteps.length !== 1 ? 's' : ''} left`,
       go: 'seasonal',
       urgent: true,
@@ -106,8 +105,8 @@ export default function LawnCanopyBoard({ app }) {
   if (queue.length === 0) {
     queue.push({
       id: 'clear',
-      title: 'Clear skies',
-      detail: `${SEASONS[currentSeason]?.name ?? 'Season'} · ${sqm} m² — nothing due today`,
+      title: 'ALL CLEAR',
+      detail: `${SEASONS[currentSeason]?.name ?? 'Season'} · ${sqm} m²`,
       go: 'maintenance',
       urgent: false,
     });
@@ -119,63 +118,59 @@ export default function LawnCanopyBoard({ app }) {
 
   return (
     <div className="lawn-canopy">
-      <header className="lawn-canopy__sky">
-        <div className="lawn-canopy__sky-glow" aria-hidden="true" />
+      <nav className="lawn-canopy__strip" aria-label="Yard board">
+        <button type="button" className="is-active" onClick={() => setActiveRoom('hub')}>
+          Today
+        </button>
+        <button type="button" onClick={() => setActiveRoom('maintenance')}>
+          Care
+        </button>
+        <button type="button" onClick={() => setActiveRoom('seasonal')}>
+          Pack
+        </button>
+      </nav>
+
+      <header className="lawn-canopy__boardhead">
         <p className="lawn-canopy__date">{dateLabel}</p>
         <h2 className="lawn-canopy__place">{weatherLocationLabel}</h2>
         <p className="lawn-canopy__weather">{weatherStatusText}</p>
-        <div className="lawn-canopy__vitals">
-          <span>{sqm} m²</span>
-          <span>{currentSoilTemp != null ? `${currentSoilTemp.toFixed(0)}°C soil` : 'Soil —'}</span>
-          <span>
-            {urgentCount > 0 ? `${urgentCount} due` : 'All clear'}
-          </span>
-        </div>
+        <p className="lawn-canopy__meta">
+          {sqm} m² · {currentSoilTemp != null ? `${currentSoilTemp.toFixed(0)}°C` : 'Soil —'} ·{' '}
+          {urgentCount > 0 ? `${urgentCount} DUE` : 'CLEAR'}
+        </p>
       </header>
 
-      <section className="lawn-canopy__ribbon" aria-label="Today">
-        <p className="lawn-canopy__ribbon-title">Today</p>
-        <ol className="lawn-canopy__timeline">
-          {queue.map((item, index) => (
-            <li key={item.id} style={{ animationDelay: `${100 + index * 70}ms` }}>
-              <button
-                type="button"
-                className={`lawn-canopy__node${item.urgent ? ' is-urgent' : ''}`}
-                onClick={() => setActiveRoom(item.go)}
-              >
-                <span className="lawn-canopy__node-dot" aria-hidden="true" />
-                <span className="lawn-canopy__node-copy">
-                  <span className="lawn-canopy__node-title">{item.title}</span>
-                  <span className="lawn-canopy__node-detail">{item.detail}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
+      <section className="lawn-canopy__bills" aria-label="Due billboards">
+        {queue.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`lawn-canopy__bill${item.urgent ? ' is-urgent' : ''}`}
+            style={{ animationDelay: `${80 + index * 80}ms` }}
+            onClick={() => setActiveRoom(item.go)}
+          >
+            <span className="lawn-canopy__bill-title">{item.title}</span>
+            <span className="lawn-canopy__bill-detail">{item.detail}</span>
+          </button>
+        ))}
       </section>
 
-      <div className="lawn-canopy__dock" role="navigation" aria-label="Open sheets">
-        <button type="button" className="lawn-canopy__dock-main" onClick={() => setActiveRoom('maintenance')}>
-          Care
-        </button>
-        <button type="button" className="lawn-canopy__dock-main" onClick={() => setActiveRoom('seasonal')}>
-          Pack
-        </button>
+      <div className="lawn-canopy__tools">
         <button type="button" onClick={() => void runFullCloudSync()} disabled={syncBusy}>
           {syncBusy
-            ? '…'
+            ? 'SYNC…'
             : cloudSyncStatus === 'synced' && lastCloudSyncAt
-              ? formatSyncTimeAgo(lastCloudSyncAt)
-              : 'Sync'}
+              ? formatSyncTimeAgo(lastCloudSyncAt).toUpperCase()
+              : 'SYNC'}
         </button>
         <button type="button" onClick={() => setActiveScreen('materials')}>
-          Kit
+          KIT
         </button>
         <button type="button" onClick={() => setActiveScreen('guides')}>
-          Guides
+          GUIDES
         </button>
         <button type="button" onClick={() => setActiveScreen('settings')}>
-          Setup
+          SETUP
         </button>
       </div>
     </div>

@@ -30,11 +30,11 @@ export const LAWN_THEMES = [
   {
     id: 'atelier',
     name: 'Atelier',
-    tagline: 'Journal spine · chapters',
+    tagline: 'Folder tabs · paper desk',
     description:
-      'Porcelain studio look. A vertical chapter spine (Cover, Care, Pack, Studio) — open one chapter at a time like a field journal, not a tab bar or long page.',
+      'Editorial paper desk. Top folder tabs (Index / Care / Pack / Studio), huge season title, dotted ledger lines — calm cobalt on white, nothing like Signal’s dark board.',
     layout: 'rooms',
-    swatches: ['#e7eef3', '#1c2430', '#f4f7fa', '#b45309'],
+    swatches: ['#f7f5f0', '#111827', '#ffffff', '#1d4ed8'],
     fontDisplay: '"Literata", Georgia, serif',
     fontBody: '"Source Sans 3", "Segoe UI", sans-serif',
   },
@@ -52,13 +52,13 @@ export const LAWN_THEMES = [
   {
     id: 'canopy',
     name: 'Canopy',
-    tagline: 'Daylight timeline · due ribbon',
+    tagline: 'Neon yard board · billboards',
     description:
-      'Bright sky-to-meadow shell. Starts on a vertical Today timeline of what’s due, with Care / Pack opened as full sheets from a floating dock — not bottom tabs.',
+      'High-vis chartreuse yard board. Giant black billboard due cards and a thick top CARE/PACK strip — loud and brutalist, not a soft sky timeline.',
     layout: 'today',
-    swatches: ['#7eb8d9', '#e8f5d8', '#ffffff', '#2f6b3a'],
-    fontDisplay: '"Sora", "Segoe UI", sans-serif',
-    fontBody: '"Nunito Sans", "Segoe UI", sans-serif',
+    swatches: ['#c8f000', '#0a0a0a', '#ffffff', '#111111'],
+    fontDisplay: '"Archivo Black", "Arial Black", sans-serif',
+    fontBody: '"DM Sans", "Segoe UI", sans-serif',
   },
 ];
 

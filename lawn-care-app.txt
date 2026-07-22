@@ -645,8 +645,7 @@ import MaintenancePanel from './MaintenancePanel';
 import SeasonTimeline from './SeasonTimeline';
 
 /**
- * Atelier — field-journal spine. Not a room hub list, not bottom tabs.
- * Vertical chapter rail + one open chapter (Cover / Care / Pack / Studio).
+ * Atelier — paper desk with top folder tabs (not a left spine, not bottom tabs).
  * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
  */
 export default function LawnAtelierBoard({ app }) {
@@ -695,16 +694,15 @@ export default function LawnAtelierBoard({ app }) {
             ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)}`
             : 'Sync now';
 
-  const chapters = [
-    { id: 'hub', label: 'Cover', short: 'Cv' },
-    { id: 'maintenance', label: 'Care', short: 'Cr', badge: dueCount > 0 ? String(dueCount) : null },
+  const folders = [
+    { id: 'hub', label: 'Index' },
+    { id: 'maintenance', label: 'Care', badge: dueCount > 0 ? String(dueCount) : null },
     {
       id: 'seasonal',
       label: 'Pack',
-      short: 'Pk',
       badge: springPackIncomplete ? String(incompleteSpringSteps.length) : null,
     },
-    { id: 'more', label: 'Studio', short: 'St' },
+    { id: 'more', label: 'Studio' },
   ];
 
   const dueLines = [
@@ -722,20 +720,20 @@ export default function LawnAtelierBoard({ app }) {
   let page = null;
   if (chapter === 'maintenance') {
     page = (
-      <div className="lawn-atelier__chapter lawn-panel-surface">
+      <div className="lawn-atelier__sheet lawn-panel-surface">
         <MaintenancePanel app={app} />
       </div>
     );
   } else if (chapter === 'seasonal') {
     page = (
-      <div className="lawn-atelier__chapter lawn-panel-surface">
+      <div className="lawn-atelier__sheet lawn-panel-surface">
         <SeasonTimeline app={app} />
       </div>
     );
   } else if (chapter === 'more') {
     page = (
       <div className="lawn-atelier__studio">
-        <p className="lawn-atelier__studio-lede">Studio tools</p>
+        <p className="lawn-atelier__studio-lede">Studio</p>
         <button
           type="button"
           className="lawn-atelier__studio-row"
@@ -751,7 +749,7 @@ export default function LawnAtelierBoard({ app }) {
           onClick={() => setActiveScreen('materials')}
         >
           <span className="inline-flex items-center gap-2">
-            <CalculatorIcon className="w-3.5 h-3.5" /> Materials calculator
+            <CalculatorIcon className="w-3.5 h-3.5" /> Materials
           </span>
           <span aria-hidden="true">→</span>
         </button>
@@ -760,7 +758,7 @@ export default function LawnAtelierBoard({ app }) {
           className="lawn-atelier__studio-row"
           onClick={() => setActiveScreen('guides')}
         >
-          <span>Guides & PDFs</span>
+          <span>Guides</span>
           <span aria-hidden="true">→</span>
         </button>
         <button
@@ -776,11 +774,14 @@ export default function LawnAtelierBoard({ app }) {
   } else {
     page = (
       <div className="lawn-atelier__cover">
-        <p className="lawn-atelier__kicker">{weatherLocationLabel}</p>
-        <h2 className="lawn-atelier__season">{SEASONS[currentSeason]?.name ?? 'Season'}</h2>
-        <p className="lawn-atelier__size">
-          {sqm} m² · {length}×{width}m
-        </p>
+        <div className="lawn-atelier__masthead">
+          <p className="lawn-atelier__kicker">{weatherLocationLabel}</p>
+          <h2 className="lawn-atelier__season">{SEASONS[currentSeason]?.name ?? 'Season'}</h2>
+          <p className="lawn-atelier__size">
+            Vol. {sqm} m² · {length}×{width}m
+          </p>
+        </div>
+
         <p className="lawn-atelier__weather">{weatherStatusText}</p>
 
         {(petLockoutActive || seedEstablishmentActive || springPackIncomplete) && (
@@ -797,38 +798,22 @@ export default function LawnAtelierBoard({ app }) {
         )}
 
         <div className="lawn-atelier__ledger" aria-label="Care ledger">
+          <p className="lawn-atelier__ledger-title">Ledger</p>
           {dueLines.map((line, index) => (
             <button
               key={line.id}
               type="button"
               className={`lawn-atelier__line${line.due ? ' is-due' : ''}`}
-              style={{ animationDelay: `${80 + index * 60}ms` }}
+              style={{ animationDelay: `${90 + index * 70}ms` }}
               onClick={() => setActiveRoom('maintenance')}
             >
+              <span className="lawn-atelier__line-num">{String(index + 1).padStart(2, '0')}</span>
               <span className="lawn-atelier__line-label">{line.label}</span>
-              <span className="lawn-atelier__line-rule" aria-hidden="true" />
               <span className="lawn-atelier__line-state">
                 {line.due ? 'Due' : line.next ? line.next : '—'}
               </span>
             </button>
           ))}
-        </div>
-
-        <div className="lawn-atelier__cover-actions">
-          <button
-            type="button"
-            className="lawn-atelier__open"
-            onClick={() => setActiveRoom('maintenance')}
-          >
-            Open Care chapter
-          </button>
-          <button
-            type="button"
-            className="lawn-atelier__open lawn-atelier__open--ghost"
-            onClick={() => setActiveRoom('seasonal')}
-          >
-            Open Pack chapter
-          </button>
         </div>
       </div>
     );
@@ -836,25 +821,23 @@ export default function LawnAtelierBoard({ app }) {
 
   return (
     <div className="lawn-atelier" data-atelier-chapter={chapter}>
-      <nav className="lawn-atelier__spine" aria-label="Journal chapters">
-        {chapters.map((item) => (
+      <nav className="lawn-atelier__folders" aria-label="Desk folders">
+        {folders.map((item) => (
           <button
             key={item.id}
             type="button"
-            className={`lawn-atelier__spine-btn${chapter === item.id ? ' is-active' : ''}`}
+            className={`lawn-atelier__folder${chapter === item.id ? ' is-active' : ''}`}
             onClick={() =>
               setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))
             }
             aria-current={chapter === item.id ? 'page' : undefined}
-            title={item.label}
           >
-            <span className="lawn-atelier__spine-short">{item.short}</span>
-            <span className="lawn-atelier__spine-label">{item.label}</span>
-            {item.badge ? <span className="lawn-atelier__spine-badge">{item.badge}</span> : null}
+            {item.label}
+            {item.badge ? <span className="lawn-atelier__folder-badge">{item.badge}</span> : null}
           </button>
         ))}
       </nav>
-      <div className="lawn-atelier__page">{page}</div>
+      <div className="lawn-atelier__desk">{page}</div>
     </div>
   );
 }
@@ -866,8 +849,7 @@ import { SEASONS } from '../../data/LawnPackData';
 import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
 
 /**
- * Canopy — bright daylight timeline. Not a dark shell, not bottom tabs.
- * Vertical due ribbon under a sky hero; Care/Pack open as sheets via floating dock.
+ * Canopy — neon yard board with giant billboard due cards (not sky timeline, not bottom tabs).
  * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
  */
 export default function LawnCanopyBoard({ app }) {
@@ -905,7 +887,7 @@ export default function LawnCanopyBoard({ app }) {
   if (petLockoutActive) {
     queue.push({
       id: 'pets',
-      title: 'Pet lockout',
+      title: 'PETS OFF',
       detail: `Safe in ${petLockoutHoursRemaining}h`,
       go: 'maintenance',
       urgent: true,
@@ -914,8 +896,8 @@ export default function LawnCanopyBoard({ app }) {
   if (seedEstablishmentActive) {
     queue.push({
       id: 'seed',
-      title: 'No mowing',
-      detail: `${seedDaysRemaining} day${seedDaysRemaining !== 1 ? 's' : ''} left on seed lock`,
+      title: 'NO MOW',
+      detail: `${seedDaysRemaining}d seed lock`,
       go: 'maintenance',
       urgent: true,
     });
@@ -923,7 +905,7 @@ export default function LawnCanopyBoard({ app }) {
   if (mowingDue && !seedEstablishmentActive) {
     queue.push({
       id: 'mow',
-      title: 'Mow the lawn',
+      title: 'MOW',
       detail: mowingNextDate ? `Was due ${mowingNextDate}` : 'Due now',
       go: 'maintenance',
       urgent: true,
@@ -932,7 +914,7 @@ export default function LawnCanopyBoard({ app }) {
   if (wateringDue) {
     queue.push({
       id: 'water',
-      title: 'Water',
+      title: 'WATER',
       detail: wateringNextDate ? `Was due ${wateringNextDate}` : 'Due now',
       go: 'maintenance',
       urgent: true,
@@ -941,7 +923,7 @@ export default function LawnCanopyBoard({ app }) {
   if (verticutDue) {
     queue.push({
       id: 'verticut',
-      title: 'Verticut',
+      title: 'VERTICUT',
       detail: verticutNextDate ? `Was due ${verticutNextDate}` : 'Due now',
       go: 'maintenance',
       urgent: true,
@@ -950,7 +932,7 @@ export default function LawnCanopyBoard({ app }) {
   if (gypsumDue) {
     queue.push({
       id: 'gypsum',
-      title: 'Liquid gypsum',
+      title: 'GYPSUM',
       detail: gypsumDueDate ? formatDisplayDate(gypsumDueDate) : 'Due now',
       go: 'maintenance',
       urgent: true,
@@ -959,7 +941,7 @@ export default function LawnCanopyBoard({ app }) {
   if (springPackIncomplete) {
     queue.push({
       id: 'spring',
-      title: 'Spring Pack',
+      title: 'SPRING PACK',
       detail: `${incompleteSpringSteps.length} step${incompleteSpringSteps.length !== 1 ? 's' : ''} left`,
       go: 'seasonal',
       urgent: true,
@@ -969,8 +951,8 @@ export default function LawnCanopyBoard({ app }) {
   if (queue.length === 0) {
     queue.push({
       id: 'clear',
-      title: 'Clear skies',
-      detail: `${SEASONS[currentSeason]?.name ?? 'Season'} · ${sqm} m² — nothing due today`,
+      title: 'ALL CLEAR',
+      detail: `${SEASONS[currentSeason]?.name ?? 'Season'} · ${sqm} m²`,
       go: 'maintenance',
       urgent: false,
     });
@@ -982,63 +964,59 @@ export default function LawnCanopyBoard({ app }) {
 
   return (
     <div className="lawn-canopy">
-      <header className="lawn-canopy__sky">
-        <div className="lawn-canopy__sky-glow" aria-hidden="true" />
+      <nav className="lawn-canopy__strip" aria-label="Yard board">
+        <button type="button" className="is-active" onClick={() => setActiveRoom('hub')}>
+          Today
+        </button>
+        <button type="button" onClick={() => setActiveRoom('maintenance')}>
+          Care
+        </button>
+        <button type="button" onClick={() => setActiveRoom('seasonal')}>
+          Pack
+        </button>
+      </nav>
+
+      <header className="lawn-canopy__boardhead">
         <p className="lawn-canopy__date">{dateLabel}</p>
         <h2 className="lawn-canopy__place">{weatherLocationLabel}</h2>
         <p className="lawn-canopy__weather">{weatherStatusText}</p>
-        <div className="lawn-canopy__vitals">
-          <span>{sqm} m²</span>
-          <span>{currentSoilTemp != null ? `${currentSoilTemp.toFixed(0)}°C soil` : 'Soil —'}</span>
-          <span>
-            {urgentCount > 0 ? `${urgentCount} due` : 'All clear'}
-          </span>
-        </div>
+        <p className="lawn-canopy__meta">
+          {sqm} m² · {currentSoilTemp != null ? `${currentSoilTemp.toFixed(0)}°C` : 'Soil —'} ·{' '}
+          {urgentCount > 0 ? `${urgentCount} DUE` : 'CLEAR'}
+        </p>
       </header>
 
-      <section className="lawn-canopy__ribbon" aria-label="Today">
-        <p className="lawn-canopy__ribbon-title">Today</p>
-        <ol className="lawn-canopy__timeline">
-          {queue.map((item, index) => (
-            <li key={item.id} style={{ animationDelay: `${100 + index * 70}ms` }}>
-              <button
-                type="button"
-                className={`lawn-canopy__node${item.urgent ? ' is-urgent' : ''}`}
-                onClick={() => setActiveRoom(item.go)}
-              >
-                <span className="lawn-canopy__node-dot" aria-hidden="true" />
-                <span className="lawn-canopy__node-copy">
-                  <span className="lawn-canopy__node-title">{item.title}</span>
-                  <span className="lawn-canopy__node-detail">{item.detail}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
+      <section className="lawn-canopy__bills" aria-label="Due billboards">
+        {queue.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`lawn-canopy__bill${item.urgent ? ' is-urgent' : ''}`}
+            style={{ animationDelay: `${80 + index * 80}ms` }}
+            onClick={() => setActiveRoom(item.go)}
+          >
+            <span className="lawn-canopy__bill-title">{item.title}</span>
+            <span className="lawn-canopy__bill-detail">{item.detail}</span>
+          </button>
+        ))}
       </section>
 
-      <div className="lawn-canopy__dock" role="navigation" aria-label="Open sheets">
-        <button type="button" className="lawn-canopy__dock-main" onClick={() => setActiveRoom('maintenance')}>
-          Care
-        </button>
-        <button type="button" className="lawn-canopy__dock-main" onClick={() => setActiveRoom('seasonal')}>
-          Pack
-        </button>
+      <div className="lawn-canopy__tools">
         <button type="button" onClick={() => void runFullCloudSync()} disabled={syncBusy}>
           {syncBusy
-            ? '…'
+            ? 'SYNC…'
             : cloudSyncStatus === 'synced' && lastCloudSyncAt
-              ? formatSyncTimeAgo(lastCloudSyncAt)
-              : 'Sync'}
+              ? formatSyncTimeAgo(lastCloudSyncAt).toUpperCase()
+              : 'SYNC'}
         </button>
         <button type="button" onClick={() => setActiveScreen('materials')}>
-          Kit
+          KIT
         </button>
         <button type="button" onClick={() => setActiveScreen('guides')}>
-          Guides
+          GUIDES
         </button>
         <button type="button" onClick={() => setActiveScreen('settings')}>
-          Setup
+          SETUP
         </button>
       </div>
     </div>
@@ -3588,11 +3566,11 @@ export const LAWN_THEMES = [
   {
     id: 'atelier',
     name: 'Atelier',
-    tagline: 'Journal spine · chapters',
+    tagline: 'Folder tabs · paper desk',
     description:
-      'Porcelain studio look. A vertical chapter spine (Cover, Care, Pack, Studio) — open one chapter at a time like a field journal, not a tab bar or long page.',
+      'Editorial paper desk. Top folder tabs (Index / Care / Pack / Studio), huge season title, dotted ledger lines — calm cobalt on white, nothing like Signal’s dark board.',
     layout: 'rooms',
-    swatches: ['#e7eef3', '#1c2430', '#f4f7fa', '#b45309'],
+    swatches: ['#f7f5f0', '#111827', '#ffffff', '#1d4ed8'],
     fontDisplay: '"Literata", Georgia, serif',
     fontBody: '"Source Sans 3", "Segoe UI", sans-serif',
   },
@@ -3610,13 +3588,13 @@ export const LAWN_THEMES = [
   {
     id: 'canopy',
     name: 'Canopy',
-    tagline: 'Daylight timeline · due ribbon',
+    tagline: 'Neon yard board · billboards',
     description:
-      'Bright sky-to-meadow shell. Starts on a vertical Today timeline of what’s due, with Care / Pack opened as full sheets from a floating dock — not bottom tabs.',
+      'High-vis chartreuse yard board. Giant black billboard due cards and a thick top CARE/PACK strip — loud and brutalist, not a soft sky timeline.',
     layout: 'today',
-    swatches: ['#7eb8d9', '#e8f5d8', '#ffffff', '#2f6b3a'],
-    fontDisplay: '"Sora", "Segoe UI", sans-serif',
-    fontBody: '"Nunito Sans", "Segoe UI", sans-serif',
+    swatches: ['#c8f000', '#0a0a0a', '#ffffff', '#111111'],
+    fontDisplay: '"Archivo Black", "Arial Black", sans-serif',
+    fontBody: '"DM Sans", "Segoe UI", sans-serif',
   },
 ];
 
@@ -5977,40 +5955,42 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
   --lawn-accent-soft: #dcfce7;
 }
 
-/* —— Atelier: porcelain journal · spine chapters (not green, not dark slate) —— */
+/* —— Atelier: paper desk · top folder tabs (cobalt, not amber/green/dark) —— */
 [data-lawn-theme='atelier'] {
   --lawn-page-bg:
-    radial-gradient(900px 420px at 0% 0%, #dce7ef 0%, transparent 55%),
-    linear-gradient(160deg, #eef3f7 0%, #e3ebf2 50%, #d5e0ea 100%);
-  --lawn-page-ink: #1c2430;
-  --lawn-shell-bg: rgba(250, 252, 253, 0.92);
-  --lawn-shell-border: rgba(28, 36, 48, 0.1);
-  --lawn-shell-radius: 0.2rem;
-  --lawn-shell-shadow: 0 22px 48px rgba(28, 36, 48, 0.08);
-  --lawn-accent: #b45309;
-  --lawn-accent-soft: #f3e0c8;
-  --lawn-muted: #5b6573;
-  --lawn-hub-room-bg: #fafcfd;
-  --lawn-hub-room-border: rgba(28, 36, 48, 0.12);
+    radial-gradient(800px 360px at 100% 0%, rgba(29, 78, 216, 0.08), transparent 55%),
+    linear-gradient(180deg, #efebe3 0%, #f7f5f0 45%, #ebe6dc 100%);
+  --lawn-page-ink: #111827;
+  --lawn-shell-bg: #fffcf7;
+  --lawn-shell-border: rgba(17, 24, 39, 0.14);
+  --lawn-shell-radius: 0;
+  --lawn-shell-shadow: 8px 8px 0 rgba(17, 24, 39, 0.08);
+  --lawn-accent: #1d4ed8;
+  --lawn-accent-soft: #dbeafe;
+  --lawn-muted: #4b5563;
+  --lawn-hub-room-bg: #fffcf7;
+  --lawn-hub-room-border: rgba(17, 24, 39, 0.14);
 }
 
 [data-lawn-theme='atelier'] .lawn-app-brand {
   font-weight: 700;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.05em;
+  font-style: italic;
 }
 
 [data-lawn-theme='atelier'] .lawn-app-subhead {
-  letter-spacing: 0.22em;
-  color: #b45309;
+  letter-spacing: 0.28em;
+  color: #1d4ed8;
 }
 
 [data-lawn-theme='atelier'] .lawn-app-shell {
-  border-left: 3px solid #b45309;
+  border: 1px solid rgba(17, 24, 39, 0.18);
+  border-top: 4px solid #1d4ed8;
 }
 
 [data-lawn-theme='atelier'] .lawn-focus-highlight {
-  outline-color: #b45309;
-  box-shadow: 0 0 0 6px rgba(180, 83, 9, 0.18);
+  outline-color: #1d4ed8;
+  box-shadow: 0 0 0 6px rgba(29, 78, 216, 0.18);
 }
 
 /* —— Signal: cool utility, bottom tabs + status grid —— */
@@ -6058,256 +6038,240 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
   box-shadow: 0 0 0 6px rgba(45, 212, 191, 0.2);
 }
 
-/* —— Canopy: bright daylight sky → meadow (light, not dark green) —— */
+/* —— Canopy: neon yard board (chartreuse + black, not soft sky) —— */
 [data-lawn-theme='canopy'] {
   --lawn-page-bg:
-    radial-gradient(700px 340px at 80% -10%, rgba(255, 255, 255, 0.55), transparent 50%),
-    linear-gradient(180deg, #7eb8d9 0%, #a8cfe0 28%, #d5e8c4 68%, #e8f5d8 100%);
-  --lawn-page-ink: #1a2f22;
-  --lawn-shell-bg: rgba(255, 255, 255, 0.55);
-  --lawn-shell-border: rgba(255, 255, 255, 0.65);
-  --lawn-shell-radius: 1.75rem;
-  --lawn-shell-shadow: 0 24px 50px rgba(47, 107, 58, 0.12);
-  --lawn-accent: #2f6b3a;
-  --lawn-accent-soft: #d7ecc8;
-  --lawn-muted: #3d5a48;
-  --lawn-hub-room-bg: rgba(255, 255, 255, 0.88);
-  --lawn-hub-room-border: rgba(47, 107, 58, 0.16);
+    repeating-linear-gradient(
+      -12deg,
+      #c8f000 0 28px,
+      #b6db00 28px 56px
+    );
+  --lawn-page-ink: #0a0a0a;
+  --lawn-shell-bg: #c8f000;
+  --lawn-shell-border: #0a0a0a;
+  --lawn-shell-radius: 0;
+  --lawn-shell-shadow: none;
+  --lawn-accent: #0a0a0a;
+  --lawn-accent-soft: #eaff6a;
+  --lawn-muted: #1f1f1f;
+  --lawn-hub-room-bg: #0a0a0a;
+  --lawn-hub-room-border: #0a0a0a;
 }
 
 [data-lawn-theme='canopy'] .lawn-app-brand {
-  color: #0f2418;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: #0a0a0a;
+  letter-spacing: -0.06em;
+  text-transform: uppercase;
 }
 
 [data-lawn-theme='canopy'] .lawn-app-subhead {
-  color: #1f4d2c;
+  color: #0a0a0a;
+  letter-spacing: 0.22em;
 }
 
 [data-lawn-theme='canopy'] .lawn-sign-out {
-  border-color: rgba(47, 107, 58, 0.22);
-  background: rgba(255, 255, 255, 0.7);
-  color: #2f6b3a;
+  border: 2px solid #0a0a0a;
+  background: #0a0a0a;
+  color: #c8f000;
+  border-radius: 0;
 }
 
 [data-lawn-theme='canopy'] .lawn-app-footer {
-  color: rgba(26, 47, 34, 0.55);
+  color: rgba(10, 10, 10, 0.65);
 }
 
 [data-lawn-theme='canopy'] .lawn-app-shell {
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  border: 3px solid #0a0a0a;
+  box-shadow: 6px 6px 0 #0a0a0a;
+  padding: 0.85rem;
 }
 
 [data-lawn-theme='canopy'] .lawn-focus-highlight {
-  outline-color: #2f6b3a;
-  box-shadow: 0 0 0 6px rgba(47, 107, 58, 0.2);
+  outline-color: #0a0a0a;
+  box-shadow: 0 0 0 6px rgba(10, 10, 10, 0.2);
 }
 
-/* —— Atelier journal spine layout —— */
+/* —— Atelier paper desk · folder tabs —— */
 .lawn-atelier-shell {
   min-height: 24rem;
 }
 
 .lawn-atelier {
-  display: grid;
-  grid-template-columns: 3.4rem 1fr;
-  gap: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   min-height: 26rem;
   animation: lawn-rise 420ms ease-out both;
 }
 
-.lawn-atelier__spine {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.35rem 0.2rem;
-  border-right: 1px solid rgba(28, 36, 48, 0.12);
-  background:
-    repeating-linear-gradient(
-      180deg,
-      transparent,
-      transparent 11px,
-      rgba(28, 36, 48, 0.04) 11px,
-      rgba(28, 36, 48, 0.04) 12px
-    );
-}
-
-.lawn-atelier__spine-btn {
+.lawn-atelier__folders {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.3rem;
+  margin: 0 0 -1px;
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  min-height: 3.6rem;
-  padding: 0.4rem 0.15rem;
-  border: 1px solid transparent;
-  border-radius: 0.15rem;
-  color: #5b6573;
-  writing-mode: horizontal-tb;
-  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+  z-index: 2;
 }
 
-.lawn-atelier__spine-btn.is-active {
-  color: #1c2430;
-  background: #fafcfd;
-  border-color: rgba(180, 83, 9, 0.45);
-  box-shadow: inset 3px 0 0 #b45309;
-}
-
-.lawn-atelier__spine-short {
+.lawn-atelier__folder {
+  position: relative;
+  min-height: 2.6rem;
+  padding: 0.45rem 0.35rem;
+  border: 1px solid rgba(17, 24, 39, 0.18);
+  border-bottom: none;
+  border-radius: 0.65rem 0.65rem 0 0;
+  background: #e8e2d6;
+  color: #4b5563;
   font-family: var(--lawn-font-display);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
-.lawn-atelier__spine-label {
-  font-size: 0.55rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.lawn-atelier__folder.is-active {
+  background: #fffcf7;
+  color: #111827;
+  box-shadow: inset 0 3px 0 #1d4ed8;
 }
 
-.lawn-atelier__spine-badge {
-  position: absolute;
-  top: 0.25rem;
-  right: 0.15rem;
-  min-width: 0.95rem;
-  height: 0.95rem;
-  padding: 0 0.2rem;
+.lawn-atelier__folder-badge {
+  display: inline-block;
+  margin-left: 0.3rem;
+  min-width: 1rem;
+  padding: 0 0.25rem;
   border-radius: 999px;
-  background: #b45309;
+  background: #1d4ed8;
   color: #fff;
-  font-size: 0.55rem;
+  font-size: 0.6rem;
   font-weight: 800;
-  line-height: 0.95rem;
-  text-align: center;
+  line-height: 1rem;
+  vertical-align: middle;
 }
 
-.lawn-atelier__page {
-  min-width: 0;
-  padding: 0.15rem 0.1rem 0.5rem;
+.lawn-atelier__desk {
+  border: 1px solid rgba(17, 24, 39, 0.18);
+  background:
+    linear-gradient(#fffcf7, #fffcf7) padding-box,
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 27px,
+      rgba(29, 78, 216, 0.08) 27px,
+      rgba(29, 78, 216, 0.08) 28px
+    );
+  padding: 1rem 0.9rem 1.1rem;
+  min-height: 22rem;
 }
 
 .lawn-atelier__cover {
   animation: lawn-rise 480ms ease-out both;
 }
 
+.lawn-atelier__masthead {
+  border-bottom: 2px solid #111827;
+  padding-bottom: 0.85rem;
+  margin-bottom: 0.9rem;
+}
+
 .lawn-atelier__kicker {
   font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #5b6573;
+  color: #1d4ed8;
 }
 
 .lawn-atelier__season {
-  margin-top: 0.35rem;
+  margin-top: 0.2rem;
   font-family: var(--lawn-font-display);
-  font-size: clamp(2rem, 8vw, 2.6rem);
+  font-size: clamp(2.4rem, 11vw, 3.4rem);
   font-weight: 700;
-  letter-spacing: -0.045em;
-  line-height: 1.05;
-  color: #1c2430;
+  font-style: italic;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  color: #111827;
 }
 
 .lawn-atelier__size {
-  margin-top: 0.35rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #5b6573;
+  margin-top: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4b5563;
 }
 
 .lawn-atelier__weather {
-  margin-top: 0.85rem;
-  padding: 0.75rem 0.85rem;
-  border-left: 2px solid #b45309;
-  background: rgba(243, 224, 200, 0.35);
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px dashed rgba(29, 78, 216, 0.45);
+  background: rgba(219, 234, 254, 0.45);
   font-size: 0.8rem;
   font-weight: 600;
   line-height: 1.4;
 }
 
 .lawn-atelier__notices {
-  margin: 0.85rem 0 0;
+  margin: 0 0 0.9rem;
   padding-left: 1.1rem;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   color: #9a3412;
   line-height: 1.4;
 }
 
 .lawn-atelier__ledger {
-  margin-top: 1.15rem;
   display: grid;
-  gap: 0.35rem;
+  gap: 0;
+}
+
+.lawn-atelier__ledger-title {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #1d4ed8;
+  margin-bottom: 0.35rem;
 }
 
 .lawn-atelier__line {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
+  grid-template-columns: 2rem 1fr auto;
+  align-items: baseline;
   gap: 0.55rem;
   width: 100%;
   text-align: left;
-  padding: 0.55rem 0.15rem;
-  border-bottom: 1px solid rgba(28, 36, 48, 0.1);
+  padding: 0.7rem 0.1rem;
+  border-bottom: 1px dotted rgba(17, 24, 39, 0.28);
   color: inherit;
   animation: lawn-rise 500ms ease-out both;
 }
 
-.lawn-atelier__line.is-due .lawn-atelier__line-state {
-  color: #b45309;
-  font-weight: 800;
+.lawn-atelier__line.is-due .lawn-atelier__line-state,
+.lawn-atelier__line.is-due .lawn-atelier__line-label {
+  color: #1d4ed8;
+}
+
+.lawn-atelier__line-num {
+  font-family: var(--lawn-font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #9ca3af;
 }
 
 .lawn-atelier__line-label {
   font-family: var(--lawn-font-display);
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   font-weight: 650;
-}
-
-.lawn-atelier__line-rule {
-  height: 1px;
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(28, 36, 48, 0.22),
-    rgba(28, 36, 48, 0.22) 2px,
-    transparent 2px,
-    transparent 5px
-  );
 }
 
 .lawn-atelier__line-state {
   font-size: 0.72rem;
-  font-weight: 700;
-  color: #5b6573;
-  white-space: nowrap;
-}
-
-.lawn-atelier__cover-actions {
-  margin-top: 1.25rem;
-  display: grid;
-  gap: 0.5rem;
-}
-
-.lawn-atelier__open {
-  min-height: 2.65rem;
-  border-radius: 0.15rem;
-  border: 1px solid #1c2430;
-  background: #1c2430;
-  color: #fafcfd;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.lawn-atelier__open--ghost {
-  background: transparent;
-  color: #1c2430;
+  color: #6b7280;
+  white-space: nowrap;
 }
 
 .lawn-atelier__studio {
@@ -6318,7 +6282,8 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
 
 .lawn-atelier__studio-lede {
   font-family: var(--lawn-font-display);
-  font-size: 1.35rem;
+  font-size: 1.6rem;
+  font-style: italic;
   font-weight: 700;
   letter-spacing: -0.03em;
   margin-bottom: 0.35rem;
@@ -6333,9 +6298,9 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
   text-align: left;
   min-height: 3rem;
   padding: 0.7rem 0.85rem;
-  border: 1px solid rgba(28, 36, 48, 0.12);
-  border-radius: 0.15rem;
-  background: #fafcfd;
+  border: 1px solid rgba(17, 24, 39, 0.16);
+  border-radius: 0;
+  background: #fffcf7;
   font-size: 0.82rem;
   font-weight: 650;
 }
@@ -6344,7 +6309,7 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
   opacity: 0.55;
 }
 
-.lawn-atelier__chapter {
+.lawn-atelier__sheet {
   animation: lawn-rise 360ms ease-out both;
 }
 
@@ -6546,10 +6511,11 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
 }
 
 [data-lawn-theme='canopy'] .lawn-panel-surface {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: rgba(47, 107, 58, 0.16);
-  border-radius: 1.15rem;
-  color: #1a2f22;
+  background: #fff;
+  border: 2px solid #0a0a0a;
+  border-radius: 0;
+  color: #0a0a0a;
+  box-shadow: 4px 4px 0 #0a0a0a;
 }
 
 /* Signal panels that still use light utility cards (maintenance) */
@@ -6560,207 +6526,143 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
 }
 
 [data-lawn-theme='atelier'] .lawn-panel-surface {
-  background: #fafcfd;
-  border-color: rgba(28, 36, 48, 0.12);
-  border-radius: 0.15rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 
-/* —— Canopy daylight timeline —— */
-.lawn-canopy__sky {
-  position: relative;
-  overflow: hidden;
-  margin: -0.25rem -0.15rem 1rem;
-  padding: 1.25rem 1.05rem 1.15rem;
-  border-radius: 1.35rem;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.12));
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  animation: lawn-rise 450ms ease-out both;
+/* —— Canopy neon yard board —— */
+.lawn-canopy__strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
 }
 
-.lawn-canopy__sky-glow {
-  position: absolute;
-  top: -2.5rem;
-  right: -1.5rem;
-  width: 8rem;
-  height: 8rem;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(255, 244, 180, 0.7), transparent 68%);
-  animation: lawn-glow 4.5s ease-in-out infinite alternate;
-  pointer-events: none;
+.lawn-canopy__strip button {
+  min-height: 2.7rem;
+  border: 2px solid #0a0a0a;
+  background: transparent;
+  color: #0a0a0a;
+  font-family: var(--lawn-font-display);
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 0;
+}
+
+.lawn-canopy__strip button.is-active,
+.lawn-canopy-sheet .lawn-canopy__strip button.is-active {
+  background: #0a0a0a;
+  color: #c8f000;
+}
+
+.lawn-canopy__boardhead {
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 3px solid #0a0a0a;
+  animation: lawn-rise 420ms ease-out both;
 }
 
 .lawn-canopy__date {
-  position: relative;
   font-size: 0.7rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #1f4d2c;
 }
 
 .lawn-canopy__place {
-  position: relative;
-  margin-top: 0.3rem;
+  margin-top: 0.2rem;
   font-family: var(--lawn-font-display);
-  font-size: 1.7rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  line-height: 1.05;
-  color: #0f2418;
+  font-size: clamp(1.6rem, 7vw, 2.2rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
 }
 
 .lawn-canopy__weather {
-  position: relative;
-  margin-top: 0.5rem;
+  margin-top: 0.45rem;
   font-size: 0.85rem;
-  font-weight: 600;
-  color: #2f4a3a;
+  font-weight: 700;
   line-height: 1.35;
 }
 
-.lawn-canopy__vitals {
-  position: relative;
-  margin-top: 0.85rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.lawn-canopy__vitals span {
-  font-size: 0.68rem;
+.lawn-canopy__meta {
+  margin-top: 0.55rem;
+  font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.3rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #2f6b3a;
-  border: 1px solid rgba(47, 107, 58, 0.14);
 }
 
-.lawn-canopy__ribbon {
-  margin-bottom: 5.5rem;
-}
-
-.lawn-canopy__ribbon-title {
-  font-family: var(--lawn-font-display);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-bottom: 0.65rem;
-  color: #1a2f22;
-}
-
-.lawn-canopy__timeline {
-  list-style: none;
-  margin: 0;
-  padding: 0 0 0 0.85rem;
-  border-left: 2px solid rgba(47, 107, 58, 0.28);
+.lawn-canopy__bills {
   display: grid;
   gap: 0.55rem;
+  margin-bottom: 0.9rem;
 }
 
-.lawn-canopy__timeline > li {
-  animation: lawn-rise 520ms ease-out both;
-}
-
-.lawn-canopy__node {
-  position: relative;
+.lawn-canopy__bill {
   width: 100%;
   text-align: left;
+  padding: 1.05rem 1rem;
+  border: 3px solid #0a0a0a;
+  background: #fff;
+  color: #0a0a0a;
+  border-radius: 0;
+  box-shadow: 5px 5px 0 #0a0a0a;
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.7rem;
-  align-items: start;
-  padding: 0.85rem 0.9rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(47, 107, 58, 0.14);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 8px 20px rgba(47, 107, 58, 0.06);
+  gap: 0.25rem;
+  animation: lawn-pop 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition: transform 140ms ease, box-shadow 140ms ease;
 }
 
-.lawn-canopy__node.is-urgent {
-  border-color: rgba(180, 83, 9, 0.4);
-  background: rgba(255, 251, 235, 0.95);
+.lawn-canopy__bill:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #0a0a0a;
 }
 
-.lawn-canopy__node-dot {
-  width: 0.7rem;
-  height: 0.7rem;
-  margin-top: 0.3rem;
-  margin-left: -1.55rem;
-  border-radius: 999px;
-  background: #2f6b3a;
-  border: 2px solid #e8f5d8;
-  box-shadow: 0 0 0 2px rgba(47, 107, 58, 0.25);
+.lawn-canopy__bill.is-urgent {
+  background: #0a0a0a;
+  color: #c8f000;
+  box-shadow: 5px 5px 0 #fff;
 }
 
-.lawn-canopy__node.is-urgent .lawn-canopy__node-dot {
-  background: #b45309;
-  box-shadow: 0 0 0 2px rgba(180, 83, 9, 0.25);
-}
-
-.lawn-canopy__node-copy {
-  display: grid;
-  gap: 0.2rem;
-}
-
-.lawn-canopy__node-title {
+.lawn-canopy__bill-title {
   font-family: var(--lawn-font-display);
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: clamp(1.35rem, 6vw, 1.85rem);
+  line-height: 1;
   letter-spacing: -0.02em;
 }
 
-.lawn-canopy__node-detail {
+.lawn-canopy__bill-detail {
   font-size: 0.78rem;
-  font-weight: 600;
-  color: #3d5a48;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
 }
 
-.lawn-canopy__dock {
-  position: sticky;
-  bottom: 0.35rem;
-  z-index: 6;
+.lawn-canopy__tools {
   display: grid;
-  grid-template-columns: 1.2fr 1.2fr repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.35rem;
-  padding: 0.45rem;
-  border-radius: 1.25rem;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(47, 107, 58, 0.16);
-  box-shadow: 0 14px 30px rgba(26, 47, 34, 0.12);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
-@media (max-width: 380px) {
-  .lawn-canopy__dock {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .lawn-atelier {
-    grid-template-columns: 2.85rem 1fr;
-  }
-}
-
-.lawn-canopy__dock button {
-  min-height: 2.45rem;
-  border-radius: 0.9rem;
-  border: 1px solid transparent;
-  background: transparent;
-  color: #2f4a3a;
-  font-size: 0.68rem;
+.lawn-canopy__tools button {
+  min-height: 2.5rem;
+  border: 2px solid #0a0a0a;
+  background: #0a0a0a;
+  color: #c8f000;
+  border-radius: 0;
+  font-size: 0.65rem;
   font-weight: 800;
+  letter-spacing: 0.06em;
 }
 
-.lawn-canopy__dock-main {
-  background: #2f6b3a !important;
-  color: #f3faf0 !important;
-}
-
-.lawn-canopy__dock button:disabled {
-  opacity: 0.55;
+.lawn-canopy__tools button:disabled {
+  opacity: 0.5;
 }
 
 .lawn-canopy-sheet__bar {
@@ -6775,19 +6677,21 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
 .lawn-canopy-sheet__setup {
   font-size: 0.72rem;
   font-weight: 800;
-  padding: 0.5rem 0.75rem;
-  border-radius: 999px;
-  border: 1px solid rgba(47, 107, 58, 0.18);
-  background: rgba(255, 255, 255, 0.85);
-  color: #1a2f22;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0;
+  border: 2px solid #0a0a0a;
+  background: #0a0a0a;
+  color: #c8f000;
 }
 
 .lawn-canopy-sheet__title {
   text-align: center;
   font-family: var(--lawn-font-display);
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1.15rem;
   letter-spacing: -0.02em;
+  text-transform: uppercase;
 }
 
 /* Stack maintenance trackers in sectioned layouts */
@@ -6808,14 +6712,14 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
   }
 }
 
-@keyframes lawn-glow {
+@keyframes lawn-pop {
   from {
-    transform: scale(0.92);
-    opacity: 0.75;
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
   }
   to {
-    transform: scale(1.08);
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -6824,12 +6728,667 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
   .lawn-atelier__cover,
   .lawn-atelier__line,
   .lawn-atelier__studio,
-  .lawn-atelier__chapter,
-  .lawn-canopy__sky,
-  .lawn-canopy__timeline > li,
-  .lawn-canopy__sky-glow {
+  .lawn-atelier__sheet,
+  .lawn-canopy__boardhead,
+  .lawn-canopy__bill {
     animation: none;
   }
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "lawn-care-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "node scripts/generate-pwa-icons.mjs && node scripts/bundle-sync-api.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
+    "mammoth": "^1.12.0",
+    "pdfjs-dist": "^6.0.227",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "husky": "^9.1.7",
+    "postcss": "^8.5.6",
+    "sharp": "^0.34.2",
+    "tailwindcss": "^3.4.17",
+    "vite": "^5.4.19",
+    "vite-plugin-pwa": "^0.21.1"
+  }
+}
+</file>
+
+<file path="src/services/lawnWeather.js">
+import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
+import { resolveWeatherLocation } from './lawnLocation.js';
+
+const LAWN_STATE_ID = 'default';
+
+export const FORECAST_RAIN_DAYS = 7;
+
+/**
+ * @param {number} latitude
+ * @param {number} longitude
+ */
+export function buildOpenMeteoForecastUrl(latitude, longitude) {
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    daily: 'precipitation_sum',
+    hourly: 'soil_temperature_6cm,precipitation',
+    timezone: 'Europe/London',
+    past_days: String(PAST_RAIN_DAYS),
+    forecast_days: String(FORECAST_RAIN_DAYS),
+  });
+  return `https://api.open-meteo.com/v1/forecast?${params}`;
+}
+
+export const SOAK_DEPTH_MM = 10;
+export const RAIN_THRESHOLD_MM = 5;
+/** Light surface misting target during seed establishment (~2.5mm). */
+export const SEED_MIST_TARGET_MM = 2.5;
+// Per-session skip: seed surface stays moist with much less rain than a full daily soak.
+export const SEED_MIST_SESSION_THRESHOLD_MM = 1.0;
+/** Rain in the next few days drives forward-looking adjustments. */
+export const NEAR_TERM_RAIN_DAYS = 3;
+/** Observed rain history from Open-Meteo. */
+export const PAST_RAIN_DAYS = 7;
+/** Recent past days that still keep the soil damp for soak / due decisions. */
+export const RECENT_PAST_RAIN_DAYS = 3;
+export const RECENT_RAIN_WET_SOIL_MM = 5;
+
+/** Hour-of-day windows (Europe/London) for seed misting sessions — end hour exclusive. */
+export const SEED_MISTING_SESSION_WINDOWS = {
+  'Water lawn (Morning)': { startHour: 5, endHour: 11, label: 'morning' },
+  'Water lawn (Midday)': { startHour: 11, endHour: 16, label: 'midday' },
+  'Water lawn (Evening)': { startHour: 16, endHour: 22, label: 'evening' },
+};
+
+/**
+ * @typedef {Object} LawnWeatherSnapshot
+ * @property {number} forecastedRainSum
+ * @property {number} forecastedRainSumNearTerm
+ * @property {number} recentPastRainSum
+ * @property {number} rainCreditMm
+ * @property {number | null} currentSoilTemp
+ * @property {number | null} currentSoilTempMin
+ * @property {boolean} isRainForecasted
+ * @property {boolean} isNatureProvidingFullSoak
+ * @property {boolean} soilRecentlyWet
+ * @property {number} [recentPastRainBeforeToday]
+ * @property {number} [todayRainMm]
+ * @property {Array<{ date: string, mm: number }>} [dailyForecastByDate]
+ * @property {number[]} [todayHourlyPrecipMm]
+ * @property {number} [todayRainObservedMm]
+ * @property {number} netWaterNeeded
+ * @property {string} fetchedAt
+ * @property {'open-meteo'} source
+ */
+
+/**
+ * @param {Array<number | null> | undefined} precipitationTotals
+ * @param {number} [days]
+ */
+export function sumPrecipitation(precipitationTotals, days = 7) {
+  if (!Array.isArray(precipitationTotals)) return 0;
+  return precipitationTotals.slice(0, days).reduce((sum, mm) => sum + (mm ?? 0), 0);
+}
+
+/**
+ * @param {Array<number | null> | undefined} precipitationTotals
+ * @param {number} [pastDays]
+ * @param {number} [forecastDays]
+ */
+export function splitPrecipitationSeries(
+  precipitationTotals,
+  pastDays = PAST_RAIN_DAYS,
+  forecastDays = FORECAST_RAIN_DAYS
+) {
+  if (!Array.isArray(precipitationTotals) || precipitationTotals.length === 0) {
+    return { past: [], forecast: [] };
+  }
+
+  // Legacy snapshots / forecast-only responses (no past_days in the series).
+  if (precipitationTotals.length < pastDays + 1) {
+    return { past: [], forecast: precipitationTotals.slice(0, forecastDays) };
+  }
+
+  return {
+    past: precipitationTotals.slice(0, pastDays),
+    forecast: precipitationTotals.slice(pastDays, pastDays + forecastDays),
+  };
+}
+
+/**
+ * Rain credit for pausing watering *today* — past soak + today's rain only.
+ * Tomorrow's forecast does not cancel today's watering.
+ * @param {number} recentPastRainBeforeToday
+ * @param {number} todayRainMm
+ */
+export function computeTodayWateringRainContext(recentPastRainBeforeToday, todayRainMm) {
+  const recentTotal = recentPastRainBeforeToday + todayRainMm;
+  const rainCreditMm = Math.min(SOAK_DEPTH_MM, recentTotal);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
+  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
+  const soilRecentlyWet = recentTotal >= RECENT_RAIN_WET_SOIL_MM;
+
+  return {
+    rainCreditMm,
+    netWaterNeeded,
+    isNatureProvidingFullSoak,
+    soilRecentlyWet,
+  };
+}
+
+/**
+ * @param {number} recentPastRainSum
+ * @param {number} forecastedRainSumNearTerm
+ */
+export function computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm) {
+  const pastCredit = Math.min(SOAK_DEPTH_MM, recentPastRainSum);
+  const rainCreditMm = Math.min(SOAK_DEPTH_MM, pastCredit + forecastedRainSumNearTerm);
+  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
+  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
+  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
+
+  return {
+    rainCreditMm,
+    netWaterNeeded,
+    isNatureProvidingFullSoak,
+    soilRecentlyWet,
+  };
+}
+
+/**
+ * @param {Partial<LawnWeatherSnapshot>} weather
+ */
+export function getEffectiveNearTermRain(weather) {
+  if (typeof weather.forecastedRainSumNearTerm === 'number') {
+    return weather.forecastedRainSumNearTerm;
+  }
+  if (typeof weather.forecastedRainSum === 'number') {
+    return (weather.forecastedRainSum / FORECAST_RAIN_DAYS) * NEAR_TERM_RAIN_DAYS;
+  }
+  return 0;
+}
+
+/**
+ * @param {Partial<LawnWeatherSnapshot>} weather
+ */
+export function getEffectiveRecentPastRain(weather) {
+  if (typeof weather.recentPastRainSum === 'number') {
+    return weather.recentPastRainSum;
+  }
+  return 0;
+}
+
+/**
+ * Sum observed hourly precipitation from midnight today up to the current hour.
+ * @param {{ hourly?: { precipitation?: Array<number | null>, time?: Array<string> } }} data
+ */
+export function getTodayPrecipitationSoFar(data) {
+  const hourlyPrecip = data.hourly?.precipitation;
+  const hourlyTimes = data.hourly?.time;
+  if (!Array.isArray(hourlyPrecip) || !Array.isArray(hourlyTimes) || hourlyPrecip.length === 0) {
+    return 0;
+  }
+
+  const start = PAST_RAIN_DAYS * 24;
+  const now = Date.now();
+  let sum = 0;
+
+  for (let i = start; i < Math.min(start + 24, hourlyPrecip.length); i++) {
+    const hourMs = new Date(hourlyTimes[i]).getTime();
+    if (Number.isNaN(hourMs) || hourMs > now) break;
+    sum += hourlyPrecip[i] ?? 0;
+  }
+
+  return sum;
+}
+
+/**
+ * Daily precipitation from today through the forecast window.
+ * @param {{ daily?: { time?: Array<string>, precipitation_sum?: Array<number | null> } }} data
+ * @returns {Array<{ date: string, mm: number }>}
+ */
+export function buildDailyForecastSeries(data) {
+  const times = data?.daily?.time;
+  const precip = data?.daily?.precipitation_sum;
+  if (!Array.isArray(times) || !Array.isArray(precip)) return [];
+
+  const { forecast } = splitPrecipitationSeries(precip);
+  return times.slice(PAST_RAIN_DAYS, PAST_RAIN_DAYS + FORECAST_RAIN_DAYS).map((date, index) => ({
+    date,
+    mm: forecast[index] ?? 0,
+  }));
+}
+
+/**
+ * Today's 24 hourly precipitation values (index 0 = midnight, 23 = 11pm).
+ * @param {{ hourly?: { precipitation?: Array<number | null> } }} data
+ * @returns {number[]}
+ */
+export function getTodayHourlyPrecipMm(data) {
+  const hourlyPrecip = data?.hourly?.precipitation;
+  if (!Array.isArray(hourlyPrecip) || hourlyPrecip.length === 0) {
+    return [];
+  }
+
+  const start = PAST_RAIN_DAYS * 24;
+  const values = [];
+  for (let hour = 0; hour < 24; hour += 1) {
+    const index = start + hour;
+    values.push(index < hourlyPrecip.length ? hourlyPrecip[index] ?? 0 : 0);
+  }
+  return values;
+}
+
+/**
+ * @param {number[]} todayHourlyPrecipMm
+ * @param {number} startHour inclusive
+ * @param {number} endHour exclusive
+ */
+export function sumHourlyPrecipInWindow(todayHourlyPrecipMm, startHour, endHour) {
+  if (!Array.isArray(todayHourlyPrecipMm) || todayHourlyPrecipMm.length < 24) {
+    return 0;
+  }
+
+  let sum = 0;
+  for (let hour = startHour; hour < endHour && hour < 24; hour += 1) {
+    sum += todayHourlyPrecipMm[hour] ?? 0;
+  }
+  return sum;
+}
+
+/**
+ * Seed establishment: skip a single misting session when rain in that session's
+ * time window meets the surface moisture target (not the whole day).
+ * @param {string} sessionTitle
+ * @param {string} dueDateIso
+ * @param {string} todayStr
+ * @param {number[]} [todayHourlyPrecipMm]
+ * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
+ * @param {number} todayRainMm
+ * @param {number} [todayRainObservedMm]
+ */
+export function getSeedMistingRainSkipForSession(
+  sessionTitle,
+  dueDateIso,
+  todayStr,
+  todayHourlyPrecipMm,
+  dailyForecastByDate,
+  todayRainMm,
+  todayRainObservedMm = 0
+) {
+  const daysUntilDue = Math.floor(
+    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  if (daysUntilDue > 0) {
+    const rainMm = dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0;
+    if (rainMm >= SEED_MIST_TARGET_MM) {
+      return {
+        skip: true,
+        reason: `${rainMm.toFixed(1)}mm rain forecast – skip misting`,
+        fullSoak: false,
+      };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  const window = SEED_MISTING_SESSION_WINDOWS[sessionTitle];
+  if (
+    window &&
+    Array.isArray(todayHourlyPrecipMm) &&
+    todayHourlyPrecipMm.length >= 24
+  ) {
+    const rainMm = sumHourlyPrecipInWindow(
+      todayHourlyPrecipMm,
+      window.startHour,
+      window.endHour
+    );
+    if (rainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
+      const label =
+        window.label === 'evening'
+          ? `${rainMm.toFixed(1)}mm rain forecast this evening – skip misting`
+          : `${rainMm.toFixed(1)}mm rain in the ${window.label} – skip misting`;
+      return { skip: true, reason: label, fullSoak: false };
+    }
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  // Fallback when hourly series unavailable (legacy snapshots).
+  if (sessionTitle === 'Water lawn (Evening)' && todayRainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
+    return {
+      skip: true,
+      reason: 'Rain keeping seed bed moist – skip evening misting',
+      fullSoak: false,
+    };
+  }
+  if (todayRainObservedMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
+    return {
+      skip: true,
+      reason: 'Rain already fallen today – skip misting',
+      fullSoak: false,
+    };
+  }
+
+  return { skip: false, reason: null, fullSoak: false };
+}
+
+/**
+ * Seed establishment: skip light misting only when rain on the due date itself
+ * meets the surface moisture target. Past days do not carry forward — each day
+ * is judged independently because the seed bed surface dries quickly.
+ * @param {string} dueDateIso
+ * @param {string} todayStr
+ * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
+ * @param {number} todayRainMm
+ */
+export function getSeedMistingRainSkipForDueDate(
+  dueDateIso,
+  todayStr,
+  dailyForecastByDate,
+  todayRainMm
+) {
+  const daysUntilDue = Math.floor(
+    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  const rainMm =
+    daysUntilDue === 0
+      ? todayRainMm
+      : (dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0);
+
+  if (rainMm >= SEED_MIST_TARGET_MM) {
+    const dayLabel =
+      daysUntilDue === 0
+        ? 'Rain keeping seed bed moist – skip misting today'
+        : `${rainMm.toFixed(1)}mm rain forecast – skip misting`;
+    return { skip: true, reason: dayLabel, fullSoak: false };
+  }
+
+  return { skip: false, reason: null, fullSoak: false };
+}
+
+/**
+ * Should watering be skipped on a specific due date?
+ * Normal maintenance: deep soak thresholds; past rain can pause for several days.
+ * Seed establishment: surface misting thresholds; only rain on the due date counts.
+ * @param {string} dueDateIso
+ * @param {string} todayStr
+ * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
+ * @param {number} recentPastRainBeforeToday
+ * @param {number} todayRainMm
+ * @param {{ seedEstablishmentActive?: boolean }} [options]
+ */
+export function getWateringRainSkipForDueDate(
+  dueDateIso,
+  todayStr,
+  dailyForecastByDate,
+  recentPastRainBeforeToday,
+  todayRainMm,
+  { seedEstablishmentActive = false } = {}
+) {
+  if (seedEstablishmentActive) {
+    return getSeedMistingRainSkipForDueDate(
+      dueDateIso,
+      todayStr,
+      dailyForecastByDate,
+      todayRainMm
+    );
+  }
+
+  const daysUntilDue = Math.floor(
+    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (daysUntilDue < 0) {
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  if (daysUntilDue === 0) {
+    const todayContext = computeTodayWateringRainContext(
+      recentPastRainBeforeToday,
+      todayRainMm
+    );
+
+    if (todayContext.isNatureProvidingFullSoak) {
+      return {
+        skip: true,
+        reason: 'Heavy rain – nature providing full soak',
+        fullSoak: true,
+      };
+    }
+
+    if (todayContext.soilRecentlyWet) {
+      return {
+        skip: true,
+        reason: 'Recent rain – soil still damp, skip watering',
+        fullSoak: false,
+      };
+    }
+
+    return { skip: false, reason: null, fullSoak: false };
+  }
+
+  const forecastEntry = dailyForecastByDate.find((entry) => entry.date === dueDateIso);
+  const forecastMm = forecastEntry?.mm ?? 0;
+
+  if (forecastMm >= SOAK_DEPTH_MM) {
+    return {
+      skip: true,
+      reason: `${forecastMm.toFixed(0)}mm rain forecast – skip watering`,
+      fullSoak: true,
+    };
+  }
+
+  if (forecastMm >= RECENT_RAIN_WET_SOIL_MM) {
+    return {
+      skip: true,
+      reason: `${forecastMm.toFixed(1)}mm rain forecast – soil will be damp`,
+      fullSoak: false,
+    };
+  }
+
+  return { skip: false, reason: null, fullSoak: false };
+}
+
+/**
+ * Hourly data starts PAST_RAIN_DAYS ago, so today's 24 hours begin at index PAST_RAIN_DAYS * 24.
+ * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
+ */
+export function getTodayMaxSoilTemp(data) {
+  const hourlyTemps = data.hourly?.soil_temperature_6cm;
+  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
+
+  const start = PAST_RAIN_DAYS * 24;
+  return hourlyTemps.slice(start, start + 24).reduce((max, temp) => {
+    if (temp == null) return max;
+    return max === null ? temp : Math.max(max, temp);
+  }, /** @type {number | null} */ (null));
+}
+
+/**
+ * Hourly data starts PAST_RAIN_DAYS ago, so today's 24 hours begin at index PAST_RAIN_DAYS * 24.
+ * @param {{ hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
+ */
+export function getTodayMinSoilTemp(data) {
+  const hourlyTemps = data.hourly?.soil_temperature_6cm;
+  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
+
+  const start = PAST_RAIN_DAYS * 24;
+  return hourlyTemps.slice(start, start + 24).reduce((min, temp) => {
+    if (temp == null) return min;
+    return min === null ? temp : Math.min(min, temp);
+  }, /** @type {number | null} */ (null));
+}
+
+/**
+ * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
+ * @returns {LawnWeatherSnapshot}
+ */
+export function buildWeatherSnapshotFromOpenMeteo(data) {
+  const precipitationTotals = data?.daily?.precipitation_sum;
+  const { past, forecast } = splitPrecipitationSeries(precipitationTotals);
+  const recentPastRainBeforeToday = sumPrecipitation(
+    past.slice(-RECENT_PAST_RAIN_DAYS),
+    RECENT_PAST_RAIN_DAYS
+  );
+  const todayRainObservedMm = getTodayPrecipitationSoFar(data);
+  const todayFromDailyForecast = forecast[0] ?? 0;
+  const todayRainMm = Math.max(todayRainObservedMm, todayFromDailyForecast);
+  const effectiveRecentPastRain = recentPastRainBeforeToday + todayRainMm;
+  const forecastNearTermBeyondToday = sumPrecipitation(
+    forecast.slice(1),
+    Math.max(0, NEAR_TERM_RAIN_DAYS - 1)
+  );
+  const forecastedRainSumNearTerm = todayRainMm + forecastNearTermBeyondToday;
+  const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
+  const dailyForecastByDate = buildDailyForecastSeries(data);
+  const todayHourlyPrecipMm = getTodayHourlyPrecipMm(data);
+  const currentSoilTemp = getTodayMaxSoilTemp(data);
+  const currentSoilTempMin = getTodayMinSoilTemp(data);
+  const todayWatering = computeTodayWateringRainContext(
+    recentPastRainBeforeToday,
+    todayRainMm
+  );
+
+  return {
+    forecastedRainSum,
+    forecastedRainSumNearTerm,
+    recentPastRainSum: effectiveRecentPastRain,
+    recentPastRainBeforeToday,
+    todayRainMm,
+    dailyForecastByDate,
+    todayHourlyPrecipMm,
+    todayRainObservedMm,
+    rainCreditMm: todayWatering.rainCreditMm,
+    currentSoilTemp,
+    currentSoilTempMin,
+    isRainForecasted:
+      forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM ||
+      effectiveRecentPastRain >= RECENT_RAIN_WET_SOIL_MM,
+    isNatureProvidingFullSoak: todayWatering.isNatureProvidingFullSoak,
+    soilRecentlyWet: todayWatering.soilRecentlyWet,
+    netWaterNeeded: todayWatering.netWaterNeeded,
+    fetchedAt: new Date().toISOString(),
+    source: 'open-meteo',
+  };
+}
+
+/**
+ * @param {import('./lawnLocation.js').LawnWeatherLocation | null | undefined} [location]
+ * @returns {Promise<LawnWeatherSnapshot>}
+ */
+export async function fetchLawnWeatherFromOpenMeteo(location) {
+  const resolved = resolveWeatherLocation(location);
+  const response = await fetch(
+    buildOpenMeteoForecastUrl(resolved.latitude, resolved.longitude)
+  );
+  if (!response.ok) {
+    throw new Error('Weather forecast unavailable');
+  }
+  const data = await response.json();
+  return buildWeatherSnapshotFromOpenMeteo(data);
+}
+
+/**
+ * @param {LawnWeatherSnapshot} snapshot
+ * @returns {Promise<boolean>}
+ */
+export async function saveLawnWeatherSnapshot(snapshot) {
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase client could not be initialised.');
+  }
+
+  const { error } = await supabase.from('lawn_app_state').upsert(
+    {
+      id: LAWN_STATE_ID,
+      weather_snapshot: snapshot,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' }
+  );
+
+  if (error) {
+    if (/weather_snapshot|42703|PGRST204|PGRST205|schema cache/i.test(error.message)) {
+      return false;
+    }
+    throw new Error(formatSupabaseSyncError(error));
+  }
+
+  return true;
+}
+
+/** @returns {Promise<LawnWeatherSnapshot | null>} */
+export async function fetchLawnWeatherSnapshotFromSupabase() {
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Supabase client could not be initialised.');
+  }
+
+  const { data, error } = await supabase
+    .from('lawn_app_state')
+    .select('weather_snapshot')
+    .eq('id', LAWN_STATE_ID)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === 'PGRST205' || /lawn_app_state|weather_snapshot/i.test(error.message)) {
+      return null;
+    }
+    throw new Error(formatSupabaseSyncError(error));
+  }
+
+  const raw = data?.weather_snapshot;
+  if (!raw || typeof raw !== 'object') return null;
+
+  const snap = /** @type {LawnWeatherSnapshot} */ (raw);
+  if (typeof snap.forecastedRainSum !== 'number') return null;
+
+  return snap;
+}
+
+/** @param {string | undefined} fetchedAt @param {number} maxAgeHours */
+export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
+  if (!fetchedAt) return false;
+  const ageMs = Date.now() - new Date(fetchedAt).getTime();
+  return ageMs >= 0 && ageMs < maxAgeHours * 60 * 60 * 1000;
 }
 </file>
 
@@ -6839,7 +7398,7 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
   <head>
     <script>
       (function () {
-        var key = 'lawn-app-sw-reset-v2';
+        var key = 'lawn-app-sw-reset-v3';
         try {
           if (localStorage.getItem(key) === '1') return;
           localStorage.setItem(key, '1');
@@ -6885,7 +7444,7 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Literata:opsz,wght@7..72,600;7..72,700&family=Nunito+Sans:wght@400;600;700;800&family=Sora:wght@600;700&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Sans:wght@400;600;700;800&family=IBM+Plex+Sans:wght@400;600;700&family=Literata:opsz,wght@7..72,600;7..72,700&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
@@ -6900,37 +7459,491 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
 </html>
 </file>
 
-<file path="package.json">
-{
-  "name": "lawn-care-app",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "prebuild": "node scripts/generate-pwa-icons.mjs && node scripts/bundle-sync-api.mjs",
-    "build": "vite build",
-    "preview": "vite preview",
-    "prepare": "husky"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.106.2",
-    "mammoth": "^1.12.0",
-    "pdfjs-dist": "^6.0.227",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
-    "husky": "^9.1.7",
-    "postcss": "^8.5.6",
-    "sharp": "^0.34.2",
-    "tailwindcss": "^3.4.17",
-    "vite": "^5.4.19",
-    "vite-plugin-pwa": "^0.21.1"
-  }
+<file path="src/components/lawn/LawnSettings.jsx">
+import React, { useEffect, useRef, useState } from 'react';
+import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
+import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
+import { LAWN_THEMES } from '../../data/lawnThemes';
+
+/**
+ * Snapshot of Setup fields that apply immediately while editing.
+ * Cancel restores this; Save keeps the current values and leaves Setup.
+ * @param {ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>} app
+ */
+function captureSettingsSnapshot(app) {
+  return {
+    length: app.length,
+    width: app.width,
+    mowerModel: app.mowerModel,
+    lawnSurface: app.lawnSurface,
+    selectedEquipment: app.selectedEquipment,
+    selectedSprinkler: app.selectedSprinkler,
+    themeId: app.themeId,
+    activeRoom: app.activeRoom,
+  };
+}
+
+/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
+export default function LawnSettings({ app }) {
+  const {
+    length,
+    setLength,
+    width,
+    setWidth,
+    sqm,
+    mowerModel,
+    setMowerModel,
+    lawnSurface,
+    setLawnSurface,
+    showLevellingGuide,
+    setShowLevellingGuide,
+    selectedEquipment,
+    setSelectedEquipment,
+    weatherLocation,
+    postcodeInput,
+    setPostcodeInput,
+    weatherLocationError,
+    weatherLocationSaving,
+    weatherLocationLabel,
+    selectedSprinkler,
+    setSelectedSprinkler,
+    setEnlargedSprinkler,
+    supabaseSyncError,
+    jsonCopied,
+    handleCopyTasksJson,
+    handleSaveWeatherPostcode,
+    handleUseMyLocationForWeather,
+    handleResetWeatherLocation,
+    setActiveScreen,
+    setWeatherLocationError,
+    themeId,
+    setThemeId,
+    setActiveRoom,
+  } = app;
+
+  const snapshotRef = useRef(/** @type {ReturnType<typeof captureSettingsSnapshot> | null} */ (null));
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    snapshotRef.current = captureSettingsSnapshot(app);
+    setDirty(false);
+    // Capture once when Setup opens — intentional empty deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount snapshot only
+  }, []);
+
+  useEffect(() => {
+    const snap = snapshotRef.current;
+    if (!snap) return;
+    setDirty(
+      length !== snap.length ||
+        width !== snap.width ||
+        mowerModel !== snap.mowerModel ||
+        lawnSurface !== snap.lawnSurface ||
+        selectedEquipment !== snap.selectedEquipment ||
+        selectedSprinkler !== snap.selectedSprinkler ||
+        themeId !== snap.themeId
+    );
+  }, [
+    length,
+    width,
+    mowerModel,
+    lawnSurface,
+    selectedEquipment,
+    selectedSprinkler,
+    themeId,
+  ]);
+
+  const leaveSetup = () => {
+    setShowLevellingGuide(false);
+    setActiveScreen('main');
+  };
+
+  const handleCancel = () => {
+    const snap = snapshotRef.current;
+    if (snap) {
+      setLength(snap.length);
+      setWidth(snap.width);
+      setMowerModel(snap.mowerModel);
+      setLawnSurface(snap.lawnSurface);
+      setSelectedEquipment(snap.selectedEquipment);
+      setSelectedSprinkler(snap.selectedSprinkler);
+      setThemeId(snap.themeId);
+      setActiveRoom(snap.activeRoom);
+    }
+    leaveSetup();
+  };
+
+  const handleSave = () => {
+    leaveSetup();
+  };
+
+  return (
+    <>
+      <div className="flex justify-between items-center mb-6 border-b pb-4 gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
+          <p className="text-sm text-green-700 mt-1">
+            Configure appearance, lawn size, equipment, and surface profile.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+        >
+          ← Back
+        </button>
+      </div>
+
+      <div className="space-y-5 pb-24">
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+          <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
+          <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
+            Four different layouts on live: Classic (long page), Atelier (paper desk + folder
+            tabs), Signal (dark status board + bottom tabs), Canopy (neon yard billboards). Use
+            Cancel to undo, Save to keep.
+          </p>
+          <div className="grid gap-2">
+            {LAWN_THEMES.map((theme) => {
+              const selected = themeId === theme.id;
+              return (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => {
+                    setThemeId(theme.id);
+                    setActiveRoom('hub');
+                  }}
+                  className={`text-left rounded-xl border p-3 transition-all ${
+                    selected
+                      ? 'border-emerald-600 bg-white ring-2 ring-emerald-500/30'
+                      : 'border-emerald-100 bg-white/80 hover:border-emerald-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900">{theme.name}</p>
+                      <p className="text-[11px] font-semibold text-emerald-800 mt-0.5">
+                        {theme.tagline}
+                      </p>
+                      <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
+                        {theme.description}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md ${
+                        selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {selected ? 'Active' : 'Try'}
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5 mt-3" aria-hidden="true">
+                    {theme.swatches.map((color) => (
+                      <span
+                        key={color}
+                        className="h-4 w-4 rounded-full border border-black/10"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <div>
+          <label className="block text-sm font-medium text-green-900 mb-1">
+            Lawn Length: <span className="font-bold text-green-700">{length}m</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            value={length}
+            onChange={(e) => setLength(parseInt(e.target.value, 10))}
+            className="w-full accent-green-600"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-green-900 mb-1">
+            Lawn Width: <span className="font-bold text-green-700">{width}m</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            value={width}
+            onChange={(e) => setWidth(parseInt(e.target.value, 10))}
+            className="w-full accent-green-600"
+          />
+        </div>
+        <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-sm text-green-800">
+          <span className="font-black">{sqm} SQM</span>
+          <span className="text-green-600 ml-1.5">
+            ({length}m × {width}m)
+          </span>
+        </div>
+        <div>
+          <label htmlFor="mower-select" className="block text-sm font-medium text-green-900 mb-1">
+            Lawnmower Model
+          </label>
+          <select
+            id="mower-select"
+            value={mowerModel}
+            onChange={(e) => setMowerModel(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+          >
+            {Object.values(MOWER_OPTIONS).map((mower) => (
+              <option key={mower.id} value={mower.id}>
+                {mower.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mb-2">
+            <p className="text-sm font-medium text-green-900">Lawn Surface Condition</p>
+            <button
+              type="button"
+              onClick={() => setShowLevellingGuide((open) => !open)}
+              aria-expanded={showLevellingGuide}
+              className="ml-2 text-emerald-600 hover:text-emerald-800 text-xs underline font-medium"
+            >
+              ℹ️ How to fix a bumpy lawn
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {Object.values(LAWN_SURFACE_OPTIONS).map((option) => {
+              const isSelected = lawnSurface === option.id;
+
+              return (
+                <label
+                  key={option.id}
+                  className={`flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer text-sm font-medium transition-all ${
+                    isSelected
+                      ? 'border-green-600 bg-green-100/80 text-green-900 ring-1 ring-green-500/30'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="lawn-surface"
+                    value={option.id}
+                    checked={isSelected}
+                    onChange={(e) => setLawnSurface(e.target.value)}
+                    className="accent-green-600"
+                  />
+                  {option.label}
+                </label>
+              );
+            })}
+          </div>
+          <div
+            className={`grid transition-all duration-300 ease-in-out ${
+              showLevellingGuide
+                ? 'grid-rows-[1fr] opacity-100 mt-3'
+                : 'grid-rows-[0fr] opacity-0 mt-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-emerald-900">Lawn Levelling Guide</h4>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Choose the method that matches your dip depth. Once levelled, switch your
+                      surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut height
+                      recommendation.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLevellingGuide(false)}
+                    className="shrink-0 text-xs font-bold text-gray-400 hover:text-gray-600"
+                    aria-label="Close levelling guide"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {LEVELLING_GUIDE_METHODS.map((method) => (
+                    <div
+                      key={method.title}
+                      className="rounded-lg border border-green-100 bg-green-50/40 p-3.5"
+                    >
+                      <p className="text-xs font-bold text-green-900 mb-1.5">{method.title}</p>
+                      <p className="text-xs text-gray-600 leading-relaxed">{method.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label htmlFor="equipment-select" className="block text-sm font-bold text-gray-700 mb-1.5">
+            Application Tool Profile:
+          </label>
+          <select
+            id="equipment-select"
+            value={selectedEquipment}
+            onChange={(e) => setSelectedEquipment(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+          >
+            {Object.values(EQUIPMENT_OPTIONS).map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
+          <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
+          <p className="text-[11px] text-sky-900/80 mb-3 leading-snug">
+            Rain and soil temperature forecasts use this postcode. Defaults to the Wallsend area
+            until you set your own. This section saves on its own (separate from Cancel / Save
+            below).
+          </p>
+          <label htmlFor="weather-postcode" className="block text-xs font-semibold text-sky-950 mb-1">
+            UK postcode
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="weather-postcode"
+              type="text"
+              value={postcodeInput}
+              onChange={(event) => {
+                setPostcodeInput(event.target.value.toUpperCase());
+                setWeatherLocationError(null);
+              }}
+              placeholder="NE28 9AB"
+              autoComplete="postal-code"
+              className="flex-1 min-w-0 bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm text-gray-800 font-medium focus:ring-2 focus:ring-sky-400"
+            />
+            <button
+              type="button"
+              onClick={() => void handleSaveWeatherPostcode()}
+              disabled={weatherLocationSaving || !postcodeInput.trim()}
+              className="shrink-0 text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+            >
+              {weatherLocationSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => void handleUseMyLocationForWeather()}
+              disabled={weatherLocationSaving}
+              className="text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+            >
+              📍 Use my location
+            </button>
+            {weatherLocation.source !== 'default' && (
+              <button
+                type="button"
+                onClick={() => void handleResetWeatherLocation()}
+                disabled={weatherLocationSaving}
+                className="text-xs font-semibold py-2 px-3 rounded-lg text-sky-800 hover:bg-sky-100/80 disabled:opacity-50"
+              >
+                Reset to default
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-xs font-medium text-sky-900">
+            Forecast for: {weatherLocationLabel}
+          </p>
+          {weatherLocationError && (
+            <p className="mt-2 text-xs font-semibold text-red-700">{weatherLocationError}</p>
+          )}
+        </div>
+
+        <div>
+          <p className="block text-sm font-bold text-gray-700 mb-1">
+            Irrigation Profile — Select Your Primary Sprinkler:
+          </p>
+          <p className="text-[11px] text-gray-500 mb-2 leading-snug">
+            Match the photo and description to the sprinkler you own. Tap a photo to enlarge it.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {Object.values(SPRINKLER_OPTIONS).map((sprinkler) => {
+              const isSelected = selectedSprinkler === sprinkler.id;
+
+              return (
+                <button
+                  key={sprinkler.id}
+                  type="button"
+                  onClick={() => setSelectedSprinkler(sprinkler.id)}
+                  className={`text-left rounded-lg border p-3 transition-all ${
+                    isSelected
+                      ? 'border-green-600 bg-green-100/80 shadow-sm ring-1 ring-green-500/30'
+                      : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
+                  }`}
+                >
+                  <img
+                    src={sprinkler.image}
+                    alt={sprinkler.name}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setEnlargedSprinkler({
+                        image: sprinkler.image,
+                        name: sprinkler.name,
+                      });
+                    }}
+                    className="w-16 h-16 object-cover rounded-md mb-2 mx-auto border border-gray-200 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
+                  />
+                  <span className="text-xs font-bold text-gray-900 leading-snug block">
+                    {sprinkler.name}
+                  </span>
+                  <span className="text-[10px] font-semibold text-green-700 block mb-1.5">
+                    ~{sprinkler.ratePerHour}mm / hour
+                  </span>
+                  <p className="text-[10px] text-gray-700 leading-snug mb-1">
+                    {sprinkler.description}
+                  </p>
+                  <p className="text-[10px] text-gray-500 leading-snug italic">
+                    {sprinkler.identification}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="border-t border-green-200 pt-4 mt-2">
+          <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
+          {supabaseSyncError && (
+            <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
+          )}
+          <button
+            type="button"
+            onClick={handleCopyTasksJson}
+            className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+          >
+            {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
+          </button>
+        </div>
+      </div>
+
+      <div className="sticky bottom-0 -mx-1 mt-4 border-t border-emerald-200 bg-white/95 backdrop-blur px-1 pt-3 pb-1 flex gap-2">
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
+        >
+          {dirty ? 'Save changes' : 'Done'}
+        </button>
+      </div>
+    </>
+  );
 }
 </file>
 
@@ -7929,1116 +8942,6 @@ export default function MaintenancePanel({ app }) {
         </div>
       )}
     </section>
-  );
-}
-</file>
-
-<file path="src/services/lawnWeather.js">
-import { getSupabase, getSupabaseConfigError, formatSupabaseSyncError } from '../lib/supabase';
-import { resolveWeatherLocation } from './lawnLocation.js';
-
-const LAWN_STATE_ID = 'default';
-
-export const FORECAST_RAIN_DAYS = 7;
-
-/**
- * @param {number} latitude
- * @param {number} longitude
- */
-export function buildOpenMeteoForecastUrl(latitude, longitude) {
-  const params = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
-    daily: 'precipitation_sum',
-    hourly: 'soil_temperature_6cm,precipitation',
-    timezone: 'Europe/London',
-    past_days: String(PAST_RAIN_DAYS),
-    forecast_days: String(FORECAST_RAIN_DAYS),
-  });
-  return `https://api.open-meteo.com/v1/forecast?${params}`;
-}
-
-export const SOAK_DEPTH_MM = 10;
-export const RAIN_THRESHOLD_MM = 5;
-/** Light surface misting target during seed establishment (~2.5mm). */
-export const SEED_MIST_TARGET_MM = 2.5;
-// Per-session skip: seed surface stays moist with much less rain than a full daily soak.
-export const SEED_MIST_SESSION_THRESHOLD_MM = 1.0;
-/** Rain in the next few days drives forward-looking adjustments. */
-export const NEAR_TERM_RAIN_DAYS = 3;
-/** Observed rain history from Open-Meteo. */
-export const PAST_RAIN_DAYS = 7;
-/** Recent past days that still keep the soil damp for soak / due decisions. */
-export const RECENT_PAST_RAIN_DAYS = 3;
-export const RECENT_RAIN_WET_SOIL_MM = 5;
-
-/** Hour-of-day windows (Europe/London) for seed misting sessions — end hour exclusive. */
-export const SEED_MISTING_SESSION_WINDOWS = {
-  'Water lawn (Morning)': { startHour: 5, endHour: 11, label: 'morning' },
-  'Water lawn (Midday)': { startHour: 11, endHour: 16, label: 'midday' },
-  'Water lawn (Evening)': { startHour: 16, endHour: 22, label: 'evening' },
-};
-
-/**
- * @typedef {Object} LawnWeatherSnapshot
- * @property {number} forecastedRainSum
- * @property {number} forecastedRainSumNearTerm
- * @property {number} recentPastRainSum
- * @property {number} rainCreditMm
- * @property {number | null} currentSoilTemp
- * @property {number | null} currentSoilTempMin
- * @property {boolean} isRainForecasted
- * @property {boolean} isNatureProvidingFullSoak
- * @property {boolean} soilRecentlyWet
- * @property {number} [recentPastRainBeforeToday]
- * @property {number} [todayRainMm]
- * @property {Array<{ date: string, mm: number }>} [dailyForecastByDate]
- * @property {number[]} [todayHourlyPrecipMm]
- * @property {number} [todayRainObservedMm]
- * @property {number} netWaterNeeded
- * @property {string} fetchedAt
- * @property {'open-meteo'} source
- */
-
-/**
- * @param {Array<number | null> | undefined} precipitationTotals
- * @param {number} [days]
- */
-export function sumPrecipitation(precipitationTotals, days = 7) {
-  if (!Array.isArray(precipitationTotals)) return 0;
-  return precipitationTotals.slice(0, days).reduce((sum, mm) => sum + (mm ?? 0), 0);
-}
-
-/**
- * @param {Array<number | null> | undefined} precipitationTotals
- * @param {number} [pastDays]
- * @param {number} [forecastDays]
- */
-export function splitPrecipitationSeries(
-  precipitationTotals,
-  pastDays = PAST_RAIN_DAYS,
-  forecastDays = FORECAST_RAIN_DAYS
-) {
-  if (!Array.isArray(precipitationTotals) || precipitationTotals.length === 0) {
-    return { past: [], forecast: [] };
-  }
-
-  // Legacy snapshots / forecast-only responses (no past_days in the series).
-  if (precipitationTotals.length < pastDays + 1) {
-    return { past: [], forecast: precipitationTotals.slice(0, forecastDays) };
-  }
-
-  return {
-    past: precipitationTotals.slice(0, pastDays),
-    forecast: precipitationTotals.slice(pastDays, pastDays + forecastDays),
-  };
-}
-
-/**
- * Rain credit for pausing watering *today* — past soak + today's rain only.
- * Tomorrow's forecast does not cancel today's watering.
- * @param {number} recentPastRainBeforeToday
- * @param {number} todayRainMm
- */
-export function computeTodayWateringRainContext(recentPastRainBeforeToday, todayRainMm) {
-  const recentTotal = recentPastRainBeforeToday + todayRainMm;
-  const rainCreditMm = Math.min(SOAK_DEPTH_MM, recentTotal);
-  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
-  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
-  const soilRecentlyWet = recentTotal >= RECENT_RAIN_WET_SOIL_MM;
-
-  return {
-    rainCreditMm,
-    netWaterNeeded,
-    isNatureProvidingFullSoak,
-    soilRecentlyWet,
-  };
-}
-
-/**
- * @param {number} recentPastRainSum
- * @param {number} forecastedRainSumNearTerm
- */
-export function computeWateringRainContext(recentPastRainSum, forecastedRainSumNearTerm) {
-  const pastCredit = Math.min(SOAK_DEPTH_MM, recentPastRainSum);
-  const rainCreditMm = Math.min(SOAK_DEPTH_MM, pastCredit + forecastedRainSumNearTerm);
-  const netWaterNeeded = Math.max(0, SOAK_DEPTH_MM - rainCreditMm);
-  const isNatureProvidingFullSoak = rainCreditMm >= SOAK_DEPTH_MM;
-  const soilRecentlyWet = recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
-
-  return {
-    rainCreditMm,
-    netWaterNeeded,
-    isNatureProvidingFullSoak,
-    soilRecentlyWet,
-  };
-}
-
-/**
- * @param {Partial<LawnWeatherSnapshot>} weather
- */
-export function getEffectiveNearTermRain(weather) {
-  if (typeof weather.forecastedRainSumNearTerm === 'number') {
-    return weather.forecastedRainSumNearTerm;
-  }
-  if (typeof weather.forecastedRainSum === 'number') {
-    return (weather.forecastedRainSum / FORECAST_RAIN_DAYS) * NEAR_TERM_RAIN_DAYS;
-  }
-  return 0;
-}
-
-/**
- * @param {Partial<LawnWeatherSnapshot>} weather
- */
-export function getEffectiveRecentPastRain(weather) {
-  if (typeof weather.recentPastRainSum === 'number') {
-    return weather.recentPastRainSum;
-  }
-  return 0;
-}
-
-/**
- * Sum observed hourly precipitation from midnight today up to the current hour.
- * @param {{ hourly?: { precipitation?: Array<number | null>, time?: Array<string> } }} data
- */
-export function getTodayPrecipitationSoFar(data) {
-  const hourlyPrecip = data.hourly?.precipitation;
-  const hourlyTimes = data.hourly?.time;
-  if (!Array.isArray(hourlyPrecip) || !Array.isArray(hourlyTimes) || hourlyPrecip.length === 0) {
-    return 0;
-  }
-
-  const start = PAST_RAIN_DAYS * 24;
-  const now = Date.now();
-  let sum = 0;
-
-  for (let i = start; i < Math.min(start + 24, hourlyPrecip.length); i++) {
-    const hourMs = new Date(hourlyTimes[i]).getTime();
-    if (Number.isNaN(hourMs) || hourMs > now) break;
-    sum += hourlyPrecip[i] ?? 0;
-  }
-
-  return sum;
-}
-
-/**
- * Daily precipitation from today through the forecast window.
- * @param {{ daily?: { time?: Array<string>, precipitation_sum?: Array<number | null> } }} data
- * @returns {Array<{ date: string, mm: number }>}
- */
-export function buildDailyForecastSeries(data) {
-  const times = data?.daily?.time;
-  const precip = data?.daily?.precipitation_sum;
-  if (!Array.isArray(times) || !Array.isArray(precip)) return [];
-
-  const { forecast } = splitPrecipitationSeries(precip);
-  return times.slice(PAST_RAIN_DAYS, PAST_RAIN_DAYS + FORECAST_RAIN_DAYS).map((date, index) => ({
-    date,
-    mm: forecast[index] ?? 0,
-  }));
-}
-
-/**
- * Today's 24 hourly precipitation values (index 0 = midnight, 23 = 11pm).
- * @param {{ hourly?: { precipitation?: Array<number | null> } }} data
- * @returns {number[]}
- */
-export function getTodayHourlyPrecipMm(data) {
-  const hourlyPrecip = data?.hourly?.precipitation;
-  if (!Array.isArray(hourlyPrecip) || hourlyPrecip.length === 0) {
-    return [];
-  }
-
-  const start = PAST_RAIN_DAYS * 24;
-  const values = [];
-  for (let hour = 0; hour < 24; hour += 1) {
-    const index = start + hour;
-    values.push(index < hourlyPrecip.length ? hourlyPrecip[index] ?? 0 : 0);
-  }
-  return values;
-}
-
-/**
- * @param {number[]} todayHourlyPrecipMm
- * @param {number} startHour inclusive
- * @param {number} endHour exclusive
- */
-export function sumHourlyPrecipInWindow(todayHourlyPrecipMm, startHour, endHour) {
-  if (!Array.isArray(todayHourlyPrecipMm) || todayHourlyPrecipMm.length < 24) {
-    return 0;
-  }
-
-  let sum = 0;
-  for (let hour = startHour; hour < endHour && hour < 24; hour += 1) {
-    sum += todayHourlyPrecipMm[hour] ?? 0;
-  }
-  return sum;
-}
-
-/**
- * Seed establishment: skip a single misting session when rain in that session's
- * time window meets the surface moisture target (not the whole day).
- * @param {string} sessionTitle
- * @param {string} dueDateIso
- * @param {string} todayStr
- * @param {number[]} [todayHourlyPrecipMm]
- * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
- * @param {number} todayRainMm
- * @param {number} [todayRainObservedMm]
- */
-export function getSeedMistingRainSkipForSession(
-  sessionTitle,
-  dueDateIso,
-  todayStr,
-  todayHourlyPrecipMm,
-  dailyForecastByDate,
-  todayRainMm,
-  todayRainObservedMm = 0
-) {
-  const daysUntilDue = Math.floor(
-    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
-      (1000 * 60 * 60 * 24)
-  );
-
-  if (daysUntilDue < 0) {
-    return { skip: false, reason: null, fullSoak: false };
-  }
-
-  if (daysUntilDue > 0) {
-    const rainMm = dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0;
-    if (rainMm >= SEED_MIST_TARGET_MM) {
-      return {
-        skip: true,
-        reason: `${rainMm.toFixed(1)}mm rain forecast – skip misting`,
-        fullSoak: false,
-      };
-    }
-    return { skip: false, reason: null, fullSoak: false };
-  }
-
-  const window = SEED_MISTING_SESSION_WINDOWS[sessionTitle];
-  if (
-    window &&
-    Array.isArray(todayHourlyPrecipMm) &&
-    todayHourlyPrecipMm.length >= 24
-  ) {
-    const rainMm = sumHourlyPrecipInWindow(
-      todayHourlyPrecipMm,
-      window.startHour,
-      window.endHour
-    );
-    if (rainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
-      const label =
-        window.label === 'evening'
-          ? `${rainMm.toFixed(1)}mm rain forecast this evening – skip misting`
-          : `${rainMm.toFixed(1)}mm rain in the ${window.label} – skip misting`;
-      return { skip: true, reason: label, fullSoak: false };
-    }
-    return { skip: false, reason: null, fullSoak: false };
-  }
-
-  // Fallback when hourly series unavailable (legacy snapshots).
-  if (sessionTitle === 'Water lawn (Evening)' && todayRainMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
-    return {
-      skip: true,
-      reason: 'Rain keeping seed bed moist – skip evening misting',
-      fullSoak: false,
-    };
-  }
-  if (todayRainObservedMm >= SEED_MIST_SESSION_THRESHOLD_MM) {
-    return {
-      skip: true,
-      reason: 'Rain already fallen today – skip misting',
-      fullSoak: false,
-    };
-  }
-
-  return { skip: false, reason: null, fullSoak: false };
-}
-
-/**
- * Seed establishment: skip light misting only when rain on the due date itself
- * meets the surface moisture target. Past days do not carry forward — each day
- * is judged independently because the seed bed surface dries quickly.
- * @param {string} dueDateIso
- * @param {string} todayStr
- * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
- * @param {number} todayRainMm
- */
-export function getSeedMistingRainSkipForDueDate(
-  dueDateIso,
-  todayStr,
-  dailyForecastByDate,
-  todayRainMm
-) {
-  const daysUntilDue = Math.floor(
-    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
-      (1000 * 60 * 60 * 24)
-  );
-
-  if (daysUntilDue < 0) {
-    return { skip: false, reason: null, fullSoak: false };
-  }
-
-  const rainMm =
-    daysUntilDue === 0
-      ? todayRainMm
-      : (dailyForecastByDate.find((entry) => entry.date === dueDateIso)?.mm ?? 0);
-
-  if (rainMm >= SEED_MIST_TARGET_MM) {
-    const dayLabel =
-      daysUntilDue === 0
-        ? 'Rain keeping seed bed moist – skip misting today'
-        : `${rainMm.toFixed(1)}mm rain forecast – skip misting`;
-    return { skip: true, reason: dayLabel, fullSoak: false };
-  }
-
-  return { skip: false, reason: null, fullSoak: false };
-}
-
-/**
- * Should watering be skipped on a specific due date?
- * Normal maintenance: deep soak thresholds; past rain can pause for several days.
- * Seed establishment: surface misting thresholds; only rain on the due date counts.
- * @param {string} dueDateIso
- * @param {string} todayStr
- * @param {Array<{ date: string, mm: number }>} dailyForecastByDate
- * @param {number} recentPastRainBeforeToday
- * @param {number} todayRainMm
- * @param {{ seedEstablishmentActive?: boolean }} [options]
- */
-export function getWateringRainSkipForDueDate(
-  dueDateIso,
-  todayStr,
-  dailyForecastByDate,
-  recentPastRainBeforeToday,
-  todayRainMm,
-  { seedEstablishmentActive = false } = {}
-) {
-  if (seedEstablishmentActive) {
-    return getSeedMistingRainSkipForDueDate(
-      dueDateIso,
-      todayStr,
-      dailyForecastByDate,
-      todayRainMm
-    );
-  }
-
-  const daysUntilDue = Math.floor(
-    (new Date(`${dueDateIso}T12:00:00`).getTime() - new Date(`${todayStr}T12:00:00`).getTime()) /
-      (1000 * 60 * 60 * 24)
-  );
-
-  if (daysUntilDue < 0) {
-    return { skip: false, reason: null, fullSoak: false };
-  }
-
-  if (daysUntilDue === 0) {
-    const todayContext = computeTodayWateringRainContext(
-      recentPastRainBeforeToday,
-      todayRainMm
-    );
-
-    if (todayContext.isNatureProvidingFullSoak) {
-      return {
-        skip: true,
-        reason: 'Heavy rain – nature providing full soak',
-        fullSoak: true,
-      };
-    }
-
-    if (todayContext.soilRecentlyWet) {
-      return {
-        skip: true,
-        reason: 'Recent rain – soil still damp, skip watering',
-        fullSoak: false,
-      };
-    }
-
-    return { skip: false, reason: null, fullSoak: false };
-  }
-
-  const forecastEntry = dailyForecastByDate.find((entry) => entry.date === dueDateIso);
-  const forecastMm = forecastEntry?.mm ?? 0;
-
-  if (forecastMm >= SOAK_DEPTH_MM) {
-    return {
-      skip: true,
-      reason: `${forecastMm.toFixed(0)}mm rain forecast – skip watering`,
-      fullSoak: true,
-    };
-  }
-
-  if (forecastMm >= RECENT_RAIN_WET_SOIL_MM) {
-    return {
-      skip: true,
-      reason: `${forecastMm.toFixed(1)}mm rain forecast – soil will be damp`,
-      fullSoak: false,
-    };
-  }
-
-  return { skip: false, reason: null, fullSoak: false };
-}
-
-/**
- * Hourly data starts PAST_RAIN_DAYS ago, so today's 24 hours begin at index PAST_RAIN_DAYS * 24.
- * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
- */
-export function getTodayMaxSoilTemp(data) {
-  const hourlyTemps = data.hourly?.soil_temperature_6cm;
-  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
-
-  const start = PAST_RAIN_DAYS * 24;
-  return hourlyTemps.slice(start, start + 24).reduce((max, temp) => {
-    if (temp == null) return max;
-    return max === null ? temp : Math.max(max, temp);
-  }, /** @type {number | null} */ (null));
-}
-
-/**
- * Hourly data starts PAST_RAIN_DAYS ago, so today's 24 hours begin at index PAST_RAIN_DAYS * 24.
- * @param {{ hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
- */
-export function getTodayMinSoilTemp(data) {
-  const hourlyTemps = data.hourly?.soil_temperature_6cm;
-  if (!Array.isArray(hourlyTemps) || hourlyTemps.length === 0) return null;
-
-  const start = PAST_RAIN_DAYS * 24;
-  return hourlyTemps.slice(start, start + 24).reduce((min, temp) => {
-    if (temp == null) return min;
-    return min === null ? temp : Math.min(min, temp);
-  }, /** @type {number | null} */ (null));
-}
-
-/**
- * @param {{ daily?: { precipitation_sum?: Array<number | null> }, hourly?: { soil_temperature_6cm?: Array<number | null> } }} data
- * @returns {LawnWeatherSnapshot}
- */
-export function buildWeatherSnapshotFromOpenMeteo(data) {
-  const precipitationTotals = data?.daily?.precipitation_sum;
-  const { past, forecast } = splitPrecipitationSeries(precipitationTotals);
-  const recentPastRainBeforeToday = sumPrecipitation(
-    past.slice(-RECENT_PAST_RAIN_DAYS),
-    RECENT_PAST_RAIN_DAYS
-  );
-  const todayRainObservedMm = getTodayPrecipitationSoFar(data);
-  const todayFromDailyForecast = forecast[0] ?? 0;
-  const todayRainMm = Math.max(todayRainObservedMm, todayFromDailyForecast);
-  const effectiveRecentPastRain = recentPastRainBeforeToday + todayRainMm;
-  const forecastNearTermBeyondToday = sumPrecipitation(
-    forecast.slice(1),
-    Math.max(0, NEAR_TERM_RAIN_DAYS - 1)
-  );
-  const forecastedRainSumNearTerm = todayRainMm + forecastNearTermBeyondToday;
-  const forecastedRainSum = sumPrecipitation(forecast, FORECAST_RAIN_DAYS);
-  const dailyForecastByDate = buildDailyForecastSeries(data);
-  const todayHourlyPrecipMm = getTodayHourlyPrecipMm(data);
-  const currentSoilTemp = getTodayMaxSoilTemp(data);
-  const currentSoilTempMin = getTodayMinSoilTemp(data);
-  const todayWatering = computeTodayWateringRainContext(
-    recentPastRainBeforeToday,
-    todayRainMm
-  );
-
-  return {
-    forecastedRainSum,
-    forecastedRainSumNearTerm,
-    recentPastRainSum: effectiveRecentPastRain,
-    recentPastRainBeforeToday,
-    todayRainMm,
-    dailyForecastByDate,
-    todayHourlyPrecipMm,
-    todayRainObservedMm,
-    rainCreditMm: todayWatering.rainCreditMm,
-    currentSoilTemp,
-    currentSoilTempMin,
-    isRainForecasted:
-      forecastedRainSumNearTerm >= RAIN_THRESHOLD_MM ||
-      effectiveRecentPastRain >= RECENT_RAIN_WET_SOIL_MM,
-    isNatureProvidingFullSoak: todayWatering.isNatureProvidingFullSoak,
-    soilRecentlyWet: todayWatering.soilRecentlyWet,
-    netWaterNeeded: todayWatering.netWaterNeeded,
-    fetchedAt: new Date().toISOString(),
-    source: 'open-meteo',
-  };
-}
-
-/**
- * @param {import('./lawnLocation.js').LawnWeatherLocation | null | undefined} [location]
- * @returns {Promise<LawnWeatherSnapshot>}
- */
-export async function fetchLawnWeatherFromOpenMeteo(location) {
-  const resolved = resolveWeatherLocation(location);
-  const response = await fetch(
-    buildOpenMeteoForecastUrl(resolved.latitude, resolved.longitude)
-  );
-  if (!response.ok) {
-    throw new Error('Weather forecast unavailable');
-  }
-  const data = await response.json();
-  return buildWeatherSnapshotFromOpenMeteo(data);
-}
-
-/**
- * @param {LawnWeatherSnapshot} snapshot
- * @returns {Promise<boolean>}
- */
-export async function saveLawnWeatherSnapshot(snapshot) {
-  const configError = getSupabaseConfigError();
-  if (configError) {
-    throw new Error(configError);
-  }
-
-  const supabase = getSupabase();
-  if (!supabase) {
-    throw new Error('Supabase client could not be initialised.');
-  }
-
-  const { error } = await supabase.from('lawn_app_state').upsert(
-    {
-      id: LAWN_STATE_ID,
-      weather_snapshot: snapshot,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'id' }
-  );
-
-  if (error) {
-    if (/weather_snapshot|42703|PGRST204|PGRST205|schema cache/i.test(error.message)) {
-      return false;
-    }
-    throw new Error(formatSupabaseSyncError(error));
-  }
-
-  return true;
-}
-
-/** @returns {Promise<LawnWeatherSnapshot | null>} */
-export async function fetchLawnWeatherSnapshotFromSupabase() {
-  const configError = getSupabaseConfigError();
-  if (configError) {
-    throw new Error(configError);
-  }
-
-  const supabase = getSupabase();
-  if (!supabase) {
-    throw new Error('Supabase client could not be initialised.');
-  }
-
-  const { data, error } = await supabase
-    .from('lawn_app_state')
-    .select('weather_snapshot')
-    .eq('id', LAWN_STATE_ID)
-    .maybeSingle();
-
-  if (error) {
-    if (error.code === 'PGRST205' || /lawn_app_state|weather_snapshot/i.test(error.message)) {
-      return null;
-    }
-    throw new Error(formatSupabaseSyncError(error));
-  }
-
-  const raw = data?.weather_snapshot;
-  if (!raw || typeof raw !== 'object') return null;
-
-  const snap = /** @type {LawnWeatherSnapshot} */ (raw);
-  if (typeof snap.forecastedRainSum !== 'number') return null;
-
-  return snap;
-}
-
-/** @param {string | undefined} fetchedAt @param {number} maxAgeHours */
-export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
-  if (!fetchedAt) return false;
-  const ageMs = Date.now() - new Date(fetchedAt).getTime();
-  return ageMs >= 0 && ageMs < maxAgeHours * 60 * 60 * 1000;
-}
-</file>
-
-<file path="src/components/lawn/LawnSettings.jsx">
-import React, { useEffect, useRef, useState } from 'react';
-import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
-import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
-import { LAWN_THEMES } from '../../data/lawnThemes';
-
-/**
- * Snapshot of Setup fields that apply immediately while editing.
- * Cancel restores this; Save keeps the current values and leaves Setup.
- * @param {ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>} app
- */
-function captureSettingsSnapshot(app) {
-  return {
-    length: app.length,
-    width: app.width,
-    mowerModel: app.mowerModel,
-    lawnSurface: app.lawnSurface,
-    selectedEquipment: app.selectedEquipment,
-    selectedSprinkler: app.selectedSprinkler,
-    themeId: app.themeId,
-    activeRoom: app.activeRoom,
-  };
-}
-
-/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
-export default function LawnSettings({ app }) {
-  const {
-    length,
-    setLength,
-    width,
-    setWidth,
-    sqm,
-    mowerModel,
-    setMowerModel,
-    lawnSurface,
-    setLawnSurface,
-    showLevellingGuide,
-    setShowLevellingGuide,
-    selectedEquipment,
-    setSelectedEquipment,
-    weatherLocation,
-    postcodeInput,
-    setPostcodeInput,
-    weatherLocationError,
-    weatherLocationSaving,
-    weatherLocationLabel,
-    selectedSprinkler,
-    setSelectedSprinkler,
-    setEnlargedSprinkler,
-    supabaseSyncError,
-    jsonCopied,
-    handleCopyTasksJson,
-    handleSaveWeatherPostcode,
-    handleUseMyLocationForWeather,
-    handleResetWeatherLocation,
-    setActiveScreen,
-    setWeatherLocationError,
-    themeId,
-    setThemeId,
-    setActiveRoom,
-  } = app;
-
-  const snapshotRef = useRef(/** @type {ReturnType<typeof captureSettingsSnapshot> | null} */ (null));
-  const [dirty, setDirty] = useState(false);
-
-  useEffect(() => {
-    snapshotRef.current = captureSettingsSnapshot(app);
-    setDirty(false);
-    // Capture once when Setup opens — intentional empty deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount snapshot only
-  }, []);
-
-  useEffect(() => {
-    const snap = snapshotRef.current;
-    if (!snap) return;
-    setDirty(
-      length !== snap.length ||
-        width !== snap.width ||
-        mowerModel !== snap.mowerModel ||
-        lawnSurface !== snap.lawnSurface ||
-        selectedEquipment !== snap.selectedEquipment ||
-        selectedSprinkler !== snap.selectedSprinkler ||
-        themeId !== snap.themeId
-    );
-  }, [
-    length,
-    width,
-    mowerModel,
-    lawnSurface,
-    selectedEquipment,
-    selectedSprinkler,
-    themeId,
-  ]);
-
-  const leaveSetup = () => {
-    setShowLevellingGuide(false);
-    setActiveScreen('main');
-  };
-
-  const handleCancel = () => {
-    const snap = snapshotRef.current;
-    if (snap) {
-      setLength(snap.length);
-      setWidth(snap.width);
-      setMowerModel(snap.mowerModel);
-      setLawnSurface(snap.lawnSurface);
-      setSelectedEquipment(snap.selectedEquipment);
-      setSelectedSprinkler(snap.selectedSprinkler);
-      setThemeId(snap.themeId);
-      setActiveRoom(snap.activeRoom);
-    }
-    leaveSetup();
-  };
-
-  const handleSave = () => {
-    leaveSetup();
-  };
-
-  return (
-    <>
-      <div className="flex justify-between items-center mb-6 border-b pb-4 gap-3">
-        <div className="min-w-0">
-          <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
-          <p className="text-sm text-green-700 mt-1">
-            Configure appearance, lawn size, equipment, and surface profile.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
-        >
-          ← Back
-        </button>
-      </div>
-
-      <div className="space-y-5 pb-24">
-        <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
-          <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
-          <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
-            Four completely different layouts: Classic (long page), Atelier (journal spine),
-            Signal (status board + bottom tabs), and Canopy (daylight today timeline). Changes
-            apply while you browse — use Cancel to undo, or Save to keep them.
-          </p>
-          <div className="grid gap-2">
-            {LAWN_THEMES.map((theme) => {
-              const selected = themeId === theme.id;
-              return (
-                <button
-                  key={theme.id}
-                  type="button"
-                  onClick={() => {
-                    setThemeId(theme.id);
-                    setActiveRoom('hub');
-                  }}
-                  className={`text-left rounded-xl border p-3 transition-all ${
-                    selected
-                      ? 'border-emerald-600 bg-white ring-2 ring-emerald-500/30'
-                      : 'border-emerald-100 bg-white/80 hover:border-emerald-300'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-900">{theme.name}</p>
-                      <p className="text-[11px] font-semibold text-emerald-800 mt-0.5">
-                        {theme.tagline}
-                      </p>
-                      <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
-                        {theme.description}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md ${
-                        selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'
-                      }`}
-                    >
-                      {selected ? 'Active' : 'Try'}
-                    </span>
-                  </div>
-                  <div className="flex gap-1.5 mt-3" aria-hidden="true">
-                    {theme.swatches.map((color) => (
-                      <span
-                        key={color}
-                        className="h-4 w-4 rounded-full border border-black/10"
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <div>
-          <label className="block text-sm font-medium text-green-900 mb-1">
-            Lawn Length: <span className="font-bold text-green-700">{length}m</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            value={length}
-            onChange={(e) => setLength(parseInt(e.target.value, 10))}
-            className="w-full accent-green-600"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-green-900 mb-1">
-            Lawn Width: <span className="font-bold text-green-700">{width}m</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            value={width}
-            onChange={(e) => setWidth(parseInt(e.target.value, 10))}
-            className="w-full accent-green-600"
-          />
-        </div>
-        <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-sm text-green-800">
-          <span className="font-black">{sqm} SQM</span>
-          <span className="text-green-600 ml-1.5">
-            ({length}m × {width}m)
-          </span>
-        </div>
-        <div>
-          <label htmlFor="mower-select" className="block text-sm font-medium text-green-900 mb-1">
-            Lawnmower Model
-          </label>
-          <select
-            id="mower-select"
-            value={mowerModel}
-            onChange={(e) => setMowerModel(e.target.value)}
-            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
-          >
-            {Object.values(MOWER_OPTIONS).map((mower) => (
-              <option key={mower.id} value={mower.id}>
-                {mower.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mb-2">
-            <p className="text-sm font-medium text-green-900">Lawn Surface Condition</p>
-            <button
-              type="button"
-              onClick={() => setShowLevellingGuide((open) => !open)}
-              aria-expanded={showLevellingGuide}
-              className="ml-2 text-emerald-600 hover:text-emerald-800 text-xs underline font-medium"
-            >
-              ℹ️ How to fix a bumpy lawn
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {Object.values(LAWN_SURFACE_OPTIONS).map((option) => {
-              const isSelected = lawnSurface === option.id;
-
-              return (
-                <label
-                  key={option.id}
-                  className={`flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer text-sm font-medium transition-all ${
-                    isSelected
-                      ? 'border-green-600 bg-green-100/80 text-green-900 ring-1 ring-green-500/30'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="lawn-surface"
-                    value={option.id}
-                    checked={isSelected}
-                    onChange={(e) => setLawnSurface(e.target.value)}
-                    className="accent-green-600"
-                  />
-                  {option.label}
-                </label>
-              );
-            })}
-          </div>
-          <div
-            className={`grid transition-all duration-300 ease-in-out ${
-              showLevellingGuide
-                ? 'grid-rows-[1fr] opacity-100 mt-3'
-                : 'grid-rows-[0fr] opacity-0 mt-0'
-            }`}
-          >
-            <div className="overflow-hidden">
-              <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-emerald-900">Lawn Levelling Guide</h4>
-                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                      Choose the method that matches your dip depth. Once levelled, switch your
-                      surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut height
-                      recommendation.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowLevellingGuide(false)}
-                    className="shrink-0 text-xs font-bold text-gray-400 hover:text-gray-600"
-                    aria-label="Close levelling guide"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {LEVELLING_GUIDE_METHODS.map((method) => (
-                    <div
-                      key={method.title}
-                      className="rounded-lg border border-green-100 bg-green-50/40 p-3.5"
-                    >
-                      <p className="text-xs font-bold text-green-900 mb-1.5">{method.title}</p>
-                      <p className="text-xs text-gray-600 leading-relaxed">{method.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div>
-          <label htmlFor="equipment-select" className="block text-sm font-bold text-gray-700 mb-1.5">
-            Application Tool Profile:
-          </label>
-          <select
-            id="equipment-select"
-            value={selectedEquipment}
-            onChange={(e) => setSelectedEquipment(e.target.value)}
-            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
-          >
-            {Object.values(EQUIPMENT_OPTIONS).map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
-          <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
-          <p className="text-[11px] text-sky-900/80 mb-3 leading-snug">
-            Rain and soil temperature forecasts use this postcode. Defaults to the Wallsend area
-            until you set your own. This section saves on its own (separate from Cancel / Save
-            below).
-          </p>
-          <label htmlFor="weather-postcode" className="block text-xs font-semibold text-sky-950 mb-1">
-            UK postcode
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="weather-postcode"
-              type="text"
-              value={postcodeInput}
-              onChange={(event) => {
-                setPostcodeInput(event.target.value.toUpperCase());
-                setWeatherLocationError(null);
-              }}
-              placeholder="NE28 9AB"
-              autoComplete="postal-code"
-              className="flex-1 min-w-0 bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm text-gray-800 font-medium focus:ring-2 focus:ring-sky-400"
-            />
-            <button
-              type="button"
-              onClick={() => void handleSaveWeatherPostcode()}
-              disabled={weatherLocationSaving || !postcodeInput.trim()}
-              className="shrink-0 text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
-            >
-              {weatherLocationSaving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-2">
-            <button
-              type="button"
-              onClick={() => void handleUseMyLocationForWeather()}
-              disabled={weatherLocationSaving}
-              className="text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
-            >
-              📍 Use my location
-            </button>
-            {weatherLocation.source !== 'default' && (
-              <button
-                type="button"
-                onClick={() => void handleResetWeatherLocation()}
-                disabled={weatherLocationSaving}
-                className="text-xs font-semibold py-2 px-3 rounded-lg text-sky-800 hover:bg-sky-100/80 disabled:opacity-50"
-              >
-                Reset to default
-              </button>
-            )}
-          </div>
-          <p className="mt-2 text-xs font-medium text-sky-900">
-            Forecast for: {weatherLocationLabel}
-          </p>
-          {weatherLocationError && (
-            <p className="mt-2 text-xs font-semibold text-red-700">{weatherLocationError}</p>
-          )}
-        </div>
-
-        <div>
-          <p className="block text-sm font-bold text-gray-700 mb-1">
-            Irrigation Profile — Select Your Primary Sprinkler:
-          </p>
-          <p className="text-[11px] text-gray-500 mb-2 leading-snug">
-            Match the photo and description to the sprinkler you own. Tap a photo to enlarge it.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {Object.values(SPRINKLER_OPTIONS).map((sprinkler) => {
-              const isSelected = selectedSprinkler === sprinkler.id;
-
-              return (
-                <button
-                  key={sprinkler.id}
-                  type="button"
-                  onClick={() => setSelectedSprinkler(sprinkler.id)}
-                  className={`text-left rounded-lg border p-3 transition-all ${
-                    isSelected
-                      ? 'border-green-600 bg-green-100/80 shadow-sm ring-1 ring-green-500/30'
-                      : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
-                  }`}
-                >
-                  <img
-                    src={sprinkler.image}
-                    alt={sprinkler.name}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setEnlargedSprinkler({
-                        image: sprinkler.image,
-                        name: sprinkler.name,
-                      });
-                    }}
-                    className="w-16 h-16 object-cover rounded-md mb-2 mx-auto border border-gray-200 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
-                  />
-                  <span className="text-xs font-bold text-gray-900 leading-snug block">
-                    {sprinkler.name}
-                  </span>
-                  <span className="text-[10px] font-semibold text-green-700 block mb-1.5">
-                    ~{sprinkler.ratePerHour}mm / hour
-                  </span>
-                  <p className="text-[10px] text-gray-700 leading-snug mb-1">
-                    {sprinkler.description}
-                  </p>
-                  <p className="text-[10px] text-gray-500 leading-snug italic">
-                    {sprinkler.identification}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="border-t border-green-200 pt-4 mt-2">
-          <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
-          {supabaseSyncError && (
-            <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
-          )}
-          <button
-            type="button"
-            onClick={handleCopyTasksJson}
-            className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
-          >
-            {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
-          </button>
-        </div>
-      </div>
-
-      <div className="sticky bottom-0 -mx-1 mt-4 border-t border-emerald-200 bg-white/95 backdrop-blur px-1 pt-3 pb-1 flex gap-2">
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
-        >
-          {dirty ? 'Save changes' : 'Done'}
-        </button>
-      </div>
-    </>
   );
 }
 </file>

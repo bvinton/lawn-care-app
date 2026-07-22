@@ -6,8 +6,7 @@ import MaintenancePanel from './MaintenancePanel';
 import SeasonTimeline from './SeasonTimeline';
 
 /**
- * Atelier — field-journal spine. Not a room hub list, not bottom tabs.
- * Vertical chapter rail + one open chapter (Cover / Care / Pack / Studio).
+ * Atelier — paper desk with top folder tabs (not a left spine, not bottom tabs).
  * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
  */
 export default function LawnAtelierBoard({ app }) {
@@ -56,16 +55,15 @@ export default function LawnAtelierBoard({ app }) {
             ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)}`
             : 'Sync now';
 
-  const chapters = [
-    { id: 'hub', label: 'Cover', short: 'Cv' },
-    { id: 'maintenance', label: 'Care', short: 'Cr', badge: dueCount > 0 ? String(dueCount) : null },
+  const folders = [
+    { id: 'hub', label: 'Index' },
+    { id: 'maintenance', label: 'Care', badge: dueCount > 0 ? String(dueCount) : null },
     {
       id: 'seasonal',
       label: 'Pack',
-      short: 'Pk',
       badge: springPackIncomplete ? String(incompleteSpringSteps.length) : null,
     },
-    { id: 'more', label: 'Studio', short: 'St' },
+    { id: 'more', label: 'Studio' },
   ];
 
   const dueLines = [
@@ -83,20 +81,20 @@ export default function LawnAtelierBoard({ app }) {
   let page = null;
   if (chapter === 'maintenance') {
     page = (
-      <div className="lawn-atelier__chapter lawn-panel-surface">
+      <div className="lawn-atelier__sheet lawn-panel-surface">
         <MaintenancePanel app={app} />
       </div>
     );
   } else if (chapter === 'seasonal') {
     page = (
-      <div className="lawn-atelier__chapter lawn-panel-surface">
+      <div className="lawn-atelier__sheet lawn-panel-surface">
         <SeasonTimeline app={app} />
       </div>
     );
   } else if (chapter === 'more') {
     page = (
       <div className="lawn-atelier__studio">
-        <p className="lawn-atelier__studio-lede">Studio tools</p>
+        <p className="lawn-atelier__studio-lede">Studio</p>
         <button
           type="button"
           className="lawn-atelier__studio-row"
@@ -112,7 +110,7 @@ export default function LawnAtelierBoard({ app }) {
           onClick={() => setActiveScreen('materials')}
         >
           <span className="inline-flex items-center gap-2">
-            <CalculatorIcon className="w-3.5 h-3.5" /> Materials calculator
+            <CalculatorIcon className="w-3.5 h-3.5" /> Materials
           </span>
           <span aria-hidden="true">→</span>
         </button>
@@ -121,7 +119,7 @@ export default function LawnAtelierBoard({ app }) {
           className="lawn-atelier__studio-row"
           onClick={() => setActiveScreen('guides')}
         >
-          <span>Guides & PDFs</span>
+          <span>Guides</span>
           <span aria-hidden="true">→</span>
         </button>
         <button
@@ -137,11 +135,14 @@ export default function LawnAtelierBoard({ app }) {
   } else {
     page = (
       <div className="lawn-atelier__cover">
-        <p className="lawn-atelier__kicker">{weatherLocationLabel}</p>
-        <h2 className="lawn-atelier__season">{SEASONS[currentSeason]?.name ?? 'Season'}</h2>
-        <p className="lawn-atelier__size">
-          {sqm} m² · {length}×{width}m
-        </p>
+        <div className="lawn-atelier__masthead">
+          <p className="lawn-atelier__kicker">{weatherLocationLabel}</p>
+          <h2 className="lawn-atelier__season">{SEASONS[currentSeason]?.name ?? 'Season'}</h2>
+          <p className="lawn-atelier__size">
+            Vol. {sqm} m² · {length}×{width}m
+          </p>
+        </div>
+
         <p className="lawn-atelier__weather">{weatherStatusText}</p>
 
         {(petLockoutActive || seedEstablishmentActive || springPackIncomplete) && (
@@ -158,38 +159,22 @@ export default function LawnAtelierBoard({ app }) {
         )}
 
         <div className="lawn-atelier__ledger" aria-label="Care ledger">
+          <p className="lawn-atelier__ledger-title">Ledger</p>
           {dueLines.map((line, index) => (
             <button
               key={line.id}
               type="button"
               className={`lawn-atelier__line${line.due ? ' is-due' : ''}`}
-              style={{ animationDelay: `${80 + index * 60}ms` }}
+              style={{ animationDelay: `${90 + index * 70}ms` }}
               onClick={() => setActiveRoom('maintenance')}
             >
+              <span className="lawn-atelier__line-num">{String(index + 1).padStart(2, '0')}</span>
               <span className="lawn-atelier__line-label">{line.label}</span>
-              <span className="lawn-atelier__line-rule" aria-hidden="true" />
               <span className="lawn-atelier__line-state">
                 {line.due ? 'Due' : line.next ? line.next : '—'}
               </span>
             </button>
           ))}
-        </div>
-
-        <div className="lawn-atelier__cover-actions">
-          <button
-            type="button"
-            className="lawn-atelier__open"
-            onClick={() => setActiveRoom('maintenance')}
-          >
-            Open Care chapter
-          </button>
-          <button
-            type="button"
-            className="lawn-atelier__open lawn-atelier__open--ghost"
-            onClick={() => setActiveRoom('seasonal')}
-          >
-            Open Pack chapter
-          </button>
         </div>
       </div>
     );
@@ -197,25 +182,23 @@ export default function LawnAtelierBoard({ app }) {
 
   return (
     <div className="lawn-atelier" data-atelier-chapter={chapter}>
-      <nav className="lawn-atelier__spine" aria-label="Journal chapters">
-        {chapters.map((item) => (
+      <nav className="lawn-atelier__folders" aria-label="Desk folders">
+        {folders.map((item) => (
           <button
             key={item.id}
             type="button"
-            className={`lawn-atelier__spine-btn${chapter === item.id ? ' is-active' : ''}`}
+            className={`lawn-atelier__folder${chapter === item.id ? ' is-active' : ''}`}
             onClick={() =>
               setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))
             }
             aria-current={chapter === item.id ? 'page' : undefined}
-            title={item.label}
           >
-            <span className="lawn-atelier__spine-short">{item.short}</span>
-            <span className="lawn-atelier__spine-label">{item.label}</span>
-            {item.badge ? <span className="lawn-atelier__spine-badge">{item.badge}</span> : null}
+            {item.label}
+            {item.badge ? <span className="lawn-atelier__folder-badge">{item.badge}</span> : null}
           </button>
         ))}
       </nav>
-      <div className="lawn-atelier__page">{page}</div>
+      <div className="lawn-atelier__desk">{page}</div>
     </div>
   );
 }

@@ -137,9 +137,9 @@ export default function LawnSettings({ app }) {
         <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
           <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
           <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
-            Four completely different layouts: Classic (long page), Atelier (journal spine),
-            Signal (status board + bottom tabs), and Canopy (daylight today timeline). Changes
-            apply while you browse — use Cancel to undo, or Save to keep them.
+            Four different layouts on live: Classic (long page), Atelier (paper desk + folder
+            tabs), Signal (dark status board + bottom tabs), Canopy (neon yard billboards). Use
+            Cancel to undo, Save to keep.
           </p>
           <div className="grid gap-2">
             {LAWN_THEMES.map((theme) => {
