@@ -52,6 +52,18 @@ api/
 public/
   guides/
     masterclass/
+      part-1/
+        01.webp
+        02.webp
+        03.webp
+        04.webp
+        05.webp
+        06.webp
+        07.webp
+        08.webp
+        09.webp
+        10.webp
+        11.webp
       part-2/
         01.webp
         02.webp
@@ -103,8 +115,6 @@ public/
         12.webp
         13.webp
       manifest.json
-  Monthly Guides/
-    Your July Lawn Monthly Checklist.pdf
   apple-touch-icon.png
   favicon-32x32.png
   hose.jfif
@@ -302,6 +312,19 @@ git add "lawn-care-app.txt"
 
 <file path="public/guides/masterclass/manifest.json">
 {
+  "part-1": [
+    "/guides/masterclass/part-1/01.webp",
+    "/guides/masterclass/part-1/02.webp",
+    "/guides/masterclass/part-1/03.webp",
+    "/guides/masterclass/part-1/04.webp",
+    "/guides/masterclass/part-1/05.webp",
+    "/guides/masterclass/part-1/06.webp",
+    "/guides/masterclass/part-1/07.webp",
+    "/guides/masterclass/part-1/08.webp",
+    "/guides/masterclass/part-1/09.webp",
+    "/guides/masterclass/part-1/10.webp",
+    "/guides/masterclass/part-1/11.webp"
+  ],
   "part-2": [
     "/guides/masterclass/part-2/01.webp",
     "/guides/masterclass/part-2/02.webp",
@@ -498,6 +521,7 @@ MANIFEST_PUBLIC = OUT_ROOT / "manifest.json"
 MANIFEST_SRC = ROOT / "src" / "data" / "masterclassManifest.json"
 
 SOURCES = {
+    "part-1": PUBLIC / "Lawn Masterclass Part 1.pdf",
     "part-2": PUBLIC / "Lawn Masterclass Part 2.pdf",
     "part-3": PUBLIC / "Lawn Masterclass Part 3.pdf",
     "part-4": PUBLIC / "Lawn Masterclass Part 4.pdf",
@@ -1520,6 +1544,19 @@ export const DECKING_EDGE_WATERING_SUBTASK = (
 
 <file path="src/data/masterclassManifest.json">
 {
+  "part-1": [
+    "/guides/masterclass/part-1/01.webp",
+    "/guides/masterclass/part-1/02.webp",
+    "/guides/masterclass/part-1/03.webp",
+    "/guides/masterclass/part-1/04.webp",
+    "/guides/masterclass/part-1/05.webp",
+    "/guides/masterclass/part-1/06.webp",
+    "/guides/masterclass/part-1/07.webp",
+    "/guides/masterclass/part-1/08.webp",
+    "/guides/masterclass/part-1/09.webp",
+    "/guides/masterclass/part-1/10.webp",
+    "/guides/masterclass/part-1/11.webp"
+  ],
   "part-2": [
     "/guides/masterclass/part-2/01.webp",
     "/guides/masterclass/part-2/02.webp",
@@ -1667,20 +1704,8 @@ export function registerAppServiceWorker() {
   });
 }
 
-/** Activate the waiting service worker (if any), then always reload the page. */
 export function reloadForAppUpdate() {
-  void (async () => {
-    try {
-      await applyUpdate?.(true);
-    } catch {
-      // Fall through to a hard reload below.
-    }
-    // vite-plugin-pwa reloads on the `controlling` event. If the SW already activated
-    // (e.g. older builds with skipWaiting: true), that never fires — force reload.
-    window.setTimeout(() => {
-      window.location.reload();
-    }, 400);
-  })();
+  void applyUpdate?.(true);
 }
 </file>
 
@@ -5224,9 +5249,13 @@ export const LAWN_GUIDE_SECTIONS = [
   },
   {
     title: 'Masterclass series',
-    description:
-      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
+    description: 'The 5-part lawn care masterclass from The Lawn Pack.',
     guides: [
+      {
+        title: 'Part 1: Level Up Your Lawn Game',
+        kind: 'gallery',
+        images: masterclassManifest['part-1'],
+      },
       {
         title: 'Part 2: Scarification & Aeration',
         kind: 'gallery',
@@ -5727,11 +5756,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Must stay false with registerType: 'prompt'. skipWaiting: true activates the
-        // new SW immediately, so Update's messageSkipWaiting() is a no-op and the page
-        // never reloads.
-        skipWaiting: false,
-        clientsClaim: false,
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
         // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
         navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
@@ -9738,7 +9764,7 @@ export default function App() {
   <head>
     <script>
       (function () {
-        var key = 'lawn-app-sw-reset-v5';
+        var key = 'lawn-app-sw-reset-v6';
         try {
           if (localStorage.getItem(key) === '1') return;
           localStorage.setItem(key, '1');

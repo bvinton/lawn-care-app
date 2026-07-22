@@ -41,9 +41,13 @@ export const LAWN_GUIDE_SECTIONS = [
   },
   {
     title: 'Masterclass series',
-    description:
-      'Parts 2–5 of the 5-part lawn care masterclass. Part 1 is not in your library — check The Lawn Pack emails or Facebook group if you need it.',
+    description: 'The 5-part lawn care masterclass from The Lawn Pack.',
     guides: [
+      {
+        title: 'Part 1: Level Up Your Lawn Game',
+        kind: 'gallery',
+        images: masterclassManifest['part-1'],
+      },
       {
         title: 'Part 2: Scarification & Aeration',
         kind: 'gallery',

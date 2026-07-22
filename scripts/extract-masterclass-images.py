@@ -20,6 +20,7 @@ MANIFEST_PUBLIC = OUT_ROOT / "manifest.json"
 MANIFEST_SRC = ROOT / "src" / "data" / "masterclassManifest.json"
 
 SOURCES = {
+    "part-1": PUBLIC / "Lawn Masterclass Part 1.pdf",
     "part-2": PUBLIC / "Lawn Masterclass Part 2.pdf",
     "part-3": PUBLIC / "Lawn Masterclass Part 3.pdf",
     "part-4": PUBLIC / "Lawn Masterclass Part 4.pdf",
