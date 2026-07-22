@@ -305,7 +305,9 @@ export default function MaintenancePanel({ app }) {
           data-mower-model={mowerModel}
           data-lawn-surface={lawnSurface}
           data-recommended-mower-setting={recommendedSetting}
-          className={`flex flex-col rounded-lg border p-3 ${
+          className={`${
+            activeItemTab === 'mowing' ? 'flex flex-col' : 'hidden'
+          } rounded-lg border p-3 ${
             isDormantSeason
               ? 'bg-gray-100 border-gray-300 text-gray-500'
               : seedEstablishmentActive
@@ -476,7 +478,9 @@ export default function MaintenancePanel({ app }) {
           data-forecasted-rain-sum={forecastedRainSum}
           data-net-water-needed={netWaterNeeded}
           data-water-status={maintenanceDueDates.wateringStatus}
-          className={`flex flex-col rounded-lg border p-3 ${
+          className={`${
+            activeItemTab === 'watering' ? 'flex flex-col' : 'hidden'
+          } rounded-lg border p-3 ${
             isDormantSeason
               ? 'bg-gray-100 border-gray-300 text-gray-500'
               : isNatureProvidingFullSoak
@@ -665,7 +669,9 @@ export default function MaintenancePanel({ app }) {
           data-verticut-locked-until={verticutLockedUntilIso ?? ''}
           data-verticut-status={maintenanceDueDates.verticutStatus}
           data-verticut-paired-with-mow={verticutPairedWithMow ? 'true' : 'false'}
-          className={`flex flex-col rounded-lg border p-3 ${
+          className={`${
+            activeItemTab === 'verticut' ? 'flex flex-col' : 'hidden'
+          } rounded-lg border p-3 ${
             !isVerticutSeason
               ? 'bg-gray-100 border-gray-300 text-gray-500'
               : renovationHoldActive
@@ -835,7 +841,9 @@ export default function MaintenancePanel({ app }) {
         data-last-gypsum-date={lastGypsumDate ?? ''}
         data-gypsum-days-remaining={gypsumDaysRemaining}
         data-gypsum-due={gypsumDue ? 'true' : 'false'}
-        className={`mt-3 rounded-lg border p-3 ${
+        className={`${
+          activeItemTab === 'gypsum' ? 'block' : 'hidden'
+        } mt-3 rounded-lg border p-3 ${
           gypsumDue ? 'bg-amber-50 border-amber-300' : 'bg-white border-gray-200'
         }`}
       >
