@@ -103,12 +103,15 @@ public/
         12.webp
         13.webp
       manifest.json
+  Monthly Guides/
+    Your July Lawn Monthly Checklist.pdf
   apple-touch-icon.png
   favicon-32x32.png
   hose.jfif
   icon.svg
   impact.jfif
   Iron Sulphate Guide.docx
+  Lawn Masterclass Part 1.pdf
   Lawn Masterclass Part 2.pdf
   Lawn Masterclass Part 3.pdf
   Lawn Masterclass Part 4.pdf
@@ -1664,8 +1667,20 @@ export function registerAppServiceWorker() {
   });
 }
 
+/** Activate the waiting service worker (if any), then always reload the page. */
 export function reloadForAppUpdate() {
-  void applyUpdate?.(true);
+  void (async () => {
+    try {
+      await applyUpdate?.(true);
+    } catch {
+      // Fall through to a hard reload below.
+    }
+    // vite-plugin-pwa reloads on the `controlling` event. If the SW already activated
+    // (e.g. older builds with skipWaiting: true), that never fires — force reload.
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 400);
+  })();
 }
 </file>
 
@@ -5712,8 +5727,11 @@ export default defineConfig({
         ],
       },
       workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
+        // Must stay false with registerType: 'prompt'. skipWaiting: true activates the
+        // new SW immediately, so Update's messageSkipWaiting() is a no-op and the page
+        // never reloads.
+        skipWaiting: false,
+        clientsClaim: false,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
         // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
         navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
@@ -8869,73 +8887,6 @@ export default function MaintenancePanel({ app }) {
 }
 </file>
 
-<file path="index.html">
-<!doctype html>
-<html lang="en-GB">
-  <head>
-    <script>
-      (function () {
-        var key = 'lawn-app-sw-reset-v5';
-        try {
-          if (localStorage.getItem(key) === '1') return;
-          localStorage.setItem(key, '1');
-        } catch (e) {
-          return;
-        }
-        var reloadAfterReset = function () {
-          window.location.reload();
-        };
-        var clearCaches = function () {
-          if (!('caches' in window)) {
-            reloadAfterReset();
-            return;
-          }
-          caches
-            .keys()
-            .then(function (keys) {
-              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
-            })
-            .finally(reloadAfterReset);
-        };
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker
-            .getRegistrations()
-            .then(function (regs) {
-              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
-            })
-            .then(clearCaches)
-            .catch(clearCaches);
-        } else {
-          clearCaches();
-        }
-      })();
-    </script>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#14532d" />
-    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;600;700;800&family=Figtree:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&family=Literata:opsz,wght@7..72,600;7..72,700&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>The Lawn Pack Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-</file>
-
 <file path="src/components/lawn/LawnSettings.jsx">
 import React, { useEffect, useRef, useState } from 'react';
 import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
@@ -9779,6 +9730,73 @@ export default function App() {
     </>
   );
 }
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <script>
+      (function () {
+        var key = 'lawn-app-sw-reset-v5';
+        try {
+          if (localStorage.getItem(key) === '1') return;
+          localStorage.setItem(key, '1');
+        } catch (e) {
+          return;
+        }
+        var reloadAfterReset = function () {
+          window.location.reload();
+        };
+        var clearCaches = function () {
+          if (!('caches' in window)) {
+            reloadAfterReset();
+            return;
+          }
+          caches
+            .keys()
+            .then(function (keys) {
+              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
+            })
+            .finally(reloadAfterReset);
+        };
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (regs) {
+              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+            })
+            .then(clearCaches)
+            .catch(clearCaches);
+        } else {
+          clearCaches();
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;600;700;800&family=Figtree:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&family=Literata:opsz,wght@7..72,600;7..72,700&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>The Lawn Pack Companion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
 </file>
 
 <file path="src/services/lawnMaintenanceSync.js">
