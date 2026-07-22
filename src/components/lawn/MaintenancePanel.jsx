@@ -144,7 +144,7 @@ export default function MaintenancePanel({ app }) {
     (lastMowedDate ? formatUkDate(addDaysToDateString(lastMowedDate, dynamicMowingDays)) : null);
 
   const seedRecoveryMowingNote = seedRecoveryActive ? (
-    <div className="mt-2 p-2 bg-lime-50 border border-lime-300 rounded text-xs text-lime-950 leading-snug">
+    <div className="lawn-care__note mt-2 p-2 bg-lime-50 border border-lime-300 text-xs text-lime-950 leading-snug">
       <p className="font-bold">🌱 Weekly cuts while spring overseed establishes</p>
       <p className="mt-1">
         {recoveryDaysRemaining} day{recoveryDaysRemaining !== 1 ? 's' : ''} remaining
@@ -181,12 +181,12 @@ export default function MaintenancePanel({ app }) {
       data-maintenance-due-dates={JSON.stringify(maintenanceDueDates)}
       data-app-source={LAWN_APP_SOURCE}
       data-pet-lockout-until={petLockoutUntil ?? ''}
-      className="mb-6 rounded-xl border border-sky-100 bg-sky-50/40 p-4"
+      className="lawn-care mb-6 p-4"
     >
       <h3 className="text-sm font-bold text-gray-800 mb-2">🔧 Maintenance Panel</h3>
 
       <div
-        className="maintenance-item-tabs mb-3 grid grid-cols-4 gap-1 rounded-xl border-2 border-sky-300 bg-white p-1.5 shadow-sm"
+        className="lawn-care__tabs maintenance-item-tabs mb-3 grid grid-cols-4 gap-1 p-1.5"
         role="tablist"
         aria-label="Maintenance items"
       >
@@ -199,17 +199,15 @@ export default function MaintenancePanel({ app }) {
               role="tab"
               aria-selected={selected}
               onClick={() => setActiveItemTab(tab.id)}
-              className={`relative min-h-[2.75rem] rounded-lg px-1 py-2 text-[11px] font-black tracking-wide transition-all ${
-                selected
-                  ? 'bg-sky-700 text-white shadow'
-                  : 'bg-sky-50 text-sky-950 hover:bg-sky-100'
+              className={`lawn-care__tab relative min-h-[2.75rem] px-1 py-2 text-[11px] font-black tracking-wide transition-all ${
+                selected ? 'is-selected' : ''
               }`}
             >
               {tab.label}
               {tab.due && (
                 <span
-                  className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ring-2 ${
-                    selected ? 'bg-amber-300 ring-sky-700' : 'bg-amber-500 ring-white'
+                  className={`lawn-care__due-dot absolute top-1.5 right-1.5 h-2 w-2 rounded-full ring-2 ${
+                    selected ? 'is-on-selected' : ''
                   }`}
                   aria-label="Due"
                 />
@@ -220,7 +218,7 @@ export default function MaintenancePanel({ app }) {
       </div>
 
       <div
-        className={`mb-3 rounded-lg border p-3 text-xs font-semibold ${
+        className={`lawn-care__banner mb-3 border p-3 text-xs font-semibold ${
           weatherStatus === 'loading'
             ? 'bg-gray-50 border-gray-200 text-gray-700'
             : isRainForecasted
@@ -236,7 +234,7 @@ export default function MaintenancePanel({ app }) {
         data-current-soil-temp={currentSoilTemp ?? ''}
         data-current-soil-temp-min={currentSoilTempMin ?? ''}
         data-soil-seed-ready={isSoilPrimeForSeed ? 'true' : 'false'}
-        className={`mb-3 rounded-lg border p-3 ${
+        className={`lawn-care__banner mb-3 border p-3 ${
           weatherStatus === 'loading'
             ? 'bg-gray-50 border-gray-200'
             : isSoilTooColdForSeed
@@ -307,7 +305,7 @@ export default function MaintenancePanel({ app }) {
           data-recommended-mower-setting={recommendedSetting}
           className={`${
             activeItemTab === 'mowing' ? 'flex flex-col' : 'hidden'
-          } rounded-lg border p-3 ${
+          } lawn-care__card border p-3 ${
             isDormantSeason
               ? 'bg-gray-100 border-gray-300 text-gray-500'
               : seedEstablishmentActive
@@ -348,7 +346,7 @@ export default function MaintenancePanel({ app }) {
               <>
                 <p className="text-xs font-bold text-amber-900 leading-snug">🚨 MOWING DUE</p>
                 {mowingDueDateLabel ? (
-                  <div className="mt-2 p-2 bg-amber-100 border border-amber-300 rounded text-sm text-amber-900 font-semibold leading-snug">
+                  <div className="lawn-care__note mt-2 p-2 bg-amber-100 border border-amber-300 text-sm text-amber-900 font-semibold leading-snug">
                     📅 Was due: {mowingDueDateLabel}
                     {mowingDaysOverdue !== null && mowingDaysOverdue > 0 && (
                       <span className="block text-xs font-bold mt-0.5 text-amber-950">
@@ -381,7 +379,7 @@ export default function MaintenancePanel({ app }) {
                   <p className="mt-1 text-xs font-medium text-sky-800">{mowingWeatherAdvisory}</p>
                 )}
                 {verticutPairedWithMow && (
-                  <p className="mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 rounded p-2 leading-snug">
+                  <p className="lawn-care__note mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 p-2 leading-snug">
                     🔗 {VERTICUT_MOW_PAIRING_NOTE}
                   </p>
                 )}
@@ -403,14 +401,14 @@ export default function MaintenancePanel({ app }) {
                   <p className="mt-1 text-xs font-medium text-sky-800">{mowingWeatherAdvisory}</p>
                 )}
                 {verticutPairedWithMow && (
-                  <p className="mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 rounded p-2 leading-snug">
+                  <p className="lawn-care__note mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 p-2 leading-snug">
                     🔗 {VERTICUT_MOW_PAIRING_NOTE}
                   </p>
                 )}
                 {seedRecoveryMowingNote}
                 {mowingIntervalReason}
                 {mowingNextDate && (
-                  <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-800 font-semibold">
+                  <div className="lawn-care__note mt-2 p-2 bg-emerald-50 border border-emerald-200 text-sm text-emerald-800 font-semibold">
                     📅 Next Cut Due: {mowingNextDate}
                   </div>
                 )}
@@ -448,7 +446,7 @@ export default function MaintenancePanel({ app }) {
                 max={todayStr}
                 onChange={setPendingMowLogDate}
                 disabled={isDormantSeason || seedEstablishmentActive}
-                className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="lawn-care__input w-full min-w-0 px-2 py-1.5 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
             <button
@@ -462,7 +460,7 @@ export default function MaintenancePanel({ app }) {
                 setMaintenanceHints((prev) => ({ ...prev, mow: null }));
               }}
               disabled={isDormantSeason || seedEstablishmentActive || !pendingMowLogDate}
-              className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="lawn-care__btn w-full text-xs font-bold py-2 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ✂️ Log
             </button>
@@ -480,7 +478,7 @@ export default function MaintenancePanel({ app }) {
           data-water-status={maintenanceDueDates.wateringStatus}
           className={`${
             activeItemTab === 'watering' ? 'flex flex-col' : 'hidden'
-          } rounded-lg border p-3 ${
+          } lawn-care__card border p-3 ${
             isDormantSeason
               ? 'bg-gray-100 border-gray-300 text-gray-500'
               : isNatureProvidingFullSoak
@@ -508,7 +506,7 @@ export default function MaintenancePanel({ app }) {
                     ? 'Recent rain has soaked the soil. Timers paused.'
                     : 'Enough rain forecast soon. Timers paused.'}
                 </p>
-                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800 font-semibold">
+                <div className="lawn-care__note mt-2 p-2 bg-blue-50 border border-blue-200 text-sm text-blue-800 font-semibold">
                   🌧️ Next Water: Paused (
                   {recentPastRainSum >= SOAK_DEPTH_MM
                     ? `${recentPastRainSum.toFixed(1)}mm in last ${RECENT_PAST_RAIN_DAYS} days already covered the ${SOAK_DEPTH_MM}mm soak`
@@ -521,7 +519,7 @@ export default function MaintenancePanel({ app }) {
                 <p className="text-xs font-bold text-amber-900 leading-snug">
                   🌱 SEED ESTABLISHING: The soil surface must stay moist. Expect 3 separate daily tasks (Morning, Midday, Evening) for light misting.
                 </p>
-                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
+                <div className="lawn-care__note mt-2 p-2 bg-amber-50 border border-amber-200 text-sm text-amber-800 font-semibold">
                   🚰 3x Daily Misting: Each session should be ~{dynamicMinutes > 0 ? Math.round(dynamicMinutes / 3) : 0} minutes (1/3 of your normal {dynamicMinutes} min soak) using your {activeSprinkler.name}.
                 </div>
                 <div className="mt-2 space-y-1">
@@ -537,7 +535,7 @@ export default function MaintenancePanel({ app }) {
                       <button
                         key={taskName}
                         type="button"
-                        className="text-[10px] font-bold py-1 px-2 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                        className="lawn-care__chip text-[10px] font-bold py-1 px-2 border"
                         onClick={() => {
                           void skipLawnTaskByName(taskName, todayStr).then(() =>
                             pushLawnTasksToSupabase({}, { quiet: true })
@@ -579,7 +577,7 @@ export default function MaintenancePanel({ app }) {
                 )}
                 {DECKING_EDGE_WATERING_SUBTASK}
                 {app.wateringNextDate && (
-                  <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
+                  <div className="lawn-care__note mt-2 p-2 bg-amber-50 border border-amber-200 text-sm text-amber-800 font-semibold">
                     🚰 Next Water Due: {app.wateringNextDate} ({dynamicMinutes} min soak).{' '}
                     <span className="font-medium italic">
                       *{recentPastRainSum.toFixed(1)}mm rain last {RECENT_PAST_RAIN_DAYS} days;{' '}
@@ -612,7 +610,7 @@ export default function MaintenancePanel({ app }) {
                   </p>
                 )}
                 {app.wateringNextDate && (
-                  <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 font-semibold">
+                  <div className="lawn-care__note mt-2 p-2 bg-amber-50 border border-amber-200 text-sm text-amber-800 font-semibold">
                     🚰 Next Water Due: {app.wateringNextDate}
                     {dynamicMinutes > 0 ? ` (${dynamicMinutes} min soak)` : ''}.{' '}
                     <span className="font-medium italic">
@@ -640,7 +638,7 @@ export default function MaintenancePanel({ app }) {
                 max={todayStr}
                 onChange={setPendingWaterLogDate}
                 disabled={isDormantSeason || isNatureProvidingFullSoak}
-                className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="lawn-care__input w-full min-w-0 px-2 py-1.5 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
             <button
@@ -654,7 +652,7 @@ export default function MaintenancePanel({ app }) {
                 setMaintenanceHints((prev) => ({ ...prev, water: null }));
               }}
               disabled={isDormantSeason || isNatureProvidingFullSoak || !pendingWaterLogDate}
-              className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="lawn-care__btn w-full text-xs font-bold py-2 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               💦 Log Watered
             </button>
@@ -671,7 +669,7 @@ export default function MaintenancePanel({ app }) {
           data-verticut-paired-with-mow={verticutPairedWithMow ? 'true' : 'false'}
           className={`${
             activeItemTab === 'verticut' ? 'flex flex-col' : 'hidden'
-          } rounded-lg border p-3 ${
+          } lawn-care__card border p-3 ${
             !isVerticutSeason
               ? 'bg-gray-100 border-gray-300 text-gray-500'
               : renovationHoldActive
@@ -717,7 +715,7 @@ export default function MaintenancePanel({ app }) {
               <>
                 <p className="text-xs font-bold text-amber-900 leading-snug">🚨 VERTICUTTING DUE</p>
                 {verticutNextDate ? (
-                  <div className="mt-2 p-2 bg-amber-100 border border-amber-300 rounded text-sm text-amber-900 font-semibold leading-snug">
+                  <div className="lawn-care__note mt-2 p-2 bg-amber-100 border border-amber-300 text-sm text-amber-900 font-semibold leading-snug">
                     📅 Was due: {verticutNextDate}
                     {verticutDaysOverdue !== null && verticutDaysOverdue > 0 && (
                       <span className="block text-xs font-bold mt-0.5 text-amber-950">
@@ -745,7 +743,7 @@ export default function MaintenancePanel({ app }) {
                   </p>
                 )}
                 {verticutPairedWithMow && (
-                  <p className="mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 rounded p-2 leading-snug">
+                  <p className="lawn-care__note mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 p-2 leading-snug">
                     🔗 {VERTICUT_MOW_PAIRING_NOTE}
                   </p>
                 )}
@@ -769,7 +767,7 @@ export default function MaintenancePanel({ app }) {
                   </p>
                 )}
                 {verticutPairedWithMow && verticutNextDate && (
-                  <p className="mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 rounded p-2 leading-snug">
+                  <p className="lawn-care__note mt-1 text-xs font-medium text-violet-900 bg-violet-50 border border-violet-200 p-2 leading-snug">
                     🔗 Paired with next mow ({verticutNextDate}): {VERTICUT_MOW_PAIRING_NOTE}
                   </p>
                 )}
@@ -779,7 +777,7 @@ export default function MaintenancePanel({ app }) {
                   </p>
                 )}
                 {verticutNextDate && (
-                  <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-800 font-semibold">
+                  <div className="lawn-care__note mt-2 p-2 bg-emerald-50 border border-emerald-200 text-sm text-emerald-800 font-semibold">
                     📅 Next Verticut Due: {verticutNextDate}
                   </div>
                 )}
@@ -807,7 +805,7 @@ export default function MaintenancePanel({ app }) {
                 disabled={
                   !isVerticutSeason || renovationHoldActive || verticutHeatDroughtPaused
                 }
-                className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="lawn-care__input w-full min-w-0 px-2 py-1.5 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
             <button
@@ -826,7 +824,7 @@ export default function MaintenancePanel({ app }) {
                 verticutHeatDroughtPaused ||
                 !pendingVerticutLogDate
               }
-              className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="lawn-care__btn w-full text-xs font-bold py-2 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               🪓 Log Verticut
             </button>
@@ -843,7 +841,7 @@ export default function MaintenancePanel({ app }) {
         data-gypsum-due={gypsumDue ? 'true' : 'false'}
         className={`${
           activeItemTab === 'gypsum' ? 'block' : 'hidden'
-        } mt-3 rounded-lg border p-3 ${
+        } lawn-care__card mt-3 border p-3 ${
           gypsumDue ? 'bg-amber-50 border-amber-300' : 'bg-white border-gray-200'
         }`}
       >
@@ -884,7 +882,7 @@ export default function MaintenancePanel({ app }) {
         </div>
 
         {(gypsumDue || gypsumSnoozed) && (
-          <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 p-2.5">
+          <div className="lawn-care__note mb-3 border border-sky-200 bg-sky-50 p-2.5">
             {gypsumDue && (
               <>
                 <p className="text-[11px] font-bold text-sky-950 mb-1.5">
@@ -907,7 +905,7 @@ export default function MaintenancePanel({ app }) {
                           { quiet: true, force: true }
                         );
                       }}
-                      className="text-[10px] font-bold py-1.5 px-2.5 rounded-md border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 transition-colors"
+                      className="lawn-care__chip text-[10px] font-bold py-1.5 px-2.5 border transition-colors"
                     >
                       {option.label}
                     </button>
@@ -951,7 +949,7 @@ export default function MaintenancePanel({ app }) {
               value={pendingGypsumLogDate}
               max={todayStr}
               onChange={setPendingGypsumLogDate}
-              className="w-full min-w-0 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="lawn-care__input w-full min-w-0 px-2 py-1.5 text-xs font-medium"
             />
           </div>
           <button
@@ -971,7 +969,7 @@ export default function MaintenancePanel({ app }) {
               );
             }}
             disabled={!pendingGypsumLogDate}
-            className="w-full text-xs font-bold py-2 px-3 rounded-lg bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="lawn-care__btn w-full text-xs font-bold py-2 px-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             Log Liquid Gypsum Application
           </button>
@@ -980,7 +978,7 @@ export default function MaintenancePanel({ app }) {
 
       {summerGranularRepeat && activeItemTab === 'gypsum' && (
         <div
-          className={`mt-3 rounded-lg border p-3 text-xs ${
+          className={`lawn-care__banner mt-3 border p-3 text-xs ${
             granularRepeatDue
               ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold'
               : 'bg-white border-gray-200 text-gray-700'

@@ -30,7 +30,7 @@ export default function SeasonTimeline({ app }) {
   } = app;
 
   return (
-    <>
+    <section className="lawn-pack">
       <div className="mb-6">
         <div className="grid grid-cols-2 gap-2">
           {Object.keys(SEASONS).map((key) => (
@@ -41,7 +41,7 @@ export default function SeasonTimeline({ app }) {
                 setCurrentSeason(key);
                 setSeasonManuallySelected(key !== workflowSeason);
               }}
-              className={`p-2.5 text-xs font-bold rounded-lg border transition-all ${
+              className={`lawn-pack__season-btn p-2.5 text-xs font-bold border transition-all ${
                 currentSeason === key
                   ? 'bg-green-600 text-white border-green-600 shadow-md'
                   : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
@@ -126,7 +126,7 @@ export default function SeasonTimeline({ app }) {
               </div>
 
               <div
-                className={`flex-1 mb-4 p-4 rounded-xl border transition-all ${
+                className={`lawn-pack__step flex-1 mb-4 p-4 border transition-all ${
                   isWeedolAdvisoryStep
                     ? 'bg-amber-50 border-amber-200'
                     : step.optional && !isCompleted
@@ -220,14 +220,14 @@ export default function SeasonTimeline({ app }) {
                       id={`date-${stepKey}`}
                       value={dateInputValue ?? ''}
                       onChange={(nextValue) => handlePendingDateChange(step.id, nextValue)}
-                      className="w-full bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="lawn-pack__input w-full px-2 py-1.5 text-xs font-medium"
                     />
                   </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => handleLogTask(step.id)}
-                      className="bg-green-700 hover:bg-green-800 text-white text-xs font-bold py-2 px-3 rounded-lg transition-all shadow-sm"
+                      className="lawn-pack__btn text-xs font-bold py-2 px-3 transition-all"
                     >
                       Log Task
                     </button>
@@ -235,7 +235,7 @@ export default function SeasonTimeline({ app }) {
                       <button
                         type="button"
                         onClick={() => handleClearLog(step.id)}
-                        className="text-xs font-bold py-2 px-3 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50"
+                        className="lawn-pack__chip text-xs font-bold py-2 px-3 border border-red-200 text-red-600"
                       >
                         Clear
                       </button>
@@ -254,7 +254,7 @@ export default function SeasonTimeline({ app }) {
             📖 Master Guide: Seasonal Maintenance & Best Practices
           </h3>
 
-          <div className="rounded-xl border border-green-100 bg-white p-4 md:p-5 shadow-sm">
+          <div className="lawn-pack__tips border p-4 md:p-5">
             <p className="text-sm text-gray-600 italic leading-relaxed mb-5">
               {activeSeason.generalGuidelines.overview}
             </p>
@@ -263,7 +263,7 @@ export default function SeasonTimeline({ app }) {
               {activeSeason.generalGuidelines.bullets.map((bullet, bulletIdx) => (
                 <div
                   key={bulletIdx}
-                  className="rounded-lg bg-green-50/30 border border-green-100/80 p-3.5"
+                  className="lawn-pack__tip border p-3.5"
                 >
                   <p className="text-xs font-bold text-green-900 mb-1.5">{bullet.title}</p>
                   <p className="text-xs text-gray-600 leading-relaxed">{bullet.text}</p>
@@ -273,6 +273,6 @@ export default function SeasonTimeline({ app }) {
           </div>
         </section>
       )}
-    </>
+    </section>
   );
 }

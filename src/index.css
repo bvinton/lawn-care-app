@@ -1056,6 +1056,689 @@
   grid-template-columns: 1fr;
 }
 
+/* —— Care + Pack surfaces: Classic defaults (pixel-close to prior sky/green) —— */
+.lawn-care {
+  --lawn-care-radius: 0.75rem;
+  --lawn-care-radius-sm: 0.5rem;
+  --lawn-care-border: #e0f2fe;
+  --lawn-care-bg: rgba(240, 249, 255, 0.4);
+  --lawn-care-ink: #1f2937;
+  --lawn-care-tab-strip-bg: #ffffff;
+  --lawn-care-tab-strip-border: #7dd3fc;
+  --lawn-care-tab-bg: #f0f9ff;
+  --lawn-care-tab-ink: #082f49;
+  --lawn-care-tab-selected-bg: #0369a1;
+  --lawn-care-tab-selected-ink: #ffffff;
+  --lawn-care-btn-bg: #15803d;
+  --lawn-care-btn-ink: #ffffff;
+  --lawn-care-btn-hover: #166534;
+  --lawn-care-input-bg: #ffffff;
+  --lawn-care-input-border: #d1d5db;
+  --lawn-care-input-ink: #374151;
+  --lawn-care-focus: #22c55e;
+  --lawn-care-chip-bg: #ffffff;
+  --lawn-care-chip-border: #d1d5db;
+  --lawn-care-chip-ink: #374151;
+  --lawn-care-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+
+  background: var(--lawn-care-bg);
+  border: 1px solid var(--lawn-care-border);
+  border-radius: var(--lawn-care-radius);
+  color: var(--lawn-care-ink);
+}
+
+.lawn-care__tabs {
+  background: var(--lawn-care-tab-strip-bg);
+  border: 2px solid var(--lawn-care-tab-strip-border);
+  border-radius: var(--lawn-care-radius);
+  box-shadow: var(--lawn-care-shadow);
+}
+
+.lawn-care__tab {
+  border-radius: var(--lawn-care-radius-sm);
+  background: var(--lawn-care-tab-bg);
+  color: var(--lawn-care-tab-ink);
+}
+
+.lawn-care__tab:hover {
+  filter: brightness(0.97);
+}
+
+.lawn-care__tab.is-selected {
+  background: var(--lawn-care-tab-selected-bg);
+  color: var(--lawn-care-tab-selected-ink);
+  box-shadow: var(--lawn-care-shadow);
+}
+
+.lawn-care__due-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px #ffffff;
+}
+
+.lawn-care__due-dot.is-on-selected {
+  background: #fcd34d;
+  box-shadow: 0 0 0 2px var(--lawn-care-tab-selected-bg);
+}
+
+.lawn-care__banner,
+.lawn-care__card,
+.lawn-care__note {
+  border-radius: var(--lawn-care-radius-sm);
+}
+
+.lawn-care__btn {
+  border-radius: var(--lawn-care-radius-sm);
+  background: var(--lawn-care-btn-bg);
+  color: var(--lawn-care-btn-ink);
+  border: 1px solid transparent;
+}
+
+.lawn-care__btn:hover:not(:disabled) {
+  background: var(--lawn-care-btn-hover);
+}
+
+.lawn-care__input {
+  border-radius: var(--lawn-care-radius-sm);
+  background: var(--lawn-care-input-bg);
+  border: 1px solid var(--lawn-care-input-border);
+  color: var(--lawn-care-input-ink);
+}
+
+.lawn-care__input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--lawn-care-focus);
+}
+
+.lawn-care__chip {
+  border-radius: var(--lawn-care-radius-sm);
+  background: var(--lawn-care-chip-bg);
+  border-color: var(--lawn-care-chip-border);
+  color: var(--lawn-care-chip-ink);
+}
+
+.lawn-care__chip:hover {
+  filter: brightness(0.97);
+}
+
+.lawn-pack {
+  --lawn-pack-radius: 0.75rem;
+  --lawn-pack-radius-sm: 0.5rem;
+  --lawn-pack-btn-bg: #15803d;
+  --lawn-pack-btn-ink: #ffffff;
+  --lawn-pack-btn-hover: #166534;
+  --lawn-pack-input-bg: #ffffff;
+  --lawn-pack-input-border: #d1d5db;
+  --lawn-pack-input-ink: #374151;
+  --lawn-pack-focus: #22c55e;
+  --lawn-pack-step-radius: 0.75rem;
+  --lawn-pack-tips-bg: #ffffff;
+  --lawn-pack-tips-border: #dcfce7;
+  --lawn-pack-tip-bg: rgba(240, 253, 244, 0.3);
+  --lawn-pack-tip-border: rgba(220, 252, 231, 0.8);
+}
+
+.lawn-pack__season-btn {
+  border-radius: var(--lawn-pack-radius-sm);
+}
+
+.lawn-pack__step {
+  border-radius: var(--lawn-pack-step-radius);
+}
+
+.lawn-pack__btn {
+  border-radius: var(--lawn-pack-radius-sm);
+  background: var(--lawn-pack-btn-bg);
+  color: var(--lawn-pack-btn-ink);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.lawn-pack__btn:hover {
+  background: var(--lawn-pack-btn-hover);
+}
+
+.lawn-pack__input {
+  border-radius: var(--lawn-pack-radius-sm);
+  background: var(--lawn-pack-input-bg);
+  border: 1px solid var(--lawn-pack-input-border);
+  color: var(--lawn-pack-input-ink);
+}
+
+.lawn-pack__input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--lawn-pack-focus);
+}
+
+.lawn-pack__chip {
+  border-radius: var(--lawn-pack-radius-sm);
+  background: #ffffff;
+}
+
+.lawn-pack__tips {
+  border-radius: var(--lawn-pack-radius);
+  background: var(--lawn-pack-tips-bg);
+  border-color: var(--lawn-pack-tips-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.lawn-pack__tip {
+  border-radius: var(--lawn-pack-radius-sm);
+  background: var(--lawn-pack-tip-bg);
+  border-color: var(--lawn-pack-tip-border);
+}
+
+/* Nested Care inside themed sheet: avoid double frames */
+.lawn-panel-surface .lawn-care {
+  margin-bottom: 0;
+}
+
+/* —— Atelier: moss soft —— */
+[data-lawn-theme='atelier'] .lawn-care {
+  --lawn-care-radius: 1rem;
+  --lawn-care-radius-sm: 0.75rem;
+  --lawn-care-border: rgba(47, 107, 79, 0.22);
+  --lawn-care-bg: rgba(243, 247, 244, 0.85);
+  --lawn-care-tab-strip-border: rgba(47, 107, 79, 0.35);
+  --lawn-care-tab-bg: #eef4f0;
+  --lawn-care-tab-ink: #1a3a2a;
+  --lawn-care-tab-selected-bg: #2f6b4f;
+  --lawn-care-tab-selected-ink: #f3f7f4;
+  --lawn-care-btn-bg: #2f6b4f;
+  --lawn-care-btn-hover: #24553e;
+  --lawn-care-focus: #2f6b4f;
+}
+
+[data-lawn-theme='atelier'] .lawn-care .bg-sky-50,
+[data-lawn-theme='atelier'] .lawn-care .bg-sky-100,
+[data-lawn-theme='atelier'] .lawn-care .bg-blue-50 {
+  background-color: #eef4f0 !important;
+}
+
+[data-lawn-theme='atelier'] .lawn-care .border-sky-200,
+[data-lawn-theme='atelier'] .lawn-care .border-sky-300,
+[data-lawn-theme='atelier'] .lawn-care .border-blue-200 {
+  border-color: rgba(47, 107, 79, 0.28) !important;
+}
+
+[data-lawn-theme='atelier'] .lawn-care .text-sky-800,
+[data-lawn-theme='atelier'] .lawn-care .text-sky-900,
+[data-lawn-theme='atelier'] .lawn-care .text-blue-700,
+[data-lawn-theme='atelier'] .lawn-care .text-blue-800 {
+  color: #1a3a2a !important;
+}
+
+[data-lawn-theme='atelier'] .lawn-pack {
+  --lawn-pack-btn-bg: #2f6b4f;
+  --lawn-pack-btn-hover: #24553e;
+  --lawn-pack-focus: #2f6b4f;
+  --lawn-pack-tips-border: rgba(47, 107, 79, 0.22);
+  --lawn-pack-tip-bg: rgba(197, 217, 200, 0.35);
+  --lawn-pack-tip-border: rgba(47, 107, 79, 0.2);
+}
+
+/* —— Signal: slate utility —— */
+[data-lawn-theme='signal'] .lawn-care {
+  --lawn-care-radius: 0.35rem;
+  --lawn-care-radius-sm: 0.25rem;
+  --lawn-care-border: #334155;
+  --lawn-care-bg: #0f172a;
+  --lawn-care-ink: #e2e8f0;
+  --lawn-care-tab-strip-bg: #111827;
+  --lawn-care-tab-strip-border: #334155;
+  --lawn-care-tab-bg: #1e293b;
+  --lawn-care-tab-ink: #cbd5e1;
+  --lawn-care-tab-selected-bg: #2dd4bf;
+  --lawn-care-tab-selected-ink: #042f2e;
+  --lawn-care-btn-bg: #2dd4bf;
+  --lawn-care-btn-ink: #042f2e;
+  --lawn-care-btn-hover: #5eead4;
+  --lawn-care-input-bg: #0b1220;
+  --lawn-care-input-border: #475569;
+  --lawn-care-input-ink: #e2e8f0;
+  --lawn-care-focus: #2dd4bf;
+  --lawn-care-chip-bg: #1e293b;
+  --lawn-care-chip-border: #475569;
+  --lawn-care-chip-ink: #e2e8f0;
+  --lawn-care-shadow: none;
+}
+
+[data-lawn-theme='signal'] .lawn-care h3,
+[data-lawn-theme='signal'] .lawn-care .text-gray-800,
+[data-lawn-theme='signal'] .lawn-care .text-gray-900,
+[data-lawn-theme='signal'] .lawn-care .text-gray-700 {
+  color: #e2e8f0 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .text-gray-600,
+[data-lawn-theme='signal'] .lawn-care .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .bg-white {
+  background-color: #1e293b !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .bg-gray-50,
+[data-lawn-theme='signal'] .lawn-care .bg-gray-100 {
+  background-color: #111827 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .border-gray-200,
+[data-lawn-theme='signal'] .lawn-care .border-gray-300 {
+  border-color: #334155 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .bg-amber-50,
+[data-lawn-theme='signal'] .lawn-care .bg-amber-100 {
+  background-color: #422006 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .border-amber-200,
+[data-lawn-theme='signal'] .lawn-care .border-amber-300 {
+  border-color: #b45309 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .text-amber-800,
+[data-lawn-theme='signal'] .lawn-care .text-amber-900,
+[data-lawn-theme='signal'] .lawn-care .text-amber-950 {
+  color: #fde68a !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .bg-emerald-50 {
+  background-color: #042f2e !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .border-emerald-200 {
+  border-color: #0f766e !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .text-emerald-800,
+[data-lawn-theme='signal'] .lawn-care .text-emerald-900 {
+  color: #99f6e4 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .bg-sky-50,
+[data-lawn-theme='signal'] .lawn-care .bg-sky-100,
+[data-lawn-theme='signal'] .lawn-care .bg-blue-50 {
+  background-color: #0c4a6e !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .border-sky-200,
+[data-lawn-theme='signal'] .lawn-care .border-sky-300,
+[data-lawn-theme='signal'] .lawn-care .border-blue-200 {
+  border-color: #0284c7 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .text-sky-800,
+[data-lawn-theme='signal'] .lawn-care .text-sky-900,
+[data-lawn-theme='signal'] .lawn-care .text-blue-700,
+[data-lawn-theme='signal'] .lawn-care .text-blue-800 {
+  color: #bae6fd !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .bg-red-50 {
+  background-color: #450a0a !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .border-red-200,
+[data-lawn-theme='signal'] .lawn-care .border-red-300 {
+  border-color: #b91c1c !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .text-red-800,
+[data-lawn-theme='signal'] .lawn-care .text-red-900 {
+  color: #fecaca !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .bg-violet-50 {
+  background-color: #2e1065 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .border-violet-200 {
+  border-color: #7c3aed !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .text-violet-900 {
+  color: #ddd6fe !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .bg-lime-50,
+[data-lawn-theme='signal'] .lawn-care .bg-lime-50\/40 {
+  background-color: #1a2e05 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-care .border-lime-200,
+[data-lawn-theme='signal'] .lawn-care .border-lime-300 {
+  border-color: #65a30d !important;
+}
+
+[data-lawn-theme='signal'] .lawn-panel-surface {
+  background: #0f172a;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+[data-lawn-theme='signal'] .lawn-pack {
+  --lawn-pack-radius: 0.35rem;
+  --lawn-pack-radius-sm: 0.25rem;
+  --lawn-pack-step-radius: 0.35rem;
+  --lawn-pack-btn-bg: #2dd4bf;
+  --lawn-pack-btn-ink: #042f2e;
+  --lawn-pack-btn-hover: #5eead4;
+  --lawn-pack-input-bg: #0b1220;
+  --lawn-pack-input-border: #475569;
+  --lawn-pack-input-ink: #e2e8f0;
+  --lawn-pack-focus: #2dd4bf;
+  --lawn-pack-tips-bg: #111827;
+  --lawn-pack-tips-border: #334155;
+  --lawn-pack-tip-bg: #0f172a;
+  --lawn-pack-tip-border: #334155;
+  color: #e2e8f0;
+}
+
+[data-lawn-theme='signal'] .lawn-pack .text-gray-800,
+[data-lawn-theme='signal'] .lawn-pack .text-gray-900 {
+  color: #e2e8f0 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-pack .text-gray-600,
+[data-lawn-theme='signal'] .lawn-pack .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+[data-lawn-theme='signal'] .lawn-pack .bg-white,
+[data-lawn-theme='signal'] .lawn-pack .bg-white\/60 {
+  background-color: #1e293b !important;
+}
+
+/* —— Canopy: neon brutalist —— */
+[data-lawn-theme='canopy'] .lawn-care {
+  --lawn-care-radius: 0;
+  --lawn-care-radius-sm: 0;
+  --lawn-care-border: #0a0a0a;
+  --lawn-care-bg: #ffffff;
+  --lawn-care-ink: #0a0a0a;
+  --lawn-care-tab-strip-bg: #eaff6a;
+  --lawn-care-tab-strip-border: #0a0a0a;
+  --lawn-care-tab-bg: #ffffff;
+  --lawn-care-tab-ink: #0a0a0a;
+  --lawn-care-tab-selected-bg: #0a0a0a;
+  --lawn-care-tab-selected-ink: #c8f000;
+  --lawn-care-btn-bg: #0a0a0a;
+  --lawn-care-btn-ink: #c8f000;
+  --lawn-care-btn-hover: #222222;
+  --lawn-care-input-bg: #ffffff;
+  --lawn-care-input-border: #0a0a0a;
+  --lawn-care-input-ink: #0a0a0a;
+  --lawn-care-focus: #c8f000;
+  --lawn-care-chip-bg: #ffffff;
+  --lawn-care-chip-border: #0a0a0a;
+  --lawn-care-chip-ink: #0a0a0a;
+  --lawn-care-shadow: 3px 3px 0 #0a0a0a;
+  border-width: 3px;
+  box-shadow: 4px 4px 0 #0a0a0a;
+}
+
+[data-lawn-theme='canopy'] .lawn-panel-surface .lawn-care {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+
+[data-lawn-theme='canopy'] .lawn-care__tabs {
+  border-width: 3px;
+  box-shadow: 3px 3px 0 #0a0a0a;
+}
+
+[data-lawn-theme='canopy'] .lawn-care__tab {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--lawn-font-display);
+  font-weight: 400;
+  border: 2px solid #0a0a0a;
+}
+
+[data-lawn-theme='canopy'] .lawn-care__banner,
+[data-lawn-theme='canopy'] .lawn-care__card,
+[data-lawn-theme='canopy'] .lawn-care__note {
+  border-width: 2px !important;
+  border-color: #0a0a0a !important;
+  box-shadow: 3px 3px 0 #0a0a0a;
+}
+
+[data-lawn-theme='canopy'] .lawn-care .bg-white {
+  background-color: #ffffff !important;
+}
+
+[data-lawn-theme='canopy'] .lawn-care .bg-amber-50,
+[data-lawn-theme='canopy'] .lawn-care .bg-amber-100 {
+  background-color: #fff4b8 !important;
+}
+
+[data-lawn-theme='canopy'] .lawn-care .bg-emerald-50 {
+  background-color: #eaff6a !important;
+}
+
+[data-lawn-theme='canopy'] .lawn-care .bg-sky-50,
+[data-lawn-theme='canopy'] .lawn-care .bg-sky-100,
+[data-lawn-theme='canopy'] .lawn-care .bg-blue-50 {
+  background-color: #f4ffe0 !important;
+}
+
+[data-lawn-theme='canopy'] .lawn-care .bg-red-50 {
+  background-color: #ffd6d6 !important;
+}
+
+[data-lawn-theme='canopy'] .lawn-care .bg-violet-50 {
+  background-color: #f3e8ff !important;
+}
+
+[data-lawn-theme='canopy'] .lawn-care .bg-lime-50,
+[data-lawn-theme='canopy'] .lawn-care .bg-lime-50\/40 {
+  background-color: #f7ffc4 !important;
+}
+
+[data-lawn-theme='canopy'] .lawn-care .bg-gray-50,
+[data-lawn-theme='canopy'] .lawn-care .bg-gray-100 {
+  background-color: #f3f4f6 !important;
+}
+
+[data-lawn-theme='canopy'] .lawn-care .border-amber-200,
+[data-lawn-theme='canopy'] .lawn-care .border-amber-300,
+[data-lawn-theme='canopy'] .lawn-care .border-emerald-200,
+[data-lawn-theme='canopy'] .lawn-care .border-sky-200,
+[data-lawn-theme='canopy'] .lawn-care .border-sky-300,
+[data-lawn-theme='canopy'] .lawn-care .border-blue-200,
+[data-lawn-theme='canopy'] .lawn-care .border-red-200,
+[data-lawn-theme='canopy'] .lawn-care .border-red-300,
+[data-lawn-theme='canopy'] .lawn-care .border-violet-200,
+[data-lawn-theme='canopy'] .lawn-care .border-lime-200,
+[data-lawn-theme='canopy'] .lawn-care .border-lime-300,
+[data-lawn-theme='canopy'] .lawn-care .border-gray-200,
+[data-lawn-theme='canopy'] .lawn-care .border-gray-300 {
+  border-color: #0a0a0a !important;
+}
+
+[data-lawn-theme='canopy'] .lawn-care .text-amber-800,
+[data-lawn-theme='canopy'] .lawn-care .text-amber-900,
+[data-lawn-theme='canopy'] .lawn-care .text-emerald-800,
+[data-lawn-theme='canopy'] .lawn-care .text-sky-800,
+[data-lawn-theme='canopy'] .lawn-care .text-blue-700,
+[data-lawn-theme='canopy'] .lawn-care .text-blue-800,
+[data-lawn-theme='canopy'] .lawn-care .text-violet-900,
+[data-lawn-theme='canopy'] .lawn-care .text-lime-950 {
+  color: #0a0a0a !important;
+}
+
+[data-lawn-theme='canopy'] .lawn-care__btn {
+  border: 2px solid #0a0a0a;
+  box-shadow: 3px 3px 0 #0a0a0a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--lawn-font-display);
+  font-weight: 400;
+}
+
+[data-lawn-theme='canopy'] .lawn-care__input {
+  border-width: 2px;
+}
+
+[data-lawn-theme='canopy'] .lawn-pack {
+  --lawn-pack-radius: 0;
+  --lawn-pack-radius-sm: 0;
+  --lawn-pack-step-radius: 0;
+  --lawn-pack-btn-bg: #0a0a0a;
+  --lawn-pack-btn-ink: #c8f000;
+  --lawn-pack-btn-hover: #222222;
+  --lawn-pack-input-border: #0a0a0a;
+  --lawn-pack-focus: #c8f000;
+  --lawn-pack-tips-bg: #ffffff;
+  --lawn-pack-tips-border: #0a0a0a;
+  --lawn-pack-tip-bg: #f4ffe0;
+  --lawn-pack-tip-border: #0a0a0a;
+}
+
+[data-lawn-theme='canopy'] .lawn-pack__season-btn,
+[data-lawn-theme='canopy'] .lawn-pack__step,
+[data-lawn-theme='canopy'] .lawn-pack__tips,
+[data-lawn-theme='canopy'] .lawn-pack__tip,
+[data-lawn-theme='canopy'] .lawn-pack__input,
+[data-lawn-theme='canopy'] .lawn-pack__chip {
+  border-color: #0a0a0a !important;
+  border-width: 2px;
+  box-shadow: 3px 3px 0 #0a0a0a;
+}
+
+[data-lawn-theme='canopy'] .lawn-pack__btn {
+  border: 2px solid #0a0a0a;
+  box-shadow: 3px 3px 0 #0a0a0a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--lawn-font-display);
+  font-weight: 400;
+}
+
+[data-lawn-theme='canopy'] .lawn-pack__season-btn.bg-green-600 {
+  background: #0a0a0a !important;
+  color: #c8f000 !important;
+  border-color: #0a0a0a !important;
+  box-shadow: 3px 3px 0 #0a0a0a;
+}
+
+[data-lawn-theme='canopy'] .lawn-pack__season-btn.bg-white {
+  background: #ffffff !important;
+  color: #0a0a0a !important;
+  border-color: #0a0a0a !important;
+}
+
+[data-lawn-theme='signal'] .lawn-pack__season-btn.bg-green-600 {
+  background: #2dd4bf !important;
+  color: #042f2e !important;
+  border-color: #2dd4bf !important;
+}
+
+[data-lawn-theme='signal'] .lawn-pack__season-btn.bg-white {
+  background: #1e293b !important;
+  color: #cbd5e1 !important;
+  border-color: #334155 !important;
+}
+
+[data-lawn-theme='folio'] .lawn-pack__season-btn.bg-green-600 {
+  background: #1d4ed8 !important;
+  color: #fffcf7 !important;
+  border-color: #1d4ed8 !important;
+}
+
+[data-lawn-theme='atelier'] .lawn-pack__season-btn.bg-green-600 {
+  background: #2f6b4f !important;
+  border-color: #2f6b4f !important;
+}
+
+/* —— Folio: cobalt paper desk —— */
+[data-lawn-theme='folio'] .lawn-care {
+  --lawn-care-radius: 0;
+  --lawn-care-radius-sm: 0;
+  --lawn-care-border: rgba(17, 24, 39, 0.18);
+  --lawn-care-bg: transparent;
+  --lawn-care-ink: #111827;
+  --lawn-care-tab-strip-bg: #fffcf7;
+  --lawn-care-tab-strip-border: #111827;
+  --lawn-care-tab-bg: #f3f0e8;
+  --lawn-care-tab-ink: #111827;
+  --lawn-care-tab-selected-bg: #1d4ed8;
+  --lawn-care-tab-selected-ink: #fffcf7;
+  --lawn-care-btn-bg: #1d4ed8;
+  --lawn-care-btn-ink: #ffffff;
+  --lawn-care-btn-hover: #1e40af;
+  --lawn-care-input-bg: #fffcf7;
+  --lawn-care-input-border: rgba(17, 24, 39, 0.35);
+  --lawn-care-focus: #1d4ed8;
+  --lawn-care-chip-bg: #fffcf7;
+  --lawn-care-chip-border: rgba(17, 24, 39, 0.35);
+  --lawn-care-shadow: none;
+  border-style: dotted;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+[data-lawn-theme='folio'] .lawn-care__tabs {
+  border-style: solid;
+  border-width: 1px 1px 2px;
+}
+
+[data-lawn-theme='folio'] .lawn-care__tab {
+  font-family: var(--lawn-font-display);
+  font-style: italic;
+}
+
+[data-lawn-theme='folio'] .lawn-care__banner,
+[data-lawn-theme='folio'] .lawn-care__card,
+[data-lawn-theme='folio'] .lawn-care__note {
+  border-style: dotted;
+  background-image: linear-gradient(to bottom, transparent 0, transparent calc(100% - 1px), rgba(17, 24, 39, 0.08) calc(100% - 1px));
+}
+
+[data-lawn-theme='folio'] .lawn-care .bg-sky-50,
+[data-lawn-theme='folio'] .lawn-care .bg-sky-100,
+[data-lawn-theme='folio'] .lawn-care .bg-blue-50 {
+  background-color: #eff6ff !important;
+}
+
+[data-lawn-theme='folio'] .lawn-care .border-sky-200,
+[data-lawn-theme='folio'] .lawn-care .border-sky-300,
+[data-lawn-theme='folio'] .lawn-care .border-blue-200 {
+  border-color: rgba(29, 78, 216, 0.35) !important;
+}
+
+[data-lawn-theme='folio'] .lawn-care .text-sky-800,
+[data-lawn-theme='folio'] .lawn-care .text-blue-700,
+[data-lawn-theme='folio'] .lawn-care .text-blue-800 {
+  color: #1e3a8a !important;
+}
+
+[data-lawn-theme='folio'] .lawn-care__btn {
+  letter-spacing: 0.02em;
+}
+
+[data-lawn-theme='folio'] .lawn-pack {
+  --lawn-pack-radius: 0;
+  --lawn-pack-radius-sm: 0;
+  --lawn-pack-step-radius: 0;
+  --lawn-pack-btn-bg: #1d4ed8;
+  --lawn-pack-btn-hover: #1e40af;
+  --lawn-pack-focus: #1d4ed8;
+  --lawn-pack-tips-bg: #fffcf7;
+  --lawn-pack-tips-border: rgba(17, 24, 39, 0.2);
+  --lawn-pack-tip-bg: #eff6ff;
+  --lawn-pack-tip-border: rgba(29, 78, 216, 0.25);
+}
+
+[data-lawn-theme='folio'] .lawn-pack__step,
+[data-lawn-theme='folio'] .lawn-pack__tips,
+[data-lawn-theme='folio'] .lawn-pack__tip {
+  border-style: dotted;
+}
+
 @keyframes lawn-rise {
   from {
     opacity: 0;
