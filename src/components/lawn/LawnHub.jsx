@@ -14,11 +14,15 @@ export default function LawnHub({ app }) {
     lastCloudSyncAt,
     setActiveScreen,
     setActiveRoom,
+    setMaintenanceFocusTab,
     mowingDue,
     wateringDue,
     verticutDue,
     gypsumDue,
     seedEstablishmentActive,
+    isDormantSeason,
+    isNatureProvidingFullSoak,
+    isVerticutSeason,
     petLockoutActive,
     springPackIncomplete,
     incompleteSpringSteps,
@@ -27,13 +31,27 @@ export default function LawnHub({ app }) {
     weatherLocationLabel,
   } = app;
 
-  const dueItems = [
-    mowingDue ? 'Mowing' : null,
-    wateringDue ? 'Watering' : null,
-    verticutDue ? 'Verticut' : null,
-    gypsumDue ? 'Gypsum' : null,
+  /** @type {Array<'mowing' | 'watering' | 'verticut' | 'gypsum'>} */
+  const dueTabs = [
+    mowingDue && !isDormantSeason && !seedEstablishmentActive ? 'mowing' : null,
+    wateringDue && !isDormantSeason && !isNatureProvidingFullSoak ? 'watering' : null,
+    verticutDue && isVerticutSeason ? 'verticut' : null,
+    gypsumDue ? 'gypsum' : null,
   ].filter(Boolean);
-  const dueCount = dueItems.length;
+  const dueCount = dueTabs.length;
+  const dueLabels = {
+    mowing: 'Mowing',
+    watering: 'Watering',
+    verticut: 'Verticut',
+    gypsum: 'Gypsum',
+  };
+  const dueItems = dueTabs.map((tab) => dueLabels[tab]);
+
+  const openMaintenance = (tab = dueTabs[0] ?? null) => {
+    if (tab) setMaintenanceFocusTab(tab);
+    else if (seedEstablishmentActive) setMaintenanceFocusTab('mowing');
+    setActiveRoom('maintenance');
+  };
 
   const heroStatus = seedEstablishmentActive
     ? {
@@ -90,7 +108,7 @@ export default function LawnHub({ app }) {
           <button
             type="button"
             className="lawn-hub__hero-open"
-            onClick={() => setActiveRoom('maintenance')}
+            onClick={() => openMaintenance()}
           >
             <span className="lawn-hub__hero-open-copy">
               <span className="lawn-hub__kicker">Today</span>
@@ -139,7 +157,9 @@ export default function LawnHub({ app }) {
               key={room.id}
               type="button"
               className={`lawn-hub__room lawn-hub__room--${room.tone}`}
-              onClick={() => setActiveRoom(room.id)}
+              onClick={() =>
+                room.id === 'maintenance' ? openMaintenance() : setActiveRoom(room.id)
+              }
             >
               <span className="lawn-hub__room-icon" aria-hidden="true">
                 {room.icon}

@@ -180,6 +180,9 @@ export function useLawnCareApp() {
   const [activeRoom, setActiveRoom] = useState(
     /** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ ('hub')
   );
+  const [maintenanceFocusTab, setMaintenanceFocusTab] = useState(
+    /** @type {'mowing' | 'watering' | 'verticut' | 'gypsum' | null} */ (null)
+  );
   const activeTheme = getLawnTheme(themeId);
 
   const setThemeId = useCallback((nextId) => {
@@ -1431,6 +1434,8 @@ export function useLawnCareApp() {
     activeTheme,
     activeRoom,
     setActiveRoom,
+    maintenanceFocusTab,
+    setMaintenanceFocusTab,
     showLevellingGuide,
     setShowLevellingGuide,
     jsonCopied,

@@ -125,14 +125,22 @@ export default function MaintenancePanel({ app }) {
 
   const [activeItemTab, setActiveItemTab] = useState(
     /** @type {MaintenanceItemTab} */ (
-      resolveMaintenanceTabFromFocus(getFocusFromUrl()) ?? 'mowing'
+      app.maintenanceFocusTab ??
+        resolveMaintenanceTabFromFocus(getFocusFromUrl()) ??
+        'mowing'
     )
   );
 
   useEffect(() => {
+    const fromApp = app.maintenanceFocusTab;
+    if (fromApp) {
+      setActiveItemTab(fromApp);
+      app.setMaintenanceFocusTab(null);
+      return;
+    }
     const fromFocus = resolveMaintenanceTabFromFocus(getFocusFromUrl());
     if (fromFocus) setActiveItemTab(fromFocus);
-  }, []);
+  }, [app.maintenanceFocusTab, app.setMaintenanceFocusTab]);
 
   const mowingDaysOverdue =
     mowingNextDueIso && mowingDue ? daysBetween(mowingNextDueIso, todayStr) : null;

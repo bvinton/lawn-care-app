@@ -2962,114 +2962,6 @@ export default function LawnCanopyBoard({ app }) {
 }
 </file>
 
-<file path="src/data/masterclassManifest.json">
-{
-  "part-1": [
-    "/guides/masterclass/part-1/01.webp",
-    "/guides/masterclass/part-1/02.webp",
-    "/guides/masterclass/part-1/03.webp",
-    "/guides/masterclass/part-1/04.webp",
-    "/guides/masterclass/part-1/05.webp",
-    "/guides/masterclass/part-1/06.webp",
-    "/guides/masterclass/part-1/07.webp",
-    "/guides/masterclass/part-1/08.webp",
-    "/guides/masterclass/part-1/09.webp",
-    "/guides/masterclass/part-1/10.webp",
-    "/guides/masterclass/part-1/11.webp"
-  ],
-  "part-2": [
-    "/guides/masterclass/part-2/01.webp",
-    "/guides/masterclass/part-2/02.webp",
-    "/guides/masterclass/part-2/03.webp",
-    "/guides/masterclass/part-2/04.webp",
-    "/guides/masterclass/part-2/05.webp",
-    "/guides/masterclass/part-2/06.webp",
-    "/guides/masterclass/part-2/07.webp",
-    "/guides/masterclass/part-2/08.webp",
-    "/guides/masterclass/part-2/09.webp",
-    "/guides/masterclass/part-2/10.webp"
-  ],
-  "part-3": [
-    "/guides/masterclass/part-3/01.webp",
-    "/guides/masterclass/part-3/02.webp",
-    "/guides/masterclass/part-3/03.webp",
-    "/guides/masterclass/part-3/04.webp",
-    "/guides/masterclass/part-3/05.webp",
-    "/guides/masterclass/part-3/06.webp",
-    "/guides/masterclass/part-3/07.webp",
-    "/guides/masterclass/part-3/08.webp",
-    "/guides/masterclass/part-3/09.webp",
-    "/guides/masterclass/part-3/10.webp",
-    "/guides/masterclass/part-3/11.webp",
-    "/guides/masterclass/part-3/12.webp",
-    "/guides/masterclass/part-3/13.webp"
-  ],
-  "part-4": [
-    "/guides/masterclass/part-4/01.webp",
-    "/guides/masterclass/part-4/02.webp",
-    "/guides/masterclass/part-4/03.webp",
-    "/guides/masterclass/part-4/04.webp",
-    "/guides/masterclass/part-4/05.webp",
-    "/guides/masterclass/part-4/06.webp",
-    "/guides/masterclass/part-4/07.webp",
-    "/guides/masterclass/part-4/08.webp",
-    "/guides/masterclass/part-4/09.webp",
-    "/guides/masterclass/part-4/10.webp"
-  ],
-  "part-5": [
-    "/guides/masterclass/part-5/01.webp",
-    "/guides/masterclass/part-5/02.webp",
-    "/guides/masterclass/part-5/03.webp",
-    "/guides/masterclass/part-5/04.webp",
-    "/guides/masterclass/part-5/05.webp",
-    "/guides/masterclass/part-5/06.webp",
-    "/guides/masterclass/part-5/07.webp",
-    "/guides/masterclass/part-5/08.webp",
-    "/guides/masterclass/part-5/09.webp",
-    "/guides/masterclass/part-5/10.webp",
-    "/guides/masterclass/part-5/11.webp",
-    "/guides/masterclass/part-5/12.webp",
-    "/guides/masterclass/part-5/13.webp"
-  ]
-}
-</file>
-
-<file path="src/lib/googleSignIn.js">
-import {
-  APP_OAUTH_LABEL,
-  assertAuthorizeUrlRedirectsToApp,
-  formatOAuthError,
-  getOAuthRedirectUrl,
-} from './oauthRedirect';
-
-/** Start Google OAuth and always show the account chooser. */
-export async function signInWithGoogleAccountPicker(supabase) {
-  const redirectTo = getOAuthRedirectUrl();
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo,
-      skipBrowserRedirect: true,
-      queryParams: {
-        prompt: 'select_account',
-      },
-    },
-  });
-
-  if (error) {
-    throw new Error(formatOAuthError(APP_OAUTH_LABEL, redirectTo, error.message));
-  }
-
-  if (!data?.url) {
-    throw new Error('Could not start Google sign-in.');
-  }
-
-  assertAuthorizeUrlRedirectsToApp(data.url, redirectTo, APP_OAUTH_LABEL);
-  window.location.assign(data.url);
-}
-</file>
-
 <file path="src/data/LawnPackData.js">
 // src/data/LawnPackData.js
 
@@ -3618,6 +3510,114 @@ export function getGranularRepeatDate(seasonKey, userLogs) {
   if (!loggedDate) return null;
 
   return addDaysToDateString(loggedDate, firstStep.granularRepeatDays);
+}
+</file>
+
+<file path="src/data/masterclassManifest.json">
+{
+  "part-1": [
+    "/guides/masterclass/part-1/01.webp",
+    "/guides/masterclass/part-1/02.webp",
+    "/guides/masterclass/part-1/03.webp",
+    "/guides/masterclass/part-1/04.webp",
+    "/guides/masterclass/part-1/05.webp",
+    "/guides/masterclass/part-1/06.webp",
+    "/guides/masterclass/part-1/07.webp",
+    "/guides/masterclass/part-1/08.webp",
+    "/guides/masterclass/part-1/09.webp",
+    "/guides/masterclass/part-1/10.webp",
+    "/guides/masterclass/part-1/11.webp"
+  ],
+  "part-2": [
+    "/guides/masterclass/part-2/01.webp",
+    "/guides/masterclass/part-2/02.webp",
+    "/guides/masterclass/part-2/03.webp",
+    "/guides/masterclass/part-2/04.webp",
+    "/guides/masterclass/part-2/05.webp",
+    "/guides/masterclass/part-2/06.webp",
+    "/guides/masterclass/part-2/07.webp",
+    "/guides/masterclass/part-2/08.webp",
+    "/guides/masterclass/part-2/09.webp",
+    "/guides/masterclass/part-2/10.webp"
+  ],
+  "part-3": [
+    "/guides/masterclass/part-3/01.webp",
+    "/guides/masterclass/part-3/02.webp",
+    "/guides/masterclass/part-3/03.webp",
+    "/guides/masterclass/part-3/04.webp",
+    "/guides/masterclass/part-3/05.webp",
+    "/guides/masterclass/part-3/06.webp",
+    "/guides/masterclass/part-3/07.webp",
+    "/guides/masterclass/part-3/08.webp",
+    "/guides/masterclass/part-3/09.webp",
+    "/guides/masterclass/part-3/10.webp",
+    "/guides/masterclass/part-3/11.webp",
+    "/guides/masterclass/part-3/12.webp",
+    "/guides/masterclass/part-3/13.webp"
+  ],
+  "part-4": [
+    "/guides/masterclass/part-4/01.webp",
+    "/guides/masterclass/part-4/02.webp",
+    "/guides/masterclass/part-4/03.webp",
+    "/guides/masterclass/part-4/04.webp",
+    "/guides/masterclass/part-4/05.webp",
+    "/guides/masterclass/part-4/06.webp",
+    "/guides/masterclass/part-4/07.webp",
+    "/guides/masterclass/part-4/08.webp",
+    "/guides/masterclass/part-4/09.webp",
+    "/guides/masterclass/part-4/10.webp"
+  ],
+  "part-5": [
+    "/guides/masterclass/part-5/01.webp",
+    "/guides/masterclass/part-5/02.webp",
+    "/guides/masterclass/part-5/03.webp",
+    "/guides/masterclass/part-5/04.webp",
+    "/guides/masterclass/part-5/05.webp",
+    "/guides/masterclass/part-5/06.webp",
+    "/guides/masterclass/part-5/07.webp",
+    "/guides/masterclass/part-5/08.webp",
+    "/guides/masterclass/part-5/09.webp",
+    "/guides/masterclass/part-5/10.webp",
+    "/guides/masterclass/part-5/11.webp",
+    "/guides/masterclass/part-5/12.webp",
+    "/guides/masterclass/part-5/13.webp"
+  ]
+}
+</file>
+
+<file path="src/lib/googleSignIn.js">
+import {
+  APP_OAUTH_LABEL,
+  assertAuthorizeUrlRedirectsToApp,
+  formatOAuthError,
+  getOAuthRedirectUrl,
+} from './oauthRedirect';
+
+/** Start Google OAuth and always show the account chooser. */
+export async function signInWithGoogleAccountPicker(supabase) {
+  const redirectTo = getOAuthRedirectUrl();
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo,
+      skipBrowserRedirect: true,
+      queryParams: {
+        prompt: 'select_account',
+      },
+    },
+  });
+
+  if (error) {
+    throw new Error(formatOAuthError(APP_OAUTH_LABEL, redirectTo, error.message));
+  }
+
+  if (!data?.url) {
+    throw new Error('Could not start Google sign-in.');
+  }
+
+  assertAuthorizeUrlRedirectsToApp(data.url, redirectTo, APP_OAUTH_LABEL);
+  window.location.assign(data.url);
 }
 </file>
 
@@ -4844,199 +4844,6 @@ export default defineConfig({
 });
 </file>
 
-<file path="src/components/lawn/LawnHub.jsx">
-import React from 'react';
-import { SEASONS } from '../../data/LawnPackData';
-import { formatSyncTimeAgo } from '../../utils/lawnDates';
-import { CalculatorIcon } from './LawnMaterials';
-
-/**
- * Hub home for sectioned themes.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-export default function LawnHub({ app }) {
-  const {
-    runFullCloudSync,
-    cloudSyncStatus,
-    lastCloudSyncAt,
-    setActiveScreen,
-    setActiveRoom,
-    mowingDue,
-    wateringDue,
-    verticutDue,
-    gypsumDue,
-    seedEstablishmentActive,
-    petLockoutActive,
-    springPackIncomplete,
-    incompleteSpringSteps,
-    currentSeason,
-    weatherStatusText,
-    weatherLocationLabel,
-  } = app;
-
-  const dueItems = [
-    mowingDue ? 'Mowing' : null,
-    wateringDue ? 'Watering' : null,
-    verticutDue ? 'Verticut' : null,
-    gypsumDue ? 'Gypsum' : null,
-  ].filter(Boolean);
-  const dueCount = dueItems.length;
-
-  const heroStatus = seedEstablishmentActive
-    ? {
-        title: 'Seed lock',
-        lede: 'Mowing paused while seed establishes.',
-        tone: 'alert',
-      }
-    : dueCount > 0
-      ? {
-          title: dueCount === 1 ? '1 task due' : `${dueCount} tasks due`,
-          lede: dueItems.join(' · '),
-          tone: 'alert',
-        }
-      : {
-          title: 'All clear',
-          lede: 'Nothing due right now.',
-          tone: 'ok',
-        };
-
-  const syncLabel =
-    cloudSyncStatus === 'pulling'
-      ? 'Pull…'
-      : cloudSyncStatus === 'pushing'
-        ? 'Push…'
-        : cloudSyncStatus === 'error'
-          ? 'Retry'
-          : cloudSyncStatus === 'idle'
-            ? 'Sync'
-            : null;
-
-  const rooms = [
-    {
-      id: 'maintenance',
-      title: 'Maintenance',
-      meta: dueCount > 0 ? `${dueCount} due` : seedEstablishmentActive ? 'Seed lock' : 'Up to date',
-      tone: dueCount > 0 || seedEstablishmentActive ? 'alert' : 'ok',
-      icon: '✂️',
-    },
-    {
-      id: 'seasonal',
-      title: 'Seasonal Pack',
-      meta: springPackIncomplete
-        ? `${incompleteSpringSteps.length} Spring left`
-        : SEASONS[currentSeason]?.name ?? 'Open',
-      tone: springPackIncomplete ? 'warn' : 'ok',
-      icon: '📋',
-    },
-  ];
-
-  return (
-    <div className="lawn-hub">
-      <header className={`lawn-hub__hero lawn-hub__hero--${heroStatus.tone}`}>
-        {dueCount > 0 || seedEstablishmentActive ? (
-          <button
-            type="button"
-            className="lawn-hub__hero-open"
-            onClick={() => setActiveRoom('maintenance')}
-          >
-            <span className="lawn-hub__hero-open-copy">
-              <span className="lawn-hub__kicker">Today</span>
-              <span className="lawn-hub__title">{heroStatus.title}</span>
-              <span className="lawn-hub__lede">{heroStatus.lede}</span>
-            </span>
-            <span className="lawn-hub__hero-open-icon" aria-hidden="true">
-              →
-            </span>
-            <span className="sr-only">Open Maintenance</span>
-          </button>
-        ) : (
-          <>
-            <p className="lawn-hub__kicker">Today</p>
-            <h2 className="lawn-hub__title">{heroStatus.title}</h2>
-            <p className="lawn-hub__lede">{heroStatus.lede}</p>
-          </>
-        )}
-      </header>
-
-      {(petLockoutActive || springPackIncomplete) && (
-        <div className="lawn-hub__notices" aria-live="polite">
-          {petLockoutActive && (
-            <p className="lawn-hub__notice lawn-hub__notice--alert">
-              Chemical drying — pets off the lawn for now.
-            </p>
-          )}
-          {springPackIncomplete && (
-            <p className="lawn-hub__notice lawn-hub__notice--warn">
-              Spring Pack still in progress — open Seasonal Pack to finish.
-            </p>
-          )}
-        </div>
-      )}
-
-      <section className="lawn-hub__weather" aria-label="Weather">
-        <p className="lawn-hub__weather-text">
-          {weatherLocationLabel}: {weatherStatusText}
-        </p>
-      </section>
-
-      <section className="lawn-hub__rooms" aria-label="Sections">
-        <div className="lawn-hub__room-grid">
-          {rooms.map((room) => (
-            <button
-              key={room.id}
-              type="button"
-              className={`lawn-hub__room lawn-hub__room--${room.tone}`}
-              onClick={() => setActiveRoom(room.id)}
-            >
-              <span className="lawn-hub__room-icon" aria-hidden="true">
-                {room.icon}
-              </span>
-              <span className="lawn-hub__room-copy">
-                <span className="lawn-hub__room-title">{room.title}</span>
-              </span>
-              <span className="lawn-hub__room-meta">{room.meta}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="lawn-hub__tools" aria-label="Tools">
-        <div className="lawn-hub__tool-grid">
-          <button
-            type="button"
-            onClick={() => void runFullCloudSync()}
-            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
-            className="lawn-hub__tool"
-            title={
-              cloudSyncStatus === 'synced' && lastCloudSyncAt
-                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
-                : 'Sync schedule to cloud'
-            }
-          >
-            <span aria-hidden="true">
-              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
-            </span>
-            <span>{syncLabel ?? 'Synced'}</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('materials')} className="lawn-hub__tool">
-            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
-            <span>Materials</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('guides')} className="lawn-hub__tool">
-            <span aria-hidden="true">📚</span>
-            <span>Guides</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('settings')} className="lawn-hub__tool">
-            <span aria-hidden="true">⚙️</span>
-            <span>Setup</span>
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-</file>
-
 <file path="src/components/lawn/LawnMainView.jsx">
 import React from 'react';
 import MaintenancePanel from './MaintenancePanel';
@@ -5738,6 +5545,219 @@ export default function LawnCareApp() {
           onClose={() => app.setEnlargedSprinkler(null)}
         />
       )}
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/lawn/LawnHub.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatSyncTimeAgo } from '../../utils/lawnDates';
+import { CalculatorIcon } from './LawnMaterials';
+
+/**
+ * Hub home for sectioned themes.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnHub({ app }) {
+  const {
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    setActiveScreen,
+    setActiveRoom,
+    setMaintenanceFocusTab,
+    mowingDue,
+    wateringDue,
+    verticutDue,
+    gypsumDue,
+    seedEstablishmentActive,
+    isDormantSeason,
+    isNatureProvidingFullSoak,
+    isVerticutSeason,
+    petLockoutActive,
+    springPackIncomplete,
+    incompleteSpringSteps,
+    currentSeason,
+    weatherStatusText,
+    weatherLocationLabel,
+  } = app;
+
+  /** @type {Array<'mowing' | 'watering' | 'verticut' | 'gypsum'>} */
+  const dueTabs = [
+    mowingDue && !isDormantSeason && !seedEstablishmentActive ? 'mowing' : null,
+    wateringDue && !isDormantSeason && !isNatureProvidingFullSoak ? 'watering' : null,
+    verticutDue && isVerticutSeason ? 'verticut' : null,
+    gypsumDue ? 'gypsum' : null,
+  ].filter(Boolean);
+  const dueCount = dueTabs.length;
+  const dueLabels = {
+    mowing: 'Mowing',
+    watering: 'Watering',
+    verticut: 'Verticut',
+    gypsum: 'Gypsum',
+  };
+  const dueItems = dueTabs.map((tab) => dueLabels[tab]);
+
+  const openMaintenance = (tab = dueTabs[0] ?? null) => {
+    if (tab) setMaintenanceFocusTab(tab);
+    else if (seedEstablishmentActive) setMaintenanceFocusTab('mowing');
+    setActiveRoom('maintenance');
+  };
+
+  const heroStatus = seedEstablishmentActive
+    ? {
+        title: 'Seed lock',
+        lede: 'Mowing paused while seed establishes.',
+        tone: 'alert',
+      }
+    : dueCount > 0
+      ? {
+          title: dueCount === 1 ? '1 task due' : `${dueCount} tasks due`,
+          lede: dueItems.join(' · '),
+          tone: 'alert',
+        }
+      : {
+          title: 'All clear',
+          lede: 'Nothing due right now.',
+          tone: 'ok',
+        };
+
+  const syncLabel =
+    cloudSyncStatus === 'pulling'
+      ? 'Pull…'
+      : cloudSyncStatus === 'pushing'
+        ? 'Push…'
+        : cloudSyncStatus === 'error'
+          ? 'Retry'
+          : cloudSyncStatus === 'idle'
+            ? 'Sync'
+            : null;
+
+  const rooms = [
+    {
+      id: 'maintenance',
+      title: 'Maintenance',
+      meta: dueCount > 0 ? `${dueCount} due` : seedEstablishmentActive ? 'Seed lock' : 'Up to date',
+      tone: dueCount > 0 || seedEstablishmentActive ? 'alert' : 'ok',
+      icon: '✂️',
+    },
+    {
+      id: 'seasonal',
+      title: 'Seasonal Pack',
+      meta: springPackIncomplete
+        ? `${incompleteSpringSteps.length} Spring left`
+        : SEASONS[currentSeason]?.name ?? 'Open',
+      tone: springPackIncomplete ? 'warn' : 'ok',
+      icon: '📋',
+    },
+  ];
+
+  return (
+    <div className="lawn-hub">
+      <header className={`lawn-hub__hero lawn-hub__hero--${heroStatus.tone}`}>
+        {dueCount > 0 || seedEstablishmentActive ? (
+          <button
+            type="button"
+            className="lawn-hub__hero-open"
+            onClick={() => openMaintenance()}
+          >
+            <span className="lawn-hub__hero-open-copy">
+              <span className="lawn-hub__kicker">Today</span>
+              <span className="lawn-hub__title">{heroStatus.title}</span>
+              <span className="lawn-hub__lede">{heroStatus.lede}</span>
+            </span>
+            <span className="lawn-hub__hero-open-icon" aria-hidden="true">
+              →
+            </span>
+            <span className="sr-only">Open Maintenance</span>
+          </button>
+        ) : (
+          <>
+            <p className="lawn-hub__kicker">Today</p>
+            <h2 className="lawn-hub__title">{heroStatus.title}</h2>
+            <p className="lawn-hub__lede">{heroStatus.lede}</p>
+          </>
+        )}
+      </header>
+
+      {(petLockoutActive || springPackIncomplete) && (
+        <div className="lawn-hub__notices" aria-live="polite">
+          {petLockoutActive && (
+            <p className="lawn-hub__notice lawn-hub__notice--alert">
+              Chemical drying — pets off the lawn for now.
+            </p>
+          )}
+          {springPackIncomplete && (
+            <p className="lawn-hub__notice lawn-hub__notice--warn">
+              Spring Pack still in progress — open Seasonal Pack to finish.
+            </p>
+          )}
+        </div>
+      )}
+
+      <section className="lawn-hub__weather" aria-label="Weather">
+        <p className="lawn-hub__weather-text">
+          {weatherLocationLabel}: {weatherStatusText}
+        </p>
+      </section>
+
+      <section className="lawn-hub__rooms" aria-label="Sections">
+        <div className="lawn-hub__room-grid">
+          {rooms.map((room) => (
+            <button
+              key={room.id}
+              type="button"
+              className={`lawn-hub__room lawn-hub__room--${room.tone}`}
+              onClick={() =>
+                room.id === 'maintenance' ? openMaintenance() : setActiveRoom(room.id)
+              }
+            >
+              <span className="lawn-hub__room-icon" aria-hidden="true">
+                {room.icon}
+              </span>
+              <span className="lawn-hub__room-copy">
+                <span className="lawn-hub__room-title">{room.title}</span>
+              </span>
+              <span className="lawn-hub__room-meta">{room.meta}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="lawn-hub__tools" aria-label="Tools">
+        <div className="lawn-hub__tool-grid">
+          <button
+            type="button"
+            onClick={() => void runFullCloudSync()}
+            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
+            className="lawn-hub__tool"
+            title={
+              cloudSyncStatus === 'synced' && lastCloudSyncAt
+                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
+                : 'Sync schedule to cloud'
+            }
+          >
+            <span aria-hidden="true">
+              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
+            </span>
+            <span>{syncLabel ?? 'Synced'}</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('materials')} className="lawn-hub__tool">
+            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
+            <span>Materials</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('guides')} className="lawn-hub__tool">
+            <span aria-hidden="true">📚</span>
+            <span>Guides</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('settings')} className="lawn-hub__tool">
+            <span aria-hidden="true">⚙️</span>
+            <span>Setup</span>
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -7097,15 +7117,26 @@ export default function MaintenancePanel({ app }) {
     setLastVerticutDate,
   } = app;
 
+  const { maintenanceFocusTab, setMaintenanceFocusTab } = app;
+
   const [activeItemTab, setActiveItemTab] = useState(
     /** @type {MaintenanceItemTab} */ (
-      resolveMaintenanceTabFromFocus(getFocusFromUrl()) ?? 'mowing'
+      maintenanceFocusTab ?? resolveMaintenanceTabFromFocus(getFocusFromUrl()) ?? 'mowing'
     )
   );
 
   useEffect(() => {
+    if (!maintenanceFocusTab) return;
+    setActiveItemTab(maintenanceFocusTab);
+    setMaintenanceFocusTab(null);
+  }, [maintenanceFocusTab, setMaintenanceFocusTab]);
+
+  useEffect(() => {
+    if (maintenanceFocusTab) return;
     const fromFocus = resolveMaintenanceTabFromFocus(getFocusFromUrl());
     if (fromFocus) setActiveItemTab(fromFocus);
+    // Mount-only URL deep link; hub passes maintenanceFocusTab instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount read
   }, []);
 
   const mowingDaysOverdue =
@@ -9087,6 +9118,556 @@ export function compileAllLawnTasks(input) {
       recentWateringSkips,
     }),
   ];
+}
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <script>
+      (function () {
+        var key = 'lawn-app-sw-reset-v8';
+        try {
+          if (localStorage.getItem(key) === '1') return;
+          localStorage.setItem(key, '1');
+        } catch (e) {
+          return;
+        }
+        var reloadAfterReset = function () {
+          window.location.reload();
+        };
+        var clearCaches = function () {
+          if (!('caches' in window)) {
+            reloadAfterReset();
+            return;
+          }
+          caches
+            .keys()
+            .then(function (keys) {
+              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
+            })
+            .finally(reloadAfterReset);
+        };
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (regs) {
+              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+            })
+            .then(clearCaches)
+            .catch(clearCaches);
+        } else {
+          clearCaches();
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;600;700;800&family=Figtree:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&family=Literata:opsz,wght@7..72,600;7..72,700&family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700;800&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>The Lawn Pack Companion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+</file>
+
+<file path="src/services/lawnScheduleEngine.js">
+import { addDaysToDateString, makeStepKey } from '../data/LawnPackData.js';
+import { pickLatestIsoDate } from './lawnMaintenanceSync.js';
+import {
+  RECENT_PAST_RAIN_DAYS,
+  RECENT_RAIN_WET_SOIL_MM,
+  SOAK_DEPTH_MM,
+} from './lawnWeather.js';
+
+export const SEED_ESTABLISHMENT_DAYS = 21;
+/** Days after seed lock ends when mowing uses a gentler interval and height steps down gradually. */
+export const SEED_RECOVERY_WINDOW_DAYS = 42;
+export const SEED_RECOVERY_MOWING_DAYS = 7;
+export const VERTICUT_INTERVAL_DAYS = 14;
+export const VERTICUT_RENOVATION_HOLD_DAYS = 42;
+export const VERTICUT_HEAT_THRESHOLD_C = 25;
+export const VERTICUT_SEASON_START = '04-01';
+export const VERTICUT_SEASON_END = '09-30';
+export const VERTICUT_BLADE_HEIGHT_RULE =
+  'Set blades 1-2mm below current mowing height (must remain above soil line).';
+export const VERTICUT_MOW_PAIRING_NOTE =
+  'Verticut first to lift weeds/runners, then follow up immediately with a regular mow to clean up the debris.';
+
+export function getTodayLondon() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+}
+
+export function isDormantSeasonForDate(todayStr) {
+  const month = Number(todayStr.slice(5, 7));
+  return month === 12 || month === 1 || month === 2;
+}
+
+/** @param {string} todayStr */
+export function isVerticutSeasonForDate(todayStr) {
+  const monthDay = todayStr.slice(5);
+  return monthDay >= VERTICUT_SEASON_START && monthDay <= VERTICUT_SEASON_END;
+}
+
+/**
+ * @param {string} todayStr
+ * @param {Record<string, string>} userLogs
+ */
+export function getVerticutRenovationState(todayStr, userLogs) {
+  const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
+  const springPrepDate = userLogs[makeStepKey('SPRING', 'prep')] ?? null;
+  const renovationDate = pickLatestIsoDate(springSeedDate, springPrepDate);
+
+  if (!renovationDate) {
+    return {
+      renovationDate: null,
+      renovationHoldActive: false,
+      verticutLockedUntilIso: null,
+    };
+  }
+
+  const daysSinceRenovation = daysBetweenIso(todayStr, renovationDate);
+  const renovationHoldActive = daysSinceRenovation < VERTICUT_RENOVATION_HOLD_DAYS;
+  const verticutLockedUntilIso = renovationHoldActive
+    ? addDaysToDateString(renovationDate, VERTICUT_RENOVATION_HOLD_DAYS)
+    : null;
+
+  return { renovationDate, renovationHoldActive, verticutLockedUntilIso };
+}
+
+/**
+ * Pause verticutting during extreme heat or drought stress.
+ * @param {number | null} currentSoilTemp
+ * @param {number} forecastedRainSumNearTerm
+ * @param {number} [recentPastRainSum]
+ */
+export function isVerticutHeatDroughtPaused(
+  currentSoilTemp,
+  forecastedRainSumNearTerm,
+  recentPastRainSum = 0
+) {
+  if (currentSoilTemp !== null && currentSoilTemp >= VERTICUT_HEAT_THRESHOLD_C) {
+    return true;
+  }
+
+  return (
+    currentSoilTemp !== null &&
+    currentSoilTemp >= 22 &&
+    forecastedRainSumNearTerm < 2 &&
+    recentPastRainSum < RECENT_RAIN_WET_SOIL_MM
+  );
+}
+
+/**
+ * @param {string} todayStr
+ * @param {string | null} springSeedDate
+ * @param {number} [establishmentExtraDays]
+ */
+export function getSeedState(todayStr, springSeedDate, establishmentExtraDays = 0) {
+  const daysSinceSeed = springSeedDate ? daysBetweenIso(todayStr, springSeedDate) : null;
+  const totalEstablishmentDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
+  const seedEstablishmentActive =
+    springSeedDate !== null &&
+    daysSinceSeed !== null &&
+    daysSinceSeed <= totalEstablishmentDays;
+  const mowingLockedUntilIso =
+    seedEstablishmentActive && springSeedDate
+      ? addDaysToDateString(springSeedDate, totalEstablishmentDays)
+      : null;
+  return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
+}
+
+/**
+ * After the no-mow lock ends, keep a gentler weekly cadence while overseed roots mature.
+ * Window: day (SEED_ESTABLISHMENT_DAYS + 1) through day (SEED_RECOVERY_WINDOW_DAYS - 1).
+ * @param {string} todayStr
+ * @param {string | null} springSeedDate
+ * @param {number} [establishmentExtraDays]
+ */
+export function getSeedRecoveryState(todayStr, springSeedDate, establishmentExtraDays = 0) {
+  if (!springSeedDate) {
+    return {
+      seedRecoveryActive: false,
+      daysSinceSeed: null,
+      recoveryDaysRemaining: 0,
+      recoveryEndsOnIso: null,
+    };
+  }
+
+  const daysSinceSeed = daysBetweenIso(todayStr, springSeedDate);
+  const lockEndsAfterDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
+  const recoveryEndsAfterDays = SEED_RECOVERY_WINDOW_DAYS + establishmentExtraDays;
+  const seedRecoveryActive =
+    daysSinceSeed > lockEndsAfterDays && daysSinceSeed < recoveryEndsAfterDays;
+  const recoveryEndsOnIso = addDaysToDateString(springSeedDate, recoveryEndsAfterDays);
+  const recoveryDaysRemaining = seedRecoveryActive
+    ? Math.max(0, recoveryEndsAfterDays - daysSinceSeed)
+    : 0;
+
+  return {
+    seedRecoveryActive,
+    daysSinceSeed,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
+  };
+}
+
+/**
+ * Growth-rate interval from soil temperature alone (ignores post-seed recovery).
+ * @param {number | null} currentSoilTemp
+ */
+export function getGrowthRateMowingDays(currentSoilTemp) {
+  const temp = currentSoilTemp;
+  if (temp !== null && temp < 8) return 14;
+  if (temp !== null && temp < 12) return 10;
+  if (temp !== null && temp >= 15) return 5;
+  return 7;
+}
+
+function daysBetweenIso(todayStr, pastIso) {
+  const start = new Date(`${pastIso}T12:00:00`);
+  const end = new Date(`${todayStr}T12:00:00`);
+  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** @param {string} isoDate */
+function formatShortUkDate(isoDate) {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const dd = String(day).padStart(2, '0');
+  const mm = String(month).padStart(2, '0');
+  return `${dd}/${mm}/${year}`;
+}
+
+/**
+ * Mowing interval from growth rate (soil temperature) — not rainfall.
+ * Rain only affects when it is practical to mow, not whether grass needs cutting.
+ * Post-overseed recovery overrides to a gentler weekly cadence.
+ * @param {number | null} currentSoilTemp
+ * @param {string | null} springSeedDate
+ * @param {string} todayStr
+ */
+export function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
+  const { seedRecoveryActive } = getSeedRecoveryState(todayStr, springSeedDate);
+  if (seedRecoveryActive) return SEED_RECOVERY_MOWING_DAYS;
+  return getGrowthRateMowingDays(currentSoilTemp);
+}
+
+/**
+ * Optional note when rain makes today a poor mowing window — does not change due date.
+ * @param {number} forecastedRainSumNearTerm
+ * @param {number} [recentPastRainSum]
+ */
+export function getMowingWeatherAdvisory(forecastedRainSumNearTerm, recentPastRainSum = 0) {
+  if (forecastedRainSumNearTerm >= 3) {
+    return `${forecastedRainSumNearTerm.toFixed(1)}mm rain forecast soon — still cut when due; pick the next dry window`;
+  }
+  if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) {
+    return 'Lawn may still be damp — mow when due and the surface is dry enough';
+  }
+  return null;
+}
+
+/**
+ * @param {number} forecastedRainSumNearTerm
+ * @param {number | null} currentSoilTemp
+ * @param {string | null} springSeedDate
+ * @param {boolean} seedEstablishmentActive
+ * @param {string} todayStr
+ * @param {number} [recentPastRainSum]
+ */
+export function getDynamicWateringDays(
+  forecastedRainSumNearTerm,
+  currentSoilTemp,
+  springSeedDate,
+  seedEstablishmentActive,
+  todayStr,
+  recentPastRainSum = 0
+) {
+  const temp = currentSoilTemp;
+  const rain = forecastedRainSumNearTerm;
+
+  if (seedEstablishmentActive) return 1;
+
+  const { seedRecoveryActive } = getSeedRecoveryState(todayStr, springSeedDate);
+  if (seedRecoveryActive) return 2;
+
+  if (recentPastRainSum >= 8) return 5;
+  if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) return 4;
+  if (temp !== null && temp > 20 && rain < 2) return 2;
+  if (rain >= 4) return 5;
+  if (rain >= 1.5) return 4;
+  if (temp !== null && temp < 12) return 5;
+  return 3;
+}
+
+/**
+ * @param {Object} input
+ * @param {number} input.forecastedRainSumNearTerm
+ * @param {number} [input.forecastedRainSumWeek]
+ * @param {number} [input.recentPastRainSum]
+ * @param {number | null} input.currentSoilTemp
+ * @param {string | null} input.springSeedDate
+ * @param {boolean} input.seedEstablishmentActive
+ * @param {string} input.todayStr
+ * @param {Record<string, string>} [input.userLogs]
+ */
+export function getScheduleReason(input) {
+  const {
+    forecastedRainSumNearTerm,
+    forecastedRainSumWeek = forecastedRainSumNearTerm,
+    recentPastRainSum = 0,
+    currentSoilTemp,
+    springSeedDate,
+    seedEstablishmentActive,
+    todayStr,
+    userLogs = {},
+  } = input;
+
+  const temp = currentSoilTemp;
+  const rainNear = forecastedRainSumNearTerm;
+  const mowReasons = [];
+  const waterReasons = [];
+  const verticutReasons = [];
+  const {
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
+  } = getSeedRecoveryState(todayStr, springSeedDate);
+
+  if (seedRecoveryActive && recoveryEndsOnIso) {
+    const endsLabel = formatShortUkDate(recoveryEndsOnIso);
+    const dayWord = recoveryDaysRemaining === 1 ? 'day' : 'days';
+    const growthRateDays = getGrowthRateMowingDays(temp);
+    const warmWouldCutMoreOften = growthRateDays < SEED_RECOVERY_MOWING_DAYS;
+
+    mowReasons.push(
+      `spring overseed still establishing — keep weekly cuts for ${recoveryDaysRemaining} more ${dayWord} (until ${endsLabel})`
+    );
+    if (warmWouldCutMoreOften) {
+      mowReasons.push(
+        `warm soil would normally mean every ${growthRateDays} days, but hold weekly so new roots aren't stressed`
+      );
+    }
+    mowReasons.push('gradually lower height each cut');
+    waterReasons.push('enhanced watering during turf recovery');
+  }
+
+  if (seedEstablishmentActive) {
+    waterReasons.push('daily watering during seed establishment');
+  }
+
+  // During recovery the weekly cadence is intentional — don't also imply soil temp sets the interval.
+  if (!seedRecoveryActive) {
+    if (temp !== null && temp >= 15) {
+      mowReasons.push(`${temp.toFixed(0)}°C soil – active growth`);
+    } else if (temp !== null && temp < 10) {
+      mowReasons.push(`${temp.toFixed(0)}°C soil – slower growth`);
+    }
+  }
+
+  if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) {
+    waterReasons.push(
+      `${recentPastRainSum.toFixed(1)}mm rain in last ${RECENT_PAST_RAIN_DAYS} days – soil still damp`
+    );
+  } else if (rainNear >= 4) {
+    waterReasons.push(`${rainNear.toFixed(1)}mm rain next 3 days – reduced need`);
+  } else if (temp !== null && temp > 20 && rainNear < 2) {
+    waterReasons.push(`${temp.toFixed(0)}°C soil & dry forecast – increased demand`);
+  }
+
+  if (forecastedRainSumWeek > rainNear + 5 && rainNear < SOAK_DEPTH_MM && recentPastRainSum < RECENT_RAIN_WET_SOIL_MM) {
+    waterReasons.push(
+      `${forecastedRainSumWeek.toFixed(0)}mm later this week – not pausing watering yet`
+    );
+  }
+
+  if (!isVerticutSeasonForDate(todayStr)) {
+    verticutReasons.push('outside active season (Apr 1 – Sep 30)');
+  } else if (temp !== null && temp >= VERTICUT_HEAT_THRESHOLD_C) {
+    verticutReasons.push(
+      `${temp.toFixed(0)}°C soil – paused to protect turf from heat stress`
+    );
+  } else if (
+    temp !== null &&
+    temp >= 22 &&
+    rainNear < 2 &&
+    recentPastRainSum < RECENT_RAIN_WET_SOIL_MM
+  ) {
+    verticutReasons.push('drought-risk conditions – paused until cooler or wetter weather');
+  }
+
+  const { renovationHoldActive } = getVerticutRenovationState(todayStr, userLogs);
+  if (renovationHoldActive) {
+    verticutReasons.push('post-renovation hold – root system still maturing (6–8 weeks)');
+  }
+
+  return {
+    mow: mowReasons.length > 0 ? mowReasons.join(', ') : null,
+    water: waterReasons.length > 0 ? waterReasons.join(', ') : null,
+    verticut: verticutReasons.length > 0 ? verticutReasons.join(', ') : null,
+  };
+}
+
+/**
+ * @param {Object} input
+ * @param {string} input.todayStr
+ * @param {Record<string, string>} input.userLogs
+ * @param {number} input.forecastedRainSumNearTerm
+ * @param {number} [input.recentPastRainSum]
+ * @param {number | null} input.currentSoilTemp
+ * @param {boolean} input.isNatureProvidingFullSoak - today-only full soak (not future forecast)
+ * @param {boolean} [input.soilRecentlyWetToday]
+ * @param {string | null} input.lastMowedDate
+ * @param {string | null} input.lastWateredDate
+ * @param {string | null} input.lastVerticutDate
+ * @param {number} [input.establishmentExtraDays]
+ */
+export function buildMaintenanceSchedule(input) {
+  const {
+    todayStr,
+    userLogs,
+    forecastedRainSumNearTerm,
+    recentPastRainSum = 0,
+    currentSoilTemp,
+    isNatureProvidingFullSoak,
+    soilRecentlyWetToday = null,
+    lastMowedDate,
+    lastWateredDate,
+    lastVerticutDate,
+    establishmentExtraDays = 0,
+  } = input;
+
+  const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
+  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(
+    todayStr,
+    springSeedDate,
+    establishmentExtraDays
+  );
+  const {
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
+  } = getSeedRecoveryState(todayStr, springSeedDate, establishmentExtraDays);
+  const isDormantSeason = isDormantSeasonForDate(todayStr);
+
+  const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
+  const dynamicWateringDays = getDynamicWateringDays(
+    forecastedRainSumNearTerm,
+    currentSoilTemp,
+    springSeedDate,
+    seedEstablishmentActive,
+    todayStr,
+    recentPastRainSum
+  );
+
+  // The Spring prep step (Step 2) requires scalping the lawn first, so logging it
+  // counts as a mow. Use whichever date is more recent: last logged mow or scarify date.
+  const springScarifyDate = userLogs[makeStepKey('SPRING', 'prep')] ?? null;
+  const wasScalped =
+    springScarifyDate !== null &&
+    (lastMowedDate === null || springScarifyDate >= lastMowedDate);
+  const effectiveLastMowedDate =
+    lastMowedDate && springScarifyDate
+      ? lastMowedDate > springScarifyDate ? lastMowedDate : springScarifyDate
+      : lastMowedDate ?? springScarifyDate ?? null;
+
+  // After a scalp cut the grass is much shorter than usual (setting 1 vs standard setting 3),
+  // so it needs longer to recover before the next proper cut. Use at least 10 days.
+  const effectiveMowingDays = wasScalped
+    ? Math.max(dynamicMowingDays, 10)
+    : dynamicMowingDays;
+
+  const mowingNextDueIso = effectiveLastMowedDate
+    ? addDaysToDateString(effectiveLastMowedDate, effectiveMowingDays)
+    : null;
+
+  // If rain has recently soaked the soil, treat today as the effective watering date so
+  // the next-due calculation counts forward from now rather than from the last manual water.
+  // Without this, when rain clears the task immediately reappears overdue.
+  const soilRecentlyWet =
+    typeof soilRecentlyWetToday === 'boolean'
+      ? soilRecentlyWetToday
+      : recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
+  const effectiveLastWateredDate =
+    !seedEstablishmentActive && (isNatureProvidingFullSoak || soilRecentlyWet)
+      ? todayStr
+      : lastWateredDate;
+  let wateringNextDueIso = effectiveLastWateredDate
+    ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays)
+    : null;
+
+  if (wateringNextDueIso && wateringNextDueIso < todayStr) {
+    wateringNextDueIso = todayStr;
+  }
+
+  const isVerticutSeason = isVerticutSeasonForDate(todayStr);
+  const { renovationHoldActive, verticutLockedUntilIso } = getVerticutRenovationState(
+    todayStr,
+    userLogs
+  );
+  const verticutHeatDroughtPaused = isVerticutHeatDroughtPaused(
+    currentSoilTemp,
+    forecastedRainSumNearTerm,
+    recentPastRainSum
+  );
+
+  const verticutNaturalNextDueIso = lastVerticutDate
+    ? addDaysToDateString(lastVerticutDate, VERTICUT_INTERVAL_DAYS)
+    : mowingNextDueIso;
+
+  const verticutIntervalElapsed =
+    lastVerticutDate === null ||
+    daysBetweenIso(todayStr, lastVerticutDate) >= VERTICUT_INTERVAL_DAYS;
+
+  let verticutNextDueIso = null;
+  let verticutPairedWithMow = false;
+
+  if (isVerticutSeason && !renovationHoldActive && !verticutHeatDroughtPaused) {
+    if (verticutIntervalElapsed) {
+      verticutNextDueIso = mowingNextDueIso ?? verticutNaturalNextDueIso ?? todayStr;
+      verticutPairedWithMow = Boolean(mowingNextDueIso);
+    } else if (verticutNaturalNextDueIso) {
+      verticutNextDueIso = verticutNaturalNextDueIso;
+    }
+  }
+
+  return {
+    isDormantSeason,
+    isNatureProvidingFullSoak,
+    seedEstablishmentActive,
+    seedRecoveryActive,
+    recoveryDaysRemaining,
+    recoveryEndsOnIso,
+    mowingLockedUntilIso,
+    mowingNextDueIso,
+    wateringNextDueIso,
+    dynamicMowingDays,
+    dynamicWateringDays,
+    isVerticutSeason,
+    renovationHoldActive,
+    verticutLockedUntilIso,
+    verticutHeatDroughtPaused,
+    verticutNextDueIso,
+    verticutPairedWithMow,
+    verticutIntervalElapsed,
+  };
 }
 </file>
 
@@ -11229,556 +11810,6 @@ export function compileAllLawnTasks(input) {
 }
 </file>
 
-<file path="index.html">
-<!doctype html>
-<html lang="en-GB">
-  <head>
-    <script>
-      (function () {
-        var key = 'lawn-app-sw-reset-v8';
-        try {
-          if (localStorage.getItem(key) === '1') return;
-          localStorage.setItem(key, '1');
-        } catch (e) {
-          return;
-        }
-        var reloadAfterReset = function () {
-          window.location.reload();
-        };
-        var clearCaches = function () {
-          if (!('caches' in window)) {
-            reloadAfterReset();
-            return;
-          }
-          caches
-            .keys()
-            .then(function (keys) {
-              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
-            })
-            .finally(reloadAfterReset);
-        };
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker
-            .getRegistrations()
-            .then(function (regs) {
-              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
-            })
-            .then(clearCaches)
-            .catch(clearCaches);
-        } else {
-          clearCaches();
-        }
-      })();
-    </script>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#14532d" />
-    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:wght@400;600;700;800&family=Figtree:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&family=Literata:opsz,wght@7..72,600;7..72,700&family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700;800&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>The Lawn Pack Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-</file>
-
-<file path="src/services/lawnScheduleEngine.js">
-import { addDaysToDateString, makeStepKey } from '../data/LawnPackData.js';
-import { pickLatestIsoDate } from './lawnMaintenanceSync.js';
-import {
-  RECENT_PAST_RAIN_DAYS,
-  RECENT_RAIN_WET_SOIL_MM,
-  SOAK_DEPTH_MM,
-} from './lawnWeather.js';
-
-export const SEED_ESTABLISHMENT_DAYS = 21;
-/** Days after seed lock ends when mowing uses a gentler interval and height steps down gradually. */
-export const SEED_RECOVERY_WINDOW_DAYS = 42;
-export const SEED_RECOVERY_MOWING_DAYS = 7;
-export const VERTICUT_INTERVAL_DAYS = 14;
-export const VERTICUT_RENOVATION_HOLD_DAYS = 42;
-export const VERTICUT_HEAT_THRESHOLD_C = 25;
-export const VERTICUT_SEASON_START = '04-01';
-export const VERTICUT_SEASON_END = '09-30';
-export const VERTICUT_BLADE_HEIGHT_RULE =
-  'Set blades 1-2mm below current mowing height (must remain above soil line).';
-export const VERTICUT_MOW_PAIRING_NOTE =
-  'Verticut first to lift weeds/runners, then follow up immediately with a regular mow to clean up the debris.';
-
-export function getTodayLondon() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
-}
-
-export function isDormantSeasonForDate(todayStr) {
-  const month = Number(todayStr.slice(5, 7));
-  return month === 12 || month === 1 || month === 2;
-}
-
-/** @param {string} todayStr */
-export function isVerticutSeasonForDate(todayStr) {
-  const monthDay = todayStr.slice(5);
-  return monthDay >= VERTICUT_SEASON_START && monthDay <= VERTICUT_SEASON_END;
-}
-
-/**
- * @param {string} todayStr
- * @param {Record<string, string>} userLogs
- */
-export function getVerticutRenovationState(todayStr, userLogs) {
-  const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
-  const springPrepDate = userLogs[makeStepKey('SPRING', 'prep')] ?? null;
-  const renovationDate = pickLatestIsoDate(springSeedDate, springPrepDate);
-
-  if (!renovationDate) {
-    return {
-      renovationDate: null,
-      renovationHoldActive: false,
-      verticutLockedUntilIso: null,
-    };
-  }
-
-  const daysSinceRenovation = daysBetweenIso(todayStr, renovationDate);
-  const renovationHoldActive = daysSinceRenovation < VERTICUT_RENOVATION_HOLD_DAYS;
-  const verticutLockedUntilIso = renovationHoldActive
-    ? addDaysToDateString(renovationDate, VERTICUT_RENOVATION_HOLD_DAYS)
-    : null;
-
-  return { renovationDate, renovationHoldActive, verticutLockedUntilIso };
-}
-
-/**
- * Pause verticutting during extreme heat or drought stress.
- * @param {number | null} currentSoilTemp
- * @param {number} forecastedRainSumNearTerm
- * @param {number} [recentPastRainSum]
- */
-export function isVerticutHeatDroughtPaused(
-  currentSoilTemp,
-  forecastedRainSumNearTerm,
-  recentPastRainSum = 0
-) {
-  if (currentSoilTemp !== null && currentSoilTemp >= VERTICUT_HEAT_THRESHOLD_C) {
-    return true;
-  }
-
-  return (
-    currentSoilTemp !== null &&
-    currentSoilTemp >= 22 &&
-    forecastedRainSumNearTerm < 2 &&
-    recentPastRainSum < RECENT_RAIN_WET_SOIL_MM
-  );
-}
-
-/**
- * @param {string} todayStr
- * @param {string | null} springSeedDate
- * @param {number} [establishmentExtraDays]
- */
-export function getSeedState(todayStr, springSeedDate, establishmentExtraDays = 0) {
-  const daysSinceSeed = springSeedDate ? daysBetweenIso(todayStr, springSeedDate) : null;
-  const totalEstablishmentDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
-  const seedEstablishmentActive =
-    springSeedDate !== null &&
-    daysSinceSeed !== null &&
-    daysSinceSeed <= totalEstablishmentDays;
-  const mowingLockedUntilIso =
-    seedEstablishmentActive && springSeedDate
-      ? addDaysToDateString(springSeedDate, totalEstablishmentDays)
-      : null;
-  return { springSeedDate, seedEstablishmentActive, mowingLockedUntilIso };
-}
-
-/**
- * After the no-mow lock ends, keep a gentler weekly cadence while overseed roots mature.
- * Window: day (SEED_ESTABLISHMENT_DAYS + 1) through day (SEED_RECOVERY_WINDOW_DAYS - 1).
- * @param {string} todayStr
- * @param {string | null} springSeedDate
- * @param {number} [establishmentExtraDays]
- */
-export function getSeedRecoveryState(todayStr, springSeedDate, establishmentExtraDays = 0) {
-  if (!springSeedDate) {
-    return {
-      seedRecoveryActive: false,
-      daysSinceSeed: null,
-      recoveryDaysRemaining: 0,
-      recoveryEndsOnIso: null,
-    };
-  }
-
-  const daysSinceSeed = daysBetweenIso(todayStr, springSeedDate);
-  const lockEndsAfterDays = SEED_ESTABLISHMENT_DAYS + establishmentExtraDays;
-  const recoveryEndsAfterDays = SEED_RECOVERY_WINDOW_DAYS + establishmentExtraDays;
-  const seedRecoveryActive =
-    daysSinceSeed > lockEndsAfterDays && daysSinceSeed < recoveryEndsAfterDays;
-  const recoveryEndsOnIso = addDaysToDateString(springSeedDate, recoveryEndsAfterDays);
-  const recoveryDaysRemaining = seedRecoveryActive
-    ? Math.max(0, recoveryEndsAfterDays - daysSinceSeed)
-    : 0;
-
-  return {
-    seedRecoveryActive,
-    daysSinceSeed,
-    recoveryDaysRemaining,
-    recoveryEndsOnIso,
-  };
-}
-
-/**
- * Growth-rate interval from soil temperature alone (ignores post-seed recovery).
- * @param {number | null} currentSoilTemp
- */
-export function getGrowthRateMowingDays(currentSoilTemp) {
-  const temp = currentSoilTemp;
-  if (temp !== null && temp < 8) return 14;
-  if (temp !== null && temp < 12) return 10;
-  if (temp !== null && temp >= 15) return 5;
-  return 7;
-}
-
-function daysBetweenIso(todayStr, pastIso) {
-  const start = new Date(`${pastIso}T12:00:00`);
-  const end = new Date(`${todayStr}T12:00:00`);
-  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-/** @param {string} isoDate */
-function formatShortUkDate(isoDate) {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  const dd = String(day).padStart(2, '0');
-  const mm = String(month).padStart(2, '0');
-  return `${dd}/${mm}/${year}`;
-}
-
-/**
- * Mowing interval from growth rate (soil temperature) — not rainfall.
- * Rain only affects when it is practical to mow, not whether grass needs cutting.
- * Post-overseed recovery overrides to a gentler weekly cadence.
- * @param {number | null} currentSoilTemp
- * @param {string | null} springSeedDate
- * @param {string} todayStr
- */
-export function getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr) {
-  const { seedRecoveryActive } = getSeedRecoveryState(todayStr, springSeedDate);
-  if (seedRecoveryActive) return SEED_RECOVERY_MOWING_DAYS;
-  return getGrowthRateMowingDays(currentSoilTemp);
-}
-
-/**
- * Optional note when rain makes today a poor mowing window — does not change due date.
- * @param {number} forecastedRainSumNearTerm
- * @param {number} [recentPastRainSum]
- */
-export function getMowingWeatherAdvisory(forecastedRainSumNearTerm, recentPastRainSum = 0) {
-  if (forecastedRainSumNearTerm >= 3) {
-    return `${forecastedRainSumNearTerm.toFixed(1)}mm rain forecast soon — still cut when due; pick the next dry window`;
-  }
-  if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) {
-    return 'Lawn may still be damp — mow when due and the surface is dry enough';
-  }
-  return null;
-}
-
-/**
- * @param {number} forecastedRainSumNearTerm
- * @param {number | null} currentSoilTemp
- * @param {string | null} springSeedDate
- * @param {boolean} seedEstablishmentActive
- * @param {string} todayStr
- * @param {number} [recentPastRainSum]
- */
-export function getDynamicWateringDays(
-  forecastedRainSumNearTerm,
-  currentSoilTemp,
-  springSeedDate,
-  seedEstablishmentActive,
-  todayStr,
-  recentPastRainSum = 0
-) {
-  const temp = currentSoilTemp;
-  const rain = forecastedRainSumNearTerm;
-
-  if (seedEstablishmentActive) return 1;
-
-  const { seedRecoveryActive } = getSeedRecoveryState(todayStr, springSeedDate);
-  if (seedRecoveryActive) return 2;
-
-  if (recentPastRainSum >= 8) return 5;
-  if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) return 4;
-  if (temp !== null && temp > 20 && rain < 2) return 2;
-  if (rain >= 4) return 5;
-  if (rain >= 1.5) return 4;
-  if (temp !== null && temp < 12) return 5;
-  return 3;
-}
-
-/**
- * @param {Object} input
- * @param {number} input.forecastedRainSumNearTerm
- * @param {number} [input.forecastedRainSumWeek]
- * @param {number} [input.recentPastRainSum]
- * @param {number | null} input.currentSoilTemp
- * @param {string | null} input.springSeedDate
- * @param {boolean} input.seedEstablishmentActive
- * @param {string} input.todayStr
- * @param {Record<string, string>} [input.userLogs]
- */
-export function getScheduleReason(input) {
-  const {
-    forecastedRainSumNearTerm,
-    forecastedRainSumWeek = forecastedRainSumNearTerm,
-    recentPastRainSum = 0,
-    currentSoilTemp,
-    springSeedDate,
-    seedEstablishmentActive,
-    todayStr,
-    userLogs = {},
-  } = input;
-
-  const temp = currentSoilTemp;
-  const rainNear = forecastedRainSumNearTerm;
-  const mowReasons = [];
-  const waterReasons = [];
-  const verticutReasons = [];
-  const {
-    seedRecoveryActive,
-    recoveryDaysRemaining,
-    recoveryEndsOnIso,
-  } = getSeedRecoveryState(todayStr, springSeedDate);
-
-  if (seedRecoveryActive && recoveryEndsOnIso) {
-    const endsLabel = formatShortUkDate(recoveryEndsOnIso);
-    const dayWord = recoveryDaysRemaining === 1 ? 'day' : 'days';
-    const growthRateDays = getGrowthRateMowingDays(temp);
-    const warmWouldCutMoreOften = growthRateDays < SEED_RECOVERY_MOWING_DAYS;
-
-    mowReasons.push(
-      `spring overseed still establishing — keep weekly cuts for ${recoveryDaysRemaining} more ${dayWord} (until ${endsLabel})`
-    );
-    if (warmWouldCutMoreOften) {
-      mowReasons.push(
-        `warm soil would normally mean every ${growthRateDays} days, but hold weekly so new roots aren't stressed`
-      );
-    }
-    mowReasons.push('gradually lower height each cut');
-    waterReasons.push('enhanced watering during turf recovery');
-  }
-
-  if (seedEstablishmentActive) {
-    waterReasons.push('daily watering during seed establishment');
-  }
-
-  // During recovery the weekly cadence is intentional — don't also imply soil temp sets the interval.
-  if (!seedRecoveryActive) {
-    if (temp !== null && temp >= 15) {
-      mowReasons.push(`${temp.toFixed(0)}°C soil – active growth`);
-    } else if (temp !== null && temp < 10) {
-      mowReasons.push(`${temp.toFixed(0)}°C soil – slower growth`);
-    }
-  }
-
-  if (recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM) {
-    waterReasons.push(
-      `${recentPastRainSum.toFixed(1)}mm rain in last ${RECENT_PAST_RAIN_DAYS} days – soil still damp`
-    );
-  } else if (rainNear >= 4) {
-    waterReasons.push(`${rainNear.toFixed(1)}mm rain next 3 days – reduced need`);
-  } else if (temp !== null && temp > 20 && rainNear < 2) {
-    waterReasons.push(`${temp.toFixed(0)}°C soil & dry forecast – increased demand`);
-  }
-
-  if (forecastedRainSumWeek > rainNear + 5 && rainNear < SOAK_DEPTH_MM && recentPastRainSum < RECENT_RAIN_WET_SOIL_MM) {
-    waterReasons.push(
-      `${forecastedRainSumWeek.toFixed(0)}mm later this week – not pausing watering yet`
-    );
-  }
-
-  if (!isVerticutSeasonForDate(todayStr)) {
-    verticutReasons.push('outside active season (Apr 1 – Sep 30)');
-  } else if (temp !== null && temp >= VERTICUT_HEAT_THRESHOLD_C) {
-    verticutReasons.push(
-      `${temp.toFixed(0)}°C soil – paused to protect turf from heat stress`
-    );
-  } else if (
-    temp !== null &&
-    temp >= 22 &&
-    rainNear < 2 &&
-    recentPastRainSum < RECENT_RAIN_WET_SOIL_MM
-  ) {
-    verticutReasons.push('drought-risk conditions – paused until cooler or wetter weather');
-  }
-
-  const { renovationHoldActive } = getVerticutRenovationState(todayStr, userLogs);
-  if (renovationHoldActive) {
-    verticutReasons.push('post-renovation hold – root system still maturing (6–8 weeks)');
-  }
-
-  return {
-    mow: mowReasons.length > 0 ? mowReasons.join(', ') : null,
-    water: waterReasons.length > 0 ? waterReasons.join(', ') : null,
-    verticut: verticutReasons.length > 0 ? verticutReasons.join(', ') : null,
-  };
-}
-
-/**
- * @param {Object} input
- * @param {string} input.todayStr
- * @param {Record<string, string>} input.userLogs
- * @param {number} input.forecastedRainSumNearTerm
- * @param {number} [input.recentPastRainSum]
- * @param {number | null} input.currentSoilTemp
- * @param {boolean} input.isNatureProvidingFullSoak - today-only full soak (not future forecast)
- * @param {boolean} [input.soilRecentlyWetToday]
- * @param {string | null} input.lastMowedDate
- * @param {string | null} input.lastWateredDate
- * @param {string | null} input.lastVerticutDate
- * @param {number} [input.establishmentExtraDays]
- */
-export function buildMaintenanceSchedule(input) {
-  const {
-    todayStr,
-    userLogs,
-    forecastedRainSumNearTerm,
-    recentPastRainSum = 0,
-    currentSoilTemp,
-    isNatureProvidingFullSoak,
-    soilRecentlyWetToday = null,
-    lastMowedDate,
-    lastWateredDate,
-    lastVerticutDate,
-    establishmentExtraDays = 0,
-  } = input;
-
-  const springSeedDate = userLogs[makeStepKey('SPRING', 'seed')] ?? null;
-  const { seedEstablishmentActive, mowingLockedUntilIso } = getSeedState(
-    todayStr,
-    springSeedDate,
-    establishmentExtraDays
-  );
-  const {
-    seedRecoveryActive,
-    recoveryDaysRemaining,
-    recoveryEndsOnIso,
-  } = getSeedRecoveryState(todayStr, springSeedDate, establishmentExtraDays);
-  const isDormantSeason = isDormantSeasonForDate(todayStr);
-
-  const dynamicMowingDays = getDynamicMowingDays(currentSoilTemp, springSeedDate, todayStr);
-  const dynamicWateringDays = getDynamicWateringDays(
-    forecastedRainSumNearTerm,
-    currentSoilTemp,
-    springSeedDate,
-    seedEstablishmentActive,
-    todayStr,
-    recentPastRainSum
-  );
-
-  // The Spring prep step (Step 2) requires scalping the lawn first, so logging it
-  // counts as a mow. Use whichever date is more recent: last logged mow or scarify date.
-  const springScarifyDate = userLogs[makeStepKey('SPRING', 'prep')] ?? null;
-  const wasScalped =
-    springScarifyDate !== null &&
-    (lastMowedDate === null || springScarifyDate >= lastMowedDate);
-  const effectiveLastMowedDate =
-    lastMowedDate && springScarifyDate
-      ? lastMowedDate > springScarifyDate ? lastMowedDate : springScarifyDate
-      : lastMowedDate ?? springScarifyDate ?? null;
-
-  // After a scalp cut the grass is much shorter than usual (setting 1 vs standard setting 3),
-  // so it needs longer to recover before the next proper cut. Use at least 10 days.
-  const effectiveMowingDays = wasScalped
-    ? Math.max(dynamicMowingDays, 10)
-    : dynamicMowingDays;
-
-  const mowingNextDueIso = effectiveLastMowedDate
-    ? addDaysToDateString(effectiveLastMowedDate, effectiveMowingDays)
-    : null;
-
-  // If rain has recently soaked the soil, treat today as the effective watering date so
-  // the next-due calculation counts forward from now rather than from the last manual water.
-  // Without this, when rain clears the task immediately reappears overdue.
-  const soilRecentlyWet =
-    typeof soilRecentlyWetToday === 'boolean'
-      ? soilRecentlyWetToday
-      : recentPastRainSum >= RECENT_RAIN_WET_SOIL_MM;
-  const effectiveLastWateredDate =
-    !seedEstablishmentActive && (isNatureProvidingFullSoak || soilRecentlyWet)
-      ? todayStr
-      : lastWateredDate;
-  let wateringNextDueIso = effectiveLastWateredDate
-    ? addDaysToDateString(effectiveLastWateredDate, dynamicWateringDays)
-    : null;
-
-  if (wateringNextDueIso && wateringNextDueIso < todayStr) {
-    wateringNextDueIso = todayStr;
-  }
-
-  const isVerticutSeason = isVerticutSeasonForDate(todayStr);
-  const { renovationHoldActive, verticutLockedUntilIso } = getVerticutRenovationState(
-    todayStr,
-    userLogs
-  );
-  const verticutHeatDroughtPaused = isVerticutHeatDroughtPaused(
-    currentSoilTemp,
-    forecastedRainSumNearTerm,
-    recentPastRainSum
-  );
-
-  const verticutNaturalNextDueIso = lastVerticutDate
-    ? addDaysToDateString(lastVerticutDate, VERTICUT_INTERVAL_DAYS)
-    : mowingNextDueIso;
-
-  const verticutIntervalElapsed =
-    lastVerticutDate === null ||
-    daysBetweenIso(todayStr, lastVerticutDate) >= VERTICUT_INTERVAL_DAYS;
-
-  let verticutNextDueIso = null;
-  let verticutPairedWithMow = false;
-
-  if (isVerticutSeason && !renovationHoldActive && !verticutHeatDroughtPaused) {
-    if (verticutIntervalElapsed) {
-      verticutNextDueIso = mowingNextDueIso ?? verticutNaturalNextDueIso ?? todayStr;
-      verticutPairedWithMow = Boolean(mowingNextDueIso);
-    } else if (verticutNaturalNextDueIso) {
-      verticutNextDueIso = verticutNaturalNextDueIso;
-    }
-  }
-
-  return {
-    isDormantSeason,
-    isNatureProvidingFullSoak,
-    seedEstablishmentActive,
-    seedRecoveryActive,
-    recoveryDaysRemaining,
-    recoveryEndsOnIso,
-    mowingLockedUntilIso,
-    mowingNextDueIso,
-    wateringNextDueIso,
-    dynamicMowingDays,
-    dynamicWateringDays,
-    isVerticutSeason,
-    renovationHoldActive,
-    verticutLockedUntilIso,
-    verticutHeatDroughtPaused,
-    verticutNextDueIso,
-    verticutPairedWithMow,
-    verticutIntervalElapsed,
-  };
-}
-</file>
-
 <file path="src/components/lawn/LawnSettings.jsx">
 import React, { useEffect, useRef, useState } from 'react';
 import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
@@ -13179,6 +13210,9 @@ export function useLawnCareApp() {
   const [activeRoom, setActiveRoom] = useState(
     /** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ ('hub')
   );
+  const [maintenanceFocusTab, setMaintenanceFocusTab] = useState(
+    /** @type {'mowing' | 'watering' | 'verticut' | 'gypsum' | null} */ (null)
+  );
   const activeTheme = getLawnTheme(themeId);
 
   const setThemeId = useCallback((nextId) => {
@@ -14430,6 +14464,8 @@ export function useLawnCareApp() {
     activeTheme,
     activeRoom,
     setActiveRoom,
+    maintenanceFocusTab,
+    setMaintenanceFocusTab,
     showLevellingGuide,
     setShowLevellingGuide,
     jsonCopied,
