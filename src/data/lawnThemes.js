@@ -71,6 +71,17 @@ export const LAWN_THEMES = [
     fontDisplay: '"Literata", Georgia, serif',
     fontBody: '"Source Sans 3", "Segoe UI", sans-serif',
   },
+  {
+    id: 'official',
+    name: 'Official',
+    tagline: 'thelawnpack.co.uk brand',
+    description:
+      'Matched to The Lawn Pack literature and website: field green covers, logo yellow, lime “Get Started” CTAs, Open Sans, and a clean white home hub.',
+    layout: 'rooms',
+    swatches: ['#419343', '#C9FF8F', '#FDD729', '#184229'],
+    fontDisplay: '"Montserrat", "Open Sans", "Segoe UI", sans-serif',
+    fontBody: '"Open Sans", "Segoe UI", sans-serif',
+  },
 ];
 
 export const DEFAULT_LAWN_THEME_ID = 'classic';

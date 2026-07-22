@@ -138,7 +138,8 @@ export default function LawnSettings({ app }) {
           <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
           <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
             Classic (long page), Atelier (moss home hub), Signal (dark status tabs), Canopy (neon
-            yard board), and Folio (paper desk folders). Use Cancel to undo, Save to keep.
+            yard board), Folio (paper desk folders), and Official (thelawnpack.co.uk brand). Use
+            Cancel to undo, Save to keep.
           </p>
           <div className="grid gap-2">
             {LAWN_THEMES.map((theme) => {

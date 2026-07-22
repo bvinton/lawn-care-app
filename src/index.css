@@ -139,6 +139,234 @@
   box-shadow: 0 0 0 6px rgba(29, 78, 216, 0.18);
 }
 
+/* —— Official: thelawnpack.co.uk / masterclass literature —— */
+[data-lawn-theme='official'] {
+  --lawn-brand-green: #419343;
+  --lawn-brand-forest: #184229;
+  --lawn-brand-lime: #c9ff8f;
+  --lawn-brand-yellow: #fdd729;
+  --lawn-brand-mist: #f3faf3;
+  --lawn-page-bg:
+    radial-gradient(900px 420px at 12% -8%, rgba(201, 255, 143, 0.45) 0%, transparent 55%),
+    linear-gradient(180deg, #f7fbf7 0%, #eef6ee 55%, #e5f0e5 100%);
+  --lawn-page-ink: #184229;
+  --lawn-shell-bg: #ffffff;
+  --lawn-shell-border: rgba(65, 147, 67, 0.22);
+  --lawn-shell-radius: 1rem;
+  --lawn-shell-shadow: 0 16px 36px rgba(24, 66, 41, 0.1);
+  --lawn-accent: #419343;
+  --lawn-accent-soft: #c9ff8f;
+  --lawn-muted: #4d6b55;
+  --lawn-hub-room-bg: #ffffff;
+  --lawn-hub-room-border: rgba(65, 147, 67, 0.18);
+}
+
+[data-lawn-theme='official'] .lawn-app-brand {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  color: #419343;
+}
+
+[data-lawn-theme='official'] .lawn-app-subhead {
+  letter-spacing: 0.22em;
+  color: #184229;
+}
+
+[data-lawn-theme='official'] .lawn-app-subhead::after {
+  content: '';
+  display: block;
+  width: 2.75rem;
+  height: 0.28rem;
+  margin: 0.55rem auto 0;
+  background: #fdd729;
+  border-radius: 999px;
+}
+
+[data-lawn-theme='official'] .lawn-app-shell {
+  border-top: 4px solid #419343;
+}
+
+[data-lawn-theme='official'] .lawn-focus-highlight {
+  outline-color: #419343;
+  box-shadow: 0 0 0 6px rgba(201, 255, 143, 0.55);
+}
+
+[data-lawn-theme='official'] .lawn-hub__title {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
+  color: #184229;
+}
+
+[data-lawn-theme='official'] .lawn-hub__weather {
+  background: linear-gradient(135deg, #c9ff8f 0%, #eaffc4 100%);
+  border-color: rgba(65, 147, 67, 0.35);
+  color: #184229;
+}
+
+[data-lawn-theme='official'] .lawn-hub__room {
+  border-radius: 0.85rem;
+  box-shadow: 0 8px 20px rgba(24, 66, 41, 0.06);
+}
+
+[data-lawn-theme='official'] .lawn-hub__room:hover,
+[data-lawn-theme='official'] .lawn-hub__room:focus-visible {
+  border-color: #419343;
+  box-shadow: 0 10px 24px rgba(65, 147, 67, 0.14);
+}
+
+[data-lawn-theme='official'] .lawn-hub__room--alert {
+  border-color: #fdd729;
+  background: linear-gradient(180deg, #fffceb 0%, #ffffff 70%);
+}
+
+[data-lawn-theme='official'] .lawn-hub__tool {
+  border-radius: 0.75rem;
+  background: #419343;
+  color: #ffffff;
+  border-color: #419343;
+}
+
+[data-lawn-theme='official'] .lawn-hub__tool:hover {
+  background: #367c39;
+  color: #ffffff;
+}
+
+[data-lawn-theme='official'] .lawn-room__bar {
+  border-bottom-color: rgba(65, 147, 67, 0.2);
+}
+
+[data-lawn-theme='official'] .lawn-room__title {
+  color: #184229;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+[data-lawn-theme='official'] .lawn-room__back,
+[data-lawn-theme='official'] .lawn-room__setup {
+  border-radius: 999px;
+  border: 1px solid rgba(65, 147, 67, 0.28);
+  background: #c9ff8f;
+  color: #184229;
+  font-weight: 700;
+}
+
+[data-lawn-theme='official'] .lawn-care {
+  --lawn-care-radius: 0.85rem;
+  --lawn-care-radius-sm: 0.65rem;
+  --lawn-care-border: rgba(65, 147, 67, 0.22);
+  --lawn-care-bg: #f3faf3;
+  --lawn-care-ink: #184229;
+  --lawn-care-tab-strip-bg: #ffffff;
+  --lawn-care-tab-strip-border: #419343;
+  --lawn-care-tab-bg: #eef6ee;
+  --lawn-care-tab-ink: #184229;
+  --lawn-care-tab-selected-bg: #419343;
+  --lawn-care-tab-selected-ink: #ffffff;
+  --lawn-care-btn-bg: #c9ff8f;
+  --lawn-care-btn-ink: #184229;
+  --lawn-care-btn-hover: #b8f574;
+  --lawn-care-input-bg: #ffffff;
+  --lawn-care-input-border: rgba(65, 147, 67, 0.35);
+  --lawn-care-input-ink: #184229;
+  --lawn-care-focus: #419343;
+  --lawn-care-chip-bg: #ffffff;
+  --lawn-care-chip-border: rgba(65, 147, 67, 0.3);
+  --lawn-care-chip-ink: #184229;
+  --lawn-care-shadow: 0 6px 16px rgba(24, 66, 41, 0.06);
+}
+
+[data-lawn-theme='official'] .lawn-care__btn {
+  border: 1px solid rgba(24, 66, 41, 0.12);
+  box-shadow: 0 4px 0 rgba(24, 66, 41, 0.08);
+  font-weight: 800;
+}
+
+[data-lawn-theme='official'] .lawn-care .bg-sky-50,
+[data-lawn-theme='official'] .lawn-care .bg-sky-100,
+[data-lawn-theme='official'] .lawn-care .bg-blue-50 {
+  background-color: #eef6ee !important;
+}
+
+[data-lawn-theme='official'] .lawn-care .border-sky-200,
+[data-lawn-theme='official'] .lawn-care .border-sky-300,
+[data-lawn-theme='official'] .lawn-care .border-blue-200 {
+  border-color: rgba(65, 147, 67, 0.28) !important;
+}
+
+[data-lawn-theme='official'] .lawn-care .text-sky-800,
+[data-lawn-theme='official'] .lawn-care .text-sky-900,
+[data-lawn-theme='official'] .lawn-care .text-blue-700,
+[data-lawn-theme='official'] .lawn-care .text-blue-800 {
+  color: #184229 !important;
+}
+
+[data-lawn-theme='official'] .lawn-care .bg-emerald-50 {
+  background-color: #c9ff8f !important;
+}
+
+[data-lawn-theme='official'] .lawn-care .border-emerald-200 {
+  border-color: #419343 !important;
+}
+
+[data-lawn-theme='official'] .lawn-care .text-emerald-800,
+[data-lawn-theme='official'] .lawn-care .text-emerald-900 {
+  color: #184229 !important;
+}
+
+[data-lawn-theme='official'] .lawn-care .bg-amber-50,
+[data-lawn-theme='official'] .lawn-care .bg-amber-100 {
+  background-color: #fff6c2 !important;
+}
+
+[data-lawn-theme='official'] .lawn-care .border-amber-200,
+[data-lawn-theme='official'] .lawn-care .border-amber-300 {
+  border-color: #fdd729 !important;
+}
+
+[data-lawn-theme='official'] .lawn-care .text-amber-800,
+[data-lawn-theme='official'] .lawn-care .text-amber-900,
+[data-lawn-theme='official'] .lawn-care .text-amber-950 {
+  color: #184229 !important;
+}
+
+[data-lawn-theme='official'] .lawn-pack {
+  --lawn-pack-radius: 0.85rem;
+  --lawn-pack-radius-sm: 0.65rem;
+  --lawn-pack-step-radius: 0.85rem;
+  --lawn-pack-btn-bg: #c9ff8f;
+  --lawn-pack-btn-ink: #184229;
+  --lawn-pack-btn-hover: #b8f574;
+  --lawn-pack-input-bg: #ffffff;
+  --lawn-pack-input-border: rgba(65, 147, 67, 0.35);
+  --lawn-pack-input-ink: #184229;
+  --lawn-pack-focus: #419343;
+  --lawn-pack-tips-bg: #ffffff;
+  --lawn-pack-tips-border: rgba(65, 147, 67, 0.22);
+  --lawn-pack-tip-bg: #f3faf3;
+  --lawn-pack-tip-border: rgba(65, 147, 67, 0.18);
+}
+
+[data-lawn-theme='official'] .lawn-pack__btn {
+  border: 1px solid rgba(24, 66, 41, 0.12);
+  box-shadow: 0 4px 0 rgba(24, 66, 41, 0.08);
+  font-weight: 800;
+}
+
+[data-lawn-theme='official'] .lawn-pack__season-btn.bg-green-600 {
+  background: #419343 !important;
+  border-color: #419343 !important;
+  color: #ffffff !important;
+}
+
+[data-lawn-theme='official'] .lawn-pack__season-btn.bg-white {
+  background: #ffffff !important;
+  color: #184229 !important;
+  border-color: rgba(65, 147, 67, 0.28) !important;
+}
+
 /* —— Hub / rooms (Atelier) —— */
 .lawn-hub__hero {
   margin-bottom: 1.25rem;
