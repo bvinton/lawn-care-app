@@ -61,6 +61,39 @@ export default function LawnSettings({ app }) {
 
   const snapshotRef = useRef(/** @type {ReturnType<typeof captureSettingsSnapshot> | null} */ (null));
   const [dirty, setDirty] = useState(false);
+  const DEBUG_STORAGE_KEY = 'lawnPackShowDebugTools';
+  const [showDebugTools, setShowDebugTools] = useState(() => {
+    try {
+      return localStorage.getItem(DEBUG_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const debugTapRef = useRef({ count: 0, timer: /** @type {ReturnType<typeof setTimeout> | null} */ (null) });
+
+  const setDebugToolsVisible = (visible) => {
+    setShowDebugTools(visible);
+    try {
+      if (visible) localStorage.setItem(DEBUG_STORAGE_KEY, '1');
+      else localStorage.removeItem(DEBUG_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleSetupTitleTap = () => {
+    const tap = debugTapRef.current;
+    if (tap.timer) clearTimeout(tap.timer);
+    tap.count += 1;
+    if (tap.count >= 7) {
+      tap.count = 0;
+      setDebugToolsVisible(!showDebugTools);
+      return;
+    }
+    tap.timer = setTimeout(() => {
+      tap.count = 0;
+    }, 1400);
+  };
 
   useEffect(() => {
     snapshotRef.current = captureSettingsSnapshot(app);
@@ -119,7 +152,12 @@ export default function LawnSettings({ app }) {
     <>
       <div className="flex justify-between items-center mb-6 border-b pb-4 gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
+          <h2
+            className="text-xl font-black text-green-800 select-none"
+            onClick={handleSetupTitleTap}
+          >
+            ⚙️ Lawn Setup
+          </h2>
           <p className="text-sm text-green-700 mt-1">
             Configure appearance, lawn size, equipment, and surface profile.
           </p>
@@ -449,19 +487,30 @@ export default function LawnSettings({ app }) {
           </div>
         </div>
 
-        <div className="border-t border-green-200 pt-4 mt-2">
-          <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
-          {supabaseSyncError && (
-            <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
-          )}
-          <button
-            type="button"
-            onClick={handleCopyTasksJson}
-            className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
-          >
-            {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
-          </button>
-        </div>
+        {showDebugTools && (
+          <div className="border-t border-green-200 pt-4 mt-2">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-sm font-bold text-gray-700">Developer / Debug Mode</p>
+              <button
+                type="button"
+                onClick={() => setDebugToolsVisible(false)}
+                className="text-[10px] font-bold uppercase tracking-wide text-gray-500 hover:text-gray-700"
+              >
+                Hide
+              </button>
+            </div>
+            {supabaseSyncError && (
+              <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
+            )}
+            <button
+              type="button"
+              onClick={handleCopyTasksJson}
+              className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+            >
+              {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="sticky bottom-0 -mx-1 mt-4 border-t border-emerald-200 bg-white/95 backdrop-blur px-1 pt-3 pb-1 flex gap-2">
