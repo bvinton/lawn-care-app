@@ -145,29 +145,35 @@ export default function LawnSettings({ app }) {
       </div>
 
       {dirty && (
-        <div
-          className="sticky top-0 z-30 -mx-1 mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 shadow-sm"
-          role="status"
-          aria-live="polite"
-        >
-          <p className="text-xs font-bold text-amber-950 mb-2">Unsaved changes</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+        <>
+          {/* Keeps layout clear of the fixed action bar while editing. */}
+          <div className="h-[5.25rem] mb-4" aria-hidden="true" />
+          <div className="fixed inset-x-0 top-0 z-40 flex justify-center px-3 sm:px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pointer-events-none">
+            <div
+              className="pointer-events-auto w-full max-w-xl rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 shadow-lg"
+              role="status"
+              aria-live="polite"
             >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
-            >
-              Save changes
-            </button>
+              <p className="text-xs font-bold text-amber-950 mb-2">Unsaved changes</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
+                >
+                  Save changes
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       <div className={`space-y-5 ${dirty ? 'pb-4' : 'pb-2'}`}>
