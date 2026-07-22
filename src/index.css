@@ -194,8 +194,29 @@
 
 [data-lawn-theme='official'] .lawn-hub__title {
   font-weight: 800;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: -0.03em;
+  color: #184229;
+}
+
+[data-lawn-theme='official'] .lawn-hub__kicker {
+  color: #419343;
+}
+
+[data-lawn-theme='official'] .lawn-hub__hero--alert {
+  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid #fdd729;
+  background: linear-gradient(180deg, #fffceb 0%, #ffffff 75%);
+}
+
+[data-lawn-theme='official'] .lawn-hub__hero--ok .lawn-hub__title {
+  color: #419343;
+}
+
+[data-lawn-theme='official'] .lawn-hub__hero-cta {
+  background: #c9ff8f;
+  border-color: rgba(65, 147, 67, 0.35);
   color: #184229;
 }
 
@@ -367,27 +388,68 @@
   border-color: rgba(65, 147, 67, 0.28) !important;
 }
 
-/* —— Hub / rooms (Atelier) —— */
+/* —— Hub / rooms (Atelier + Official) —— */
 .lawn-hub__hero {
   margin-bottom: 1.25rem;
   animation: lawn-rise 420ms ease-out both;
 }
 
+.lawn-hub__kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--lawn-muted);
+}
+
 .lawn-hub__title {
   font-family: var(--lawn-font-display);
-  font-size: 1.55rem;
-  font-weight: 750;
+  font-size: 1.7rem;
+  font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.15;
+  line-height: 1.1;
   color: inherit;
+  margin: 0;
 }
 
 .lawn-hub__lede {
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  margin: 0.4rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--lawn-muted);
+}
+
+.lawn-hub__hero-cta {
+  margin-top: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.4rem;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--lawn-accent) 35%, transparent);
+  background: var(--lawn-accent-soft);
+  color: var(--lawn-page-ink);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.lawn-hub__hero-cta:hover {
+  filter: brightness(0.97);
+}
+
+.lawn-hub__size-meta {
+  margin: 0.65rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--lawn-muted) 85%, transparent);
+}
+
+.lawn-hub__hero--alert .lawn-hub__title {
+  color: var(--lawn-page-ink);
 }
 
 .lawn-hub__sqm {
