@@ -9,9 +9,6 @@ import { CalculatorIcon } from './LawnMaterials';
  */
 export default function LawnHub({ app }) {
   const {
-    sqm,
-    length,
-    width,
     runFullCloudSync,
     cloudSyncStatus,
     lastCloudSyncAt,
@@ -101,9 +98,6 @@ export default function LawnHub({ app }) {
             Open Care
           </button>
         )}
-        <p className="lawn-hub__size-meta">
-          {sqm} SQM · {length}m × {width}m
-        </p>
       </header>
 
       {(petLockoutActive || springPackIncomplete) && (
