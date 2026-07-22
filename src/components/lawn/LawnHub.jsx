@@ -86,17 +86,28 @@ export default function LawnHub({ app }) {
   return (
     <div className="lawn-hub">
       <header className={`lawn-hub__hero lawn-hub__hero--${heroStatus.tone}`}>
-        <p className="lawn-hub__kicker">Today</p>
-        <h2 className="lawn-hub__title">{heroStatus.title}</h2>
-        <p className="lawn-hub__lede">{heroStatus.lede}</p>
-        {dueCount > 0 && (
+        {dueCount > 0 || seedEstablishmentActive ? (
           <button
             type="button"
-            className="lawn-hub__hero-cta"
+            className="lawn-hub__hero-open"
             onClick={() => setActiveRoom('maintenance')}
           >
-            Open Care
+            <span className="lawn-hub__hero-open-copy">
+              <span className="lawn-hub__kicker">Today</span>
+              <span className="lawn-hub__title">{heroStatus.title}</span>
+              <span className="lawn-hub__lede">{heroStatus.lede}</span>
+            </span>
+            <span className="lawn-hub__hero-open-icon" aria-hidden="true">
+              →
+            </span>
+            <span className="sr-only">Open Maintenance</span>
           </button>
+        ) : (
+          <>
+            <p className="lawn-hub__kicker">Today</p>
+            <h2 className="lawn-hub__title">{heroStatus.title}</h2>
+            <p className="lawn-hub__lede">{heroStatus.lede}</p>
+          </>
         )}
       </header>
 
