@@ -2238,6 +2238,137 @@ pnpm-debug.log*
 .vercel
 </file>
 
+<file path="README.md">
+# 🌿 The Lawn Pack Companion
+
+A data-driven lawn care workflow tracker built for **The Lawn Pack** seasonal system. Plan, log, and automate your full-year lawn routine — from Spring renovation through Winter moss treatment — with dose calculations, weather-aware irrigation, and context-sensitive maintenance alarms.
+
+**Live repo:** [github.com/bvinton/lawn-care-app](https://github.com/bvinton/lawn-care-app)
+
+---
+
+## Features
+
+### 📋 Seasonal Workflow Engine
+- **Spring, Summer, Autumn & Winter** packs with step-by-step timelines
+- Per-step dose calculations based on your lawn size (SQM)
+- Sprayer mixing instructions for Birchmeier, watering can, or knapsack profiles
+- Cascading target dates anchored to uniform season baselines (1st of each month)
+- Weedol 6-week soft advisory for Spring prep and seeding steps
+
+### 🌦️ 7-Day Weather Radar
+- Live rainfall forecast for the North East / Newcastle region (Open-Meteo)
+- Pauses watering reminders when 7-day projected rain ≥ 5mm
+- Amber warning when a deep soak is inbound
+
+### 🚰 Intelligent Irrigation Controller
+- Sprinkler profile selector with real product photos (Oscillating, Impact, Static, Hose)
+- Calculates exact runtime for a 10mm soak based on your sprinkler's mm/hour rate
+- Tap any photo to enlarge and identify your setup
+
+### ✂️ Context-Aware Maintenance Alarms
+- **Mowing:** Suspended in Winter; locked during 21-day Spring seed establishment; amber alert at 5+ days
+- **Watering:** Suspended in Winter; paused when rain is forecast; amber alert at 3+ dry days
+- Backdated log dates for mowing and watering
+
+### 🐶 Pet Safety & Master Guides
+- Separate bold blue pet safety banners on every chemical, granular, and liquid step
+- Full seasonal maintenance guides with best-practice bullet blocks per season
+
+### 💾 Persistent Local Storage
+All task logs and maintenance dates survive browser refresh:
+- `lawnPackUserLogs` — completed step dates
+- `lawnPackLastMowedDate` / `lawnPackLastWateredDate`
+- `lawnPackSelectedSprinkler` — irrigation profile
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| UI | React 18 |
+| Build | Vite 5 |
+| Styling | Tailwind CSS 3 |
+| Weather | [Open-Meteo API](https://open-meteo.com/) (free, no key required) |
+
+---
+
+## Getting Started
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) 18 or later
+- npm
+
+### Install & Run
+
+```bash
+git clone https://github.com/bvinton/lawn-care-app.git
+cd lawn-care-app
+npm install
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+### Build for Production
+
+```bash
+npm run build
+npm run preview
+```
+
+---
+
+## Project Structure
+
+```
+lawn-care-app/
+├── public/                  # Sprinkler reference photos (.jfif)
+├── src/
+│   ├── App.jsx              # App shell
+│   ├── components/
+│   │   └── lawn/
+│   │       ├── LawnCareApp.jsx       # Thin shell: settings vs workflow
+│   │       ├── LawnSettings.jsx      # Postcode, lawn size, sprinklers, etc.
+│   │       ├── LawnWorkflow.jsx      # Alerts, header, maintenance, timeline
+│   │       ├── MaintenancePanel.jsx  # Weather, mowing, watering, gypsum
+│   │       ├── SeasonTimeline.jsx    # Season tabs, step timeline, guidelines
+│   │       ├── SprinklerLightbox.jsx # Enlarged sprinkler modal
+│   │       └── UkDateInput.jsx       # UK date picker input
+│   ├── data/
+│   │   ├── LawnPackData.js  # Seasons, steps, equipment & sprinkler config
+│   │   └── lawnUiConfig.jsx # UI constants (mower options, pet safety, etc.)
+│   ├── hooks/
+│   │   └── useLawnCareApp.js # State, effects, handlers, derived schedule values
+│   ├── services/            # Supabase sync, weather, location, schedule engine
+│   └── utils/
+│       ├── lawnDates.js     # Date formatting & parsing helpers
+│       ├── lawnStorage.js   # localStorage JSON helpers
+│       └── lawnStepAmounts.js # Per-step dose calculations
+├── supabase/                # SQL migrations for cloud sync tables
+├── index.html
+├── package.json
+└── vite.config.js
+```
+
+---
+
+## Configuration
+
+Open **⚙️ Show Setup** in the app to configure:
+
+- **Lawn dimensions** — length × width sliders (auto-calculates SQM)
+- **Application tool** — Birchmeier Aquamix, watering can, or knapsack sprayer
+- **Irrigation profile** — select your primary sprinkler with photo identification
+
+---
+
+## License
+
+Private project — all rights reserved.
+</file>
+
 <file path="api/sync-lawn.source.js">
 import { runLawnCloudSync } from '../src/server/runLawnCloudSync.js';
 
@@ -2939,137 +3070,6 @@ export async function signInWithGoogleAccountPicker(supabase) {
 }
 </file>
 
-<file path="README.md">
-# 🌿 The Lawn Pack Companion
-
-A data-driven lawn care workflow tracker built for **The Lawn Pack** seasonal system. Plan, log, and automate your full-year lawn routine — from Spring renovation through Winter moss treatment — with dose calculations, weather-aware irrigation, and context-sensitive maintenance alarms.
-
-**Live repo:** [github.com/bvinton/lawn-care-app](https://github.com/bvinton/lawn-care-app)
-
----
-
-## Features
-
-### 📋 Seasonal Workflow Engine
-- **Spring, Summer, Autumn & Winter** packs with step-by-step timelines
-- Per-step dose calculations based on your lawn size (SQM)
-- Sprayer mixing instructions for Birchmeier, watering can, or knapsack profiles
-- Cascading target dates anchored to uniform season baselines (1st of each month)
-- Weedol 6-week soft advisory for Spring prep and seeding steps
-
-### 🌦️ 7-Day Weather Radar
-- Live rainfall forecast for the North East / Newcastle region (Open-Meteo)
-- Pauses watering reminders when 7-day projected rain ≥ 5mm
-- Amber warning when a deep soak is inbound
-
-### 🚰 Intelligent Irrigation Controller
-- Sprinkler profile selector with real product photos (Oscillating, Impact, Static, Hose)
-- Calculates exact runtime for a 10mm soak based on your sprinkler's mm/hour rate
-- Tap any photo to enlarge and identify your setup
-
-### ✂️ Context-Aware Maintenance Alarms
-- **Mowing:** Suspended in Winter; locked during 21-day Spring seed establishment; amber alert at 5+ days
-- **Watering:** Suspended in Winter; paused when rain is forecast; amber alert at 3+ dry days
-- Backdated log dates for mowing and watering
-
-### 🐶 Pet Safety & Master Guides
-- Separate bold blue pet safety banners on every chemical, granular, and liquid step
-- Full seasonal maintenance guides with best-practice bullet blocks per season
-
-### 💾 Persistent Local Storage
-All task logs and maintenance dates survive browser refresh:
-- `lawnPackUserLogs` — completed step dates
-- `lawnPackLastMowedDate` / `lawnPackLastWateredDate`
-- `lawnPackSelectedSprinkler` — irrigation profile
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| UI | React 18 |
-| Build | Vite 5 |
-| Styling | Tailwind CSS 3 |
-| Weather | [Open-Meteo API](https://open-meteo.com/) (free, no key required) |
-
----
-
-## Getting Started
-
-### Prerequisites
-- [Node.js](https://nodejs.org/) 18 or later
-- npm
-
-### Install & Run
-
-```bash
-git clone https://github.com/bvinton/lawn-care-app.git
-cd lawn-care-app
-npm install
-npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-### Build for Production
-
-```bash
-npm run build
-npm run preview
-```
-
----
-
-## Project Structure
-
-```
-lawn-care-app/
-├── public/                  # Sprinkler reference photos (.jfif)
-├── src/
-│   ├── App.jsx              # App shell
-│   ├── components/
-│   │   └── lawn/
-│   │       ├── LawnCareApp.jsx       # Thin shell: settings vs workflow
-│   │       ├── LawnSettings.jsx      # Postcode, lawn size, sprinklers, etc.
-│   │       ├── LawnWorkflow.jsx      # Alerts, header, maintenance, timeline
-│   │       ├── MaintenancePanel.jsx  # Weather, mowing, watering, gypsum
-│   │       ├── SeasonTimeline.jsx    # Season tabs, step timeline, guidelines
-│   │       ├── SprinklerLightbox.jsx # Enlarged sprinkler modal
-│   │       └── UkDateInput.jsx       # UK date picker input
-│   ├── data/
-│   │   ├── LawnPackData.js  # Seasons, steps, equipment & sprinkler config
-│   │   └── lawnUiConfig.jsx # UI constants (mower options, pet safety, etc.)
-│   ├── hooks/
-│   │   └── useLawnCareApp.js # State, effects, handlers, derived schedule values
-│   ├── services/            # Supabase sync, weather, location, schedule engine
-│   └── utils/
-│       ├── lawnDates.js     # Date formatting & parsing helpers
-│       ├── lawnStorage.js   # localStorage JSON helpers
-│       └── lawnStepAmounts.js # Per-step dose calculations
-├── supabase/                # SQL migrations for cloud sync tables
-├── index.html
-├── package.json
-└── vite.config.js
-```
-
----
-
-## Configuration
-
-Open **⚙️ Show Setup** in the app to configure:
-
-- **Lawn dimensions** — length × width sliders (auto-calculates SQM)
-- **Application tool** — Birchmeier Aquamix, watering can, or knapsack sprayer
-- **Irrigation profile** — select your primary sprinkler with photo identification
-
----
-
-## License
-
-Private project — all rights reserved.
-</file>
-
 <file path="src/components/lawn/SeasonTimeline.jsx">
 import React from 'react';
 import { SEASONS, makeStepKey } from '../../data/LawnPackData';
@@ -3368,246 +3368,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </AuthProvider>
   </React.StrictMode>,
 );
-</file>
-
-<file path="src/components/lawn/GuideViewerModal.jsx">
-import React, { useEffect, useState } from 'react';
-import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
-
-/**
- * Render a DOCX file as formatted HTML using mammoth (lazy-loaded).
- * @param {{ fileUrl: string, title: string }} props
- */
-function DocxViewer({ fileUrl, title }) {
-  const [html, setHtml] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    setError('');
-    setHtml('');
-
-    let cancelled = false;
-
-    Promise.all([
-      import('mammoth'),
-      fetch(fileUrl).then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.arrayBuffer();
-      }),
-    ])
-      .then(([mammoth, buf]) => mammoth.convertToHtml({ arrayBuffer: buf }))
-      .then((result) => { if (!cancelled) setHtml(result.value); })
-      .catch((err) => { if (!cancelled) setError(err.message ?? 'Could not load guide.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
-  }, [fileUrl]);
-
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorState title={title} message={error} />;
-
-  return (
-    <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
-      <div
-        className="mx-auto w-full max-w-md md:max-w-lg"
-        style={{
-          fontFamily: 'system-ui, sans-serif',
-          lineHeight: '1.65',
-          fontSize: '0.875rem',
-          color: '#1a1a1a',
-        }}
-        /* eslint-disable-next-line react/no-danger */
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    </div>
-  );
-}
-
-/**
- * Render a PDF in-app with pdf.js (lazy-loaded), one scrollable page stack.
- * @param {{ fileUrl: string, title: string }} props
- */
-function PdfViewer({ fileUrl, title }) {
-  const [pageImages, setPageImages] = useState(/** @type {string[]} */ ([]));
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    setError('');
-    setPageImages([]);
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const pdfjs = await import('pdfjs-dist');
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-          'pdfjs-dist/build/pdf.worker.min.mjs',
-          import.meta.url,
-        ).href;
-
-        const pdf = await pdfjs.getDocument(fileUrl).promise;
-        const targetWidth = Math.min(window.innerWidth - 32, 720);
-        const images = [];
-
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
-          const page = await pdf.getPage(pageNum);
-          const baseViewport = page.getViewport({ scale: 1 });
-          const scale = targetWidth / baseViewport.width;
-          const viewport = page.getViewport({ scale });
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          if (!context) throw new Error('Canvas not supported');
-
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-
-          await page.render({ canvasContext: context, viewport, canvas }).promise;
-          images.push(canvas.toDataURL('image/jpeg', 0.88));
-        }
-
-        if (!cancelled) setPageImages(images);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load PDF.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [fileUrl]);
-
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorState title={title} message={error} />;
-
-  return (
-    <div className="flex-1 overflow-y-auto px-2 py-4 space-y-3 bg-gray-50 md:px-6 md:py-6">
-      <div className="mx-auto w-full max-w-md space-y-3 md:max-w-lg">
-        {pageImages.map((src, index) => (
-          <img
-            key={`${title}-page-${index + 1}`}
-            src={src}
-            alt={`${title} — page ${index + 1}`}
-            className="w-full rounded-lg shadow-sm bg-white"
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Scrollable image gallery (clean masterclass content extracted from Gmail PDFs).
- * Phone-sized slides stay full-bleed on mobile; on desktop they sit in a
- * centred reading column so they don't stretch across a wide monitor.
- * @param {{ images: string[], title: string }} props
- */
-function GalleryViewer({ images, title }) {
-  return (
-    <div className="flex-1 overflow-y-auto px-2 py-4 space-y-3 bg-gray-50 md:px-6 md:py-6">
-      <div className="mx-auto w-full max-w-md space-y-3 md:max-w-lg">
-        {images.map((src, index) => (
-          <img
-            key={src}
-            src={src}
-            alt={`${title} — section ${index + 1}`}
-            className="w-full rounded-lg shadow-sm bg-white"
-            loading={index === 0 ? 'eager' : 'lazy'}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function LoadingSpinner() {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 p-8 flex-1">
-      <div className="w-8 h-8 border-4 border-green-200 border-t-green-700 rounded-full animate-spin" />
-      <p className="text-xs text-gray-500 font-medium">Loading guide…</p>
-    </div>
-  );
-}
-
-/** @param {{ title: string, message: string }} props */
-function ErrorState({ title, message }) {
-  return (
-    <div className="flex flex-col items-center justify-center flex-1 gap-2 px-6 py-8 text-center">
-      <p className="text-2xl">⚠️</p>
-      <p className="text-sm font-bold text-gray-800">Could not load {title}</p>
-      <p className="text-xs text-gray-500">{message}</p>
-    </div>
-  );
-}
-
-/**
- * @param {{
- *   guide: {
- *     file?: string,
- *     kind: 'pdf' | 'docx' | 'gallery',
- *     title: string,
- *     images?: string[],
- *   } | null,
- *   onClose: () => void,
- * }} props
- */
-export default function GuideViewerModal({ guide, onClose }) {
-  useRegisterBackHandler(() => {
-    if (guide) { onClose(); return true; }
-    return false;
-  }, Boolean(guide));
-
-  if (!guide) return null;
-
-  const fileUrl = guide.file
-    ? new URL(guide.file, window.location.origin).href
-    : null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-stretch justify-center bg-white md:items-center md:bg-black/45 md:p-6"
-      role="dialog"
-      aria-modal="true"
-      aria-label={guide.title}
-    >
-      {/* Click outside closes on desktop; mobile stays full-screen edge-to-edge. */}
-      <button
-        type="button"
-        className="absolute inset-0 hidden md:block"
-        aria-label="Close guide"
-        onClick={onClose}
-      />
-      <div className="relative z-10 flex h-full w-full flex-col overflow-hidden bg-white md:h-[min(92vh,960px)] md:max-w-xl md:rounded-2xl md:shadow-2xl">
-        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 bg-white shrink-0">
-          <p className="text-sm font-bold text-gray-900 truncate flex-1">{guide.title}</p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold shrink-0"
-            aria-label="Close guide"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="flex flex-col flex-1 overflow-hidden relative">
-          {guide.kind === 'docx' && fileUrl && (
-            <DocxViewer fileUrl={fileUrl} title={guide.title} />
-          )}
-          {guide.kind === 'pdf' && fileUrl && (
-            <PdfViewer fileUrl={fileUrl} title={guide.title} />
-          )}
-          {guide.kind === 'gallery' && guide.images && (
-            <GalleryViewer images={guide.images} title={guide.title} />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 </file>
 
 <file path="src/components/lawn/LawnHub.jsx">
@@ -4502,6 +4262,246 @@ LAWN_SYNC_SECRET=your-random-secret
       "maxDuration": 60
     }
   }
+}
+</file>
+
+<file path="src/components/lawn/GuideViewerModal.jsx">
+import React, { useEffect, useState } from 'react';
+import { useRegisterBackHandler } from '../../hooks/useMobileBackNavigation';
+
+/**
+ * Render a DOCX file as formatted HTML using mammoth (lazy-loaded).
+ * @param {{ fileUrl: string, title: string }} props
+ */
+function DocxViewer({ fileUrl, title }) {
+  const [html, setHtml] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    setError('');
+    setHtml('');
+
+    let cancelled = false;
+
+    Promise.all([
+      import('mammoth'),
+      fetch(fileUrl).then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.arrayBuffer();
+      }),
+    ])
+      .then(([mammoth, buf]) => mammoth.convertToHtml({ arrayBuffer: buf }))
+      .then((result) => { if (!cancelled) setHtml(result.value); })
+      .catch((err) => { if (!cancelled) setError(err.message ?? 'Could not load guide.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [fileUrl]);
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorState title={title} message={error} />;
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
+      <div
+        className="mx-auto w-full max-w-md md:max-w-lg"
+        style={{
+          fontFamily: 'system-ui, sans-serif',
+          lineHeight: '1.65',
+          fontSize: '0.875rem',
+          color: '#1a1a1a',
+        }}
+        /* eslint-disable-next-line react/no-danger */
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Render a PDF in-app with pdf.js (lazy-loaded), one scrollable page stack.
+ * @param {{ fileUrl: string, title: string }} props
+ */
+function PdfViewer({ fileUrl, title }) {
+  const [pageImages, setPageImages] = useState(/** @type {string[]} */ ([]));
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    setError('');
+    setPageImages([]);
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const pdfjs = await import('pdfjs-dist');
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url,
+        ).href;
+
+        const pdf = await pdfjs.getDocument(fileUrl).promise;
+        const targetWidth = Math.min(window.innerWidth - 32, 720);
+        const images = [];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+          const page = await pdf.getPage(pageNum);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const scale = targetWidth / baseViewport.width;
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Canvas not supported');
+
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          await page.render({ canvasContext: context, viewport, canvas }).promise;
+          images.push(canvas.toDataURL('image/jpeg', 0.88));
+        }
+
+        if (!cancelled) setPageImages(images);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load PDF.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [fileUrl]);
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorState title={title} message={error} />;
+
+  return (
+    <div className="flex-1 overflow-y-auto px-2 py-4 space-y-3 bg-gray-50 md:px-6 md:py-6">
+      <div className="mx-auto w-full max-w-md space-y-3 md:max-w-lg">
+        {pageImages.map((src, index) => (
+          <img
+            key={`${title}-page-${index + 1}`}
+            src={src}
+            alt={`${title} — page ${index + 1}`}
+            className="w-full rounded-lg shadow-sm bg-white"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Scrollable image gallery (clean masterclass content extracted from Gmail PDFs).
+ * Phone-sized slides stay full-bleed on mobile; on desktop they sit in a
+ * centred reading column so they don't stretch across a wide monitor.
+ * @param {{ images: string[], title: string }} props
+ */
+function GalleryViewer({ images, title }) {
+  return (
+    <div className="flex-1 overflow-y-auto px-2 py-4 space-y-3 bg-gray-50 md:px-6 md:py-6">
+      <div className="mx-auto w-full max-w-md space-y-3 md:max-w-lg">
+        {images.map((src, index) => (
+          <img
+            key={src}
+            src={src}
+            alt={`${title} — section ${index + 1}`}
+            className="w-full rounded-lg shadow-sm bg-white"
+            loading={index === 0 ? 'eager' : 'lazy'}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 p-8 flex-1">
+      <div className="w-8 h-8 border-4 border-green-200 border-t-green-700 rounded-full animate-spin" />
+      <p className="text-xs text-gray-500 font-medium">Loading guide…</p>
+    </div>
+  );
+}
+
+/** @param {{ title: string, message: string }} props */
+function ErrorState({ title, message }) {
+  return (
+    <div className="flex flex-col items-center justify-center flex-1 gap-2 px-6 py-8 text-center">
+      <p className="text-2xl">⚠️</p>
+      <p className="text-sm font-bold text-gray-800">Could not load {title}</p>
+      <p className="text-xs text-gray-500">{message}</p>
+    </div>
+  );
+}
+
+/**
+ * @param {{
+ *   guide: {
+ *     file?: string,
+ *     kind: 'pdf' | 'docx' | 'gallery',
+ *     title: string,
+ *     images?: string[],
+ *   } | null,
+ *   onClose: () => void,
+ * }} props
+ */
+export default function GuideViewerModal({ guide, onClose }) {
+  useRegisterBackHandler(() => {
+    if (guide) { onClose(); return true; }
+    return false;
+  }, Boolean(guide));
+
+  if (!guide) return null;
+
+  const fileUrl = guide.file
+    ? new URL(guide.file, window.location.origin).href
+    : null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-white md:items-center md:bg-black/45 md:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={guide.title}
+    >
+      {/* Click outside closes on desktop; mobile stays full-screen edge-to-edge. */}
+      <button
+        type="button"
+        className="absolute inset-0 hidden md:block"
+        aria-label="Close guide"
+        onClick={onClose}
+      />
+      <div className="relative z-10 flex h-full w-full flex-col overflow-hidden bg-white md:h-[min(92vh,960px)] md:max-w-xl md:rounded-2xl md:shadow-2xl">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 bg-white shrink-0">
+          <p className="text-sm font-bold text-gray-900 truncate flex-1">{guide.title}</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold shrink-0"
+            aria-label="Close guide"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex flex-col flex-1 overflow-hidden relative">
+          {guide.kind === 'docx' && fileUrl && (
+            <DocxViewer fileUrl={fileUrl} title={guide.title} />
+          )}
+          {guide.kind === 'pdf' && fileUrl && (
+            <PdfViewer fileUrl={fileUrl} title={guide.title} />
+          )}
+          {guide.kind === 'gallery' && guide.images && (
+            <GalleryViewer images={guide.images} title={guide.title} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 </file>
 
@@ -9150,28 +9150,72 @@ export default function LawnSettings({ app }) {
 
   return (
     <>
-      <div className="flex justify-between items-center mb-6 border-b pb-4 gap-3">
+      <div className="flex justify-between items-center mb-4 border-b pb-4 gap-3">
         <div className="min-w-0">
           <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
           <p className="text-sm text-green-700 mt-1">
             Configure appearance, lawn size, equipment, and surface profile.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
-        >
-          ← Back
-        </button>
+        {!dirty && (
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+            >
+              ← Back
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="text-xs bg-green-700 hover:bg-green-800 text-white font-bold py-1.5 px-3 rounded-lg transition-all"
+            >
+              Done
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="space-y-5 pb-24">
+      {dirty && (
+        <>
+          {/* Keeps layout clear of the fixed action bar while editing. */}
+          <div className="h-[5.25rem] mb-4" aria-hidden="true" />
+          <div className="fixed inset-x-0 top-0 z-40 flex justify-center px-3 sm:px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pointer-events-none">
+            <div
+              className="pointer-events-auto w-full max-w-xl rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 shadow-lg"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-xs font-bold text-amber-950 mb-2">Unsaved changes</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
+                >
+                  Save changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className={`space-y-5 ${dirty ? 'pb-4' : 'pb-2'}`}>
         <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
           <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
           <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
             Classic (long page), Atelier (moss home hub), Signal (dark status tabs), Canopy (neon
-            yard board), and Folio (paper desk folders). Use Cancel to undo, Save to keep.
+            yard board), and Folio (paper desk folders). Change anything and Cancel / Save appear at
+            the top.
           </p>
           <div className="grid gap-2">
             {LAWN_THEMES.map((theme) => {
@@ -9494,23 +9538,6 @@ export default function LawnSettings({ app }) {
             {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
           </button>
         </div>
-      </div>
-
-      <div className="sticky bottom-0 -mx-1 mt-4 border-t border-emerald-200 bg-white/95 backdrop-blur px-1 pt-3 pb-1 flex gap-2">
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
-        >
-          {dirty ? 'Save changes' : 'Done'}
-        </button>
       </div>
     </>
   );

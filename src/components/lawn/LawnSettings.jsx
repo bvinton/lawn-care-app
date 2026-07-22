@@ -117,28 +117,66 @@ export default function LawnSettings({ app }) {
 
   return (
     <>
-      <div className="flex justify-between items-center mb-6 border-b pb-4 gap-3">
+      <div className="flex justify-between items-center mb-4 border-b pb-4 gap-3">
         <div className="min-w-0">
           <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
           <p className="text-sm text-green-700 mt-1">
             Configure appearance, lawn size, equipment, and surface profile.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
-        >
-          ← Back
-        </button>
+        {!dirty && (
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+            >
+              ← Back
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="text-xs bg-green-700 hover:bg-green-800 text-white font-bold py-1.5 px-3 rounded-lg transition-all"
+            >
+              Done
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="space-y-5 pb-24">
+      {dirty && (
+        <div
+          className="sticky top-0 z-30 -mx-1 mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 shadow-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-xs font-bold text-amber-950 mb-2">Unsaved changes</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
+            >
+              Save changes
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className={`space-y-5 ${dirty ? 'pb-4' : 'pb-2'}`}>
         <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
           <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
           <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
             Classic (long page), Atelier (moss home hub), Signal (dark status tabs), Canopy (neon
-            yard board), and Folio (paper desk folders). Use Cancel to undo, Save to keep.
+            yard board), and Folio (paper desk folders). Change anything and Cancel / Save appear at
+            the top.
           </p>
           <div className="grid gap-2">
             {LAWN_THEMES.map((theme) => {
@@ -461,23 +499,6 @@ export default function LawnSettings({ app }) {
             {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
           </button>
         </div>
-      </div>
-
-      <div className="sticky bottom-0 -mx-1 mt-4 border-t border-emerald-200 bg-white/95 backdrop-blur px-1 pt-3 pb-1 flex gap-2">
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
-        >
-          {dirty ? 'Save changes' : 'Done'}
-        </button>
       </div>
     </>
   );
