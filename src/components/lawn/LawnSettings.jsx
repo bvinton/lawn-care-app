@@ -184,34 +184,29 @@ export default function LawnSettings({ app }) {
       </div>
 
       {dirty && (
-        <>
-          <div className="h-[5.25rem] mb-4" aria-hidden="true" />
-          <div className="fixed inset-x-0 top-0 z-40 flex justify-center px-3 sm:px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pointer-events-none">
-            <div
-              className="pointer-events-auto w-full max-w-xl rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 shadow-lg"
-              role="status"
-              aria-live="polite"
+        <div
+          className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 shadow-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-xs font-bold text-amber-950 mb-2">Unsaved changes</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
             >
-              <p className="text-xs font-bold text-amber-950 mb-2">Unsaved changes</p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
-                >
-                  Save changes
-                </button>
-              </div>
-            </div>
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
+            >
+              Save changes
+            </button>
           </div>
-        </>
+        </div>
       )}
 
       <div className={`space-y-5 ${dirty ? 'pb-4' : 'pb-2'}`}>
@@ -220,7 +215,7 @@ export default function LawnSettings({ app }) {
           <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
             Classic (long page), Atelier (moss home hub), Signal (dark status tabs), Canopy (neon
             yard board), Folio (paper desk folders), and Official (thelawnpack.co.uk brand). Change
-            anything and Cancel / Save appear at the top.
+            anything and Cancel / Save appear under Lawn Setup above.
           </p>
           <div className="grid gap-2">
             {LAWN_THEMES.map((theme) => {
