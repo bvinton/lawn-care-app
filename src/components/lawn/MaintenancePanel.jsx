@@ -183,7 +183,41 @@ export default function MaintenancePanel({ app }) {
       data-pet-lockout-until={petLockoutUntil ?? ''}
       className="mb-6 rounded-xl border border-sky-100 bg-sky-50/40 p-4"
     >
-      <h3 className="text-sm font-bold text-gray-800 mb-3">🔧 Maintenance Panel</h3>
+      <h3 className="text-sm font-bold text-gray-800 mb-2">🔧 Maintenance Panel</h3>
+
+      <div
+        className="maintenance-item-tabs mb-3 grid grid-cols-4 gap-1 rounded-xl border-2 border-sky-300 bg-white p-1.5 shadow-sm"
+        role="tablist"
+        aria-label="Maintenance items"
+      >
+        {itemTabs.map((tab) => {
+          const selected = activeItemTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setActiveItemTab(tab.id)}
+              className={`relative min-h-[2.75rem] rounded-lg px-1 py-2 text-[11px] font-black tracking-wide transition-all ${
+                selected
+                  ? 'bg-sky-700 text-white shadow'
+                  : 'bg-sky-50 text-sky-950 hover:bg-sky-100'
+              }`}
+            >
+              {tab.label}
+              {tab.due && (
+                <span
+                  className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ring-2 ${
+                    selected ? 'bg-amber-300 ring-sky-700' : 'bg-amber-500 ring-white'
+                  }`}
+                  aria-label="Due"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       <div
         className={`mb-3 rounded-lg border p-3 text-xs font-semibold ${
@@ -256,42 +290,8 @@ export default function MaintenancePanel({ app }) {
       </div>
 
       <p className="text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
-        Regular Maintenance
+        {itemTabs.find((tab) => tab.id === activeItemTab)?.label ?? 'Maintenance'}
       </p>
-
-      <div
-        className="mb-3 flex gap-1 overflow-x-auto rounded-lg border border-sky-200 bg-white/80 p-1"
-        role="tablist"
-        aria-label="Maintenance items"
-      >
-        {itemTabs.map((tab) => {
-          const selected = activeItemTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => setActiveItemTab(tab.id)}
-              className={`relative shrink-0 flex-1 min-w-[4.5rem] rounded-md px-2 py-2 text-[11px] font-bold transition-all ${
-                selected
-                  ? 'bg-sky-700 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-sky-50 hover:text-sky-900'
-              }`}
-            >
-              {tab.label}
-              {tab.due && (
-                <span
-                  className={`absolute top-1 right-1 h-1.5 w-1.5 rounded-full ${
-                    selected ? 'bg-amber-300' : 'bg-amber-500'
-                  }`}
-                  aria-label="Due"
-                />
-              )}
-            </button>
-          );
-        })}
-      </div>
 
       <div className="grid gap-3">
         <div

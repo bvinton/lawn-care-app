@@ -211,416 +211,6 @@ vite.config.js
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/components/lawn/LawnAtelierBoard.jsx">
-import React from 'react';
-import { SEASONS } from '../../data/LawnPackData';
-import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
-import { CalculatorIcon } from './LawnMaterials';
-import MaintenancePanel from './MaintenancePanel';
-import SeasonTimeline from './SeasonTimeline';
-
-/**
- * Atelier — field-journal spine. Not a room hub list, not bottom tabs.
- * Vertical chapter rail + one open chapter (Cover / Care / Pack / Studio).
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-export default function LawnAtelierBoard({ app }) {
-  const {
-    sqm,
-    length,
-    width,
-    runFullCloudSync,
-    cloudSyncStatus,
-    lastCloudSyncAt,
-    setActiveScreen,
-    setActiveRoom,
-    activeRoom,
-    mowingDue,
-    wateringDue,
-    verticutDue,
-    gypsumDue,
-    seedEstablishmentActive,
-    petLockoutActive,
-    springPackIncomplete,
-    incompleteSpringSteps,
-    currentSeason,
-    weatherStatusText,
-    weatherLocationLabel,
-    mowingNextDate,
-    wateringNextDate,
-    verticutNextDate,
-    gypsumDueDate,
-  } = app;
-
-  const dueCount = [mowingDue, wateringDue, verticutDue, gypsumDue].filter(Boolean).length;
-  const chapter =
-    activeRoom === 'maintenance' || activeRoom === 'seasonal' || activeRoom === 'more'
-      ? activeRoom
-      : 'hub';
-
-  const syncBusy = cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing';
-  const syncLabel =
-    cloudSyncStatus === 'pulling'
-      ? 'Pulling…'
-      : cloudSyncStatus === 'pushing'
-        ? 'Pushing…'
-        : cloudSyncStatus === 'error'
-          ? 'Retry sync'
-          : cloudSyncStatus === 'synced' && lastCloudSyncAt
-            ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)}`
-            : 'Sync now';
-
-  const chapters = [
-    { id: 'hub', label: 'Cover', short: 'Cv' },
-    { id: 'maintenance', label: 'Care', short: 'Cr', badge: dueCount > 0 ? String(dueCount) : null },
-    {
-      id: 'seasonal',
-      label: 'Pack',
-      short: 'Pk',
-      badge: springPackIncomplete ? String(incompleteSpringSteps.length) : null,
-    },
-    { id: 'more', label: 'Studio', short: 'St' },
-  ];
-
-  const dueLines = [
-    { id: 'mow', label: 'Mowing', due: mowingDue && !seedEstablishmentActive, next: mowingNextDate },
-    { id: 'water', label: 'Watering', due: wateringDue, next: wateringNextDate },
-    { id: 'verticut', label: 'Verticut', due: verticutDue, next: verticutNextDate },
-    {
-      id: 'gypsum',
-      label: 'Gypsum',
-      due: gypsumDue,
-      next: gypsumDueDate ? formatDisplayDate(gypsumDueDate) : null,
-    },
-  ];
-
-  let page = null;
-  if (chapter === 'maintenance') {
-    page = (
-      <div className="lawn-atelier__chapter lawn-panel-surface">
-        <MaintenancePanel app={app} />
-      </div>
-    );
-  } else if (chapter === 'seasonal') {
-    page = (
-      <div className="lawn-atelier__chapter lawn-panel-surface">
-        <SeasonTimeline app={app} />
-      </div>
-    );
-  } else if (chapter === 'more') {
-    page = (
-      <div className="lawn-atelier__studio">
-        <p className="lawn-atelier__studio-lede">Studio tools</p>
-        <button
-          type="button"
-          className="lawn-atelier__studio-row"
-          onClick={() => void runFullCloudSync()}
-          disabled={syncBusy}
-        >
-          <span>Cloud sync</span>
-          <span>{syncLabel}</span>
-        </button>
-        <button
-          type="button"
-          className="lawn-atelier__studio-row"
-          onClick={() => setActiveScreen('materials')}
-        >
-          <span className="inline-flex items-center gap-2">
-            <CalculatorIcon className="w-3.5 h-3.5" /> Materials calculator
-          </span>
-          <span aria-hidden="true">→</span>
-        </button>
-        <button
-          type="button"
-          className="lawn-atelier__studio-row"
-          onClick={() => setActiveScreen('guides')}
-        >
-          <span>Guides & PDFs</span>
-          <span aria-hidden="true">→</span>
-        </button>
-        <button
-          type="button"
-          className="lawn-atelier__studio-row"
-          onClick={() => setActiveScreen('settings')}
-        >
-          <span>Setup</span>
-          <span aria-hidden="true">→</span>
-        </button>
-      </div>
-    );
-  } else {
-    page = (
-      <div className="lawn-atelier__cover">
-        <p className="lawn-atelier__kicker">{weatherLocationLabel}</p>
-        <h2 className="lawn-atelier__season">{SEASONS[currentSeason]?.name ?? 'Season'}</h2>
-        <p className="lawn-atelier__size">
-          {sqm} m² · {length}×{width}m
-        </p>
-        <p className="lawn-atelier__weather">{weatherStatusText}</p>
-
-        {(petLockoutActive || seedEstablishmentActive || springPackIncomplete) && (
-          <ul className="lawn-atelier__notices">
-            {petLockoutActive && <li>Pets off the lawn — chemical drying.</li>}
-            {seedEstablishmentActive && <li>Seed lock — no mowing while establishing.</li>}
-            {springPackIncomplete && (
-              <li>
-                Spring Pack: {incompleteSpringSteps.length} step
-                {incompleteSpringSteps.length !== 1 ? 's' : ''} left.
-              </li>
-            )}
-          </ul>
-        )}
-
-        <div className="lawn-atelier__ledger" aria-label="Care ledger">
-          {dueLines.map((line, index) => (
-            <button
-              key={line.id}
-              type="button"
-              className={`lawn-atelier__line${line.due ? ' is-due' : ''}`}
-              style={{ animationDelay: `${80 + index * 60}ms` }}
-              onClick={() => setActiveRoom('maintenance')}
-            >
-              <span className="lawn-atelier__line-label">{line.label}</span>
-              <span className="lawn-atelier__line-rule" aria-hidden="true" />
-              <span className="lawn-atelier__line-state">
-                {line.due ? 'Due' : line.next ? line.next : '—'}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        <div className="lawn-atelier__cover-actions">
-          <button
-            type="button"
-            className="lawn-atelier__open"
-            onClick={() => setActiveRoom('maintenance')}
-          >
-            Open Care chapter
-          </button>
-          <button
-            type="button"
-            className="lawn-atelier__open lawn-atelier__open--ghost"
-            onClick={() => setActiveRoom('seasonal')}
-          >
-            Open Pack chapter
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="lawn-atelier" data-atelier-chapter={chapter}>
-      <nav className="lawn-atelier__spine" aria-label="Journal chapters">
-        {chapters.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`lawn-atelier__spine-btn${chapter === item.id ? ' is-active' : ''}`}
-            onClick={() =>
-              setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))
-            }
-            aria-current={chapter === item.id ? 'page' : undefined}
-            title={item.label}
-          >
-            <span className="lawn-atelier__spine-short">{item.short}</span>
-            <span className="lawn-atelier__spine-label">{item.label}</span>
-            {item.badge ? <span className="lawn-atelier__spine-badge">{item.badge}</span> : null}
-          </button>
-        ))}
-      </nav>
-      <div className="lawn-atelier__page">{page}</div>
-    </div>
-  );
-}
-</file>
-
-<file path="src/components/lawn/LawnCanopyBoard.jsx">
-import React from 'react';
-import { SEASONS } from '../../data/LawnPackData';
-import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
-
-/**
- * Canopy — bright daylight timeline. Not a dark shell, not bottom tabs.
- * Vertical due ribbon under a sky hero; Care/Pack open as sheets via floating dock.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-export default function LawnCanopyBoard({ app }) {
-  const {
-    sqm,
-    mowingDue,
-    wateringDue,
-    verticutDue,
-    gypsumDue,
-    seedEstablishmentActive,
-    seedDaysRemaining,
-    mowingNextDate,
-    wateringNextDate,
-    verticutNextDate,
-    gypsumDueDate,
-    currentSeason,
-    springPackIncomplete,
-    incompleteSpringSteps,
-    weatherStatusText,
-    weatherLocationLabel,
-    currentSoilTemp,
-    setActiveRoom,
-    setActiveScreen,
-    runFullCloudSync,
-    cloudSyncStatus,
-    lastCloudSyncAt,
-    petLockoutActive,
-    petLockoutHoursRemaining,
-    todayStr,
-  } = app;
-
-  /** @type {{ id: string, title: string, detail: string, go: 'maintenance' | 'seasonal', urgent: boolean }[]} */
-  const queue = [];
-
-  if (petLockoutActive) {
-    queue.push({
-      id: 'pets',
-      title: 'Pet lockout',
-      detail: `Safe in ${petLockoutHoursRemaining}h`,
-      go: 'maintenance',
-      urgent: true,
-    });
-  }
-  if (seedEstablishmentActive) {
-    queue.push({
-      id: 'seed',
-      title: 'No mowing',
-      detail: `${seedDaysRemaining} day${seedDaysRemaining !== 1 ? 's' : ''} left on seed lock`,
-      go: 'maintenance',
-      urgent: true,
-    });
-  }
-  if (mowingDue && !seedEstablishmentActive) {
-    queue.push({
-      id: 'mow',
-      title: 'Mow the lawn',
-      detail: mowingNextDate ? `Was due ${mowingNextDate}` : 'Due now',
-      go: 'maintenance',
-      urgent: true,
-    });
-  }
-  if (wateringDue) {
-    queue.push({
-      id: 'water',
-      title: 'Water',
-      detail: wateringNextDate ? `Was due ${wateringNextDate}` : 'Due now',
-      go: 'maintenance',
-      urgent: true,
-    });
-  }
-  if (verticutDue) {
-    queue.push({
-      id: 'verticut',
-      title: 'Verticut',
-      detail: verticutNextDate ? `Was due ${verticutNextDate}` : 'Due now',
-      go: 'maintenance',
-      urgent: true,
-    });
-  }
-  if (gypsumDue) {
-    queue.push({
-      id: 'gypsum',
-      title: 'Liquid gypsum',
-      detail: gypsumDueDate ? formatDisplayDate(gypsumDueDate) : 'Due now',
-      go: 'maintenance',
-      urgent: true,
-    });
-  }
-  if (springPackIncomplete) {
-    queue.push({
-      id: 'spring',
-      title: 'Spring Pack',
-      detail: `${incompleteSpringSteps.length} step${incompleteSpringSteps.length !== 1 ? 's' : ''} left`,
-      go: 'seasonal',
-      urgent: true,
-    });
-  }
-
-  if (queue.length === 0) {
-    queue.push({
-      id: 'clear',
-      title: 'Clear skies',
-      detail: `${SEASONS[currentSeason]?.name ?? 'Season'} · ${sqm} m² — nothing due today`,
-      go: 'maintenance',
-      urgent: false,
-    });
-  }
-
-  const dateLabel = formatDisplayDate(todayStr);
-  const syncBusy = cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing';
-  const urgentCount = queue.filter((item) => item.urgent).length;
-
-  return (
-    <div className="lawn-canopy">
-      <header className="lawn-canopy__sky">
-        <div className="lawn-canopy__sky-glow" aria-hidden="true" />
-        <p className="lawn-canopy__date">{dateLabel}</p>
-        <h2 className="lawn-canopy__place">{weatherLocationLabel}</h2>
-        <p className="lawn-canopy__weather">{weatherStatusText}</p>
-        <div className="lawn-canopy__vitals">
-          <span>{sqm} m²</span>
-          <span>{currentSoilTemp != null ? `${currentSoilTemp.toFixed(0)}°C soil` : 'Soil —'}</span>
-          <span>
-            {urgentCount > 0 ? `${urgentCount} due` : 'All clear'}
-          </span>
-        </div>
-      </header>
-
-      <section className="lawn-canopy__ribbon" aria-label="Today">
-        <p className="lawn-canopy__ribbon-title">Today</p>
-        <ol className="lawn-canopy__timeline">
-          {queue.map((item, index) => (
-            <li key={item.id} style={{ animationDelay: `${100 + index * 70}ms` }}>
-              <button
-                type="button"
-                className={`lawn-canopy__node${item.urgent ? ' is-urgent' : ''}`}
-                onClick={() => setActiveRoom(item.go)}
-              >
-                <span className="lawn-canopy__node-dot" aria-hidden="true" />
-                <span className="lawn-canopy__node-copy">
-                  <span className="lawn-canopy__node-title">{item.title}</span>
-                  <span className="lawn-canopy__node-detail">{item.detail}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <div className="lawn-canopy__dock" role="navigation" aria-label="Open sheets">
-        <button type="button" className="lawn-canopy__dock-main" onClick={() => setActiveRoom('maintenance')}>
-          Care
-        </button>
-        <button type="button" className="lawn-canopy__dock-main" onClick={() => setActiveRoom('seasonal')}>
-          Pack
-        </button>
-        <button type="button" onClick={() => void runFullCloudSync()} disabled={syncBusy}>
-          {syncBusy
-            ? '…'
-            : cloudSyncStatus === 'synced' && lastCloudSyncAt
-              ? formatSyncTimeAgo(lastCloudSyncAt)
-              : 'Sync'}
-        </button>
-        <button type="button" onClick={() => setActiveScreen('materials')}>
-          Kit
-        </button>
-        <button type="button" onClick={() => setActiveScreen('guides')}>
-          Guides
-        </button>
-        <button type="button" onClick={() => setActiveScreen('settings')}>
-          Setup
-        </button>
-      </div>
-    </div>
-  );
-}
-</file>
-
 <file path=".cursor/rules/git-workflow.mdc">
 ---
 description: How to commit and push — use push-all.ps1 to deploy both apps together
@@ -1043,6 +633,416 @@ const sizes = [
 for (const { name, size } of sizes) {
   await sharp(svg).resize(size, size).png().toFile(join(root, 'public', name));
   console.log(`Wrote public/${name}`);
+}
+</file>
+
+<file path="src/components/lawn/LawnAtelierBoard.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
+import { CalculatorIcon } from './LawnMaterials';
+import MaintenancePanel from './MaintenancePanel';
+import SeasonTimeline from './SeasonTimeline';
+
+/**
+ * Atelier — field-journal spine. Not a room hub list, not bottom tabs.
+ * Vertical chapter rail + one open chapter (Cover / Care / Pack / Studio).
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnAtelierBoard({ app }) {
+  const {
+    sqm,
+    length,
+    width,
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    setActiveScreen,
+    setActiveRoom,
+    activeRoom,
+    mowingDue,
+    wateringDue,
+    verticutDue,
+    gypsumDue,
+    seedEstablishmentActive,
+    petLockoutActive,
+    springPackIncomplete,
+    incompleteSpringSteps,
+    currentSeason,
+    weatherStatusText,
+    weatherLocationLabel,
+    mowingNextDate,
+    wateringNextDate,
+    verticutNextDate,
+    gypsumDueDate,
+  } = app;
+
+  const dueCount = [mowingDue, wateringDue, verticutDue, gypsumDue].filter(Boolean).length;
+  const chapter =
+    activeRoom === 'maintenance' || activeRoom === 'seasonal' || activeRoom === 'more'
+      ? activeRoom
+      : 'hub';
+
+  const syncBusy = cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing';
+  const syncLabel =
+    cloudSyncStatus === 'pulling'
+      ? 'Pulling…'
+      : cloudSyncStatus === 'pushing'
+        ? 'Pushing…'
+        : cloudSyncStatus === 'error'
+          ? 'Retry sync'
+          : cloudSyncStatus === 'synced' && lastCloudSyncAt
+            ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)}`
+            : 'Sync now';
+
+  const chapters = [
+    { id: 'hub', label: 'Cover', short: 'Cv' },
+    { id: 'maintenance', label: 'Care', short: 'Cr', badge: dueCount > 0 ? String(dueCount) : null },
+    {
+      id: 'seasonal',
+      label: 'Pack',
+      short: 'Pk',
+      badge: springPackIncomplete ? String(incompleteSpringSteps.length) : null,
+    },
+    { id: 'more', label: 'Studio', short: 'St' },
+  ];
+
+  const dueLines = [
+    { id: 'mow', label: 'Mowing', due: mowingDue && !seedEstablishmentActive, next: mowingNextDate },
+    { id: 'water', label: 'Watering', due: wateringDue, next: wateringNextDate },
+    { id: 'verticut', label: 'Verticut', due: verticutDue, next: verticutNextDate },
+    {
+      id: 'gypsum',
+      label: 'Gypsum',
+      due: gypsumDue,
+      next: gypsumDueDate ? formatDisplayDate(gypsumDueDate) : null,
+    },
+  ];
+
+  let page = null;
+  if (chapter === 'maintenance') {
+    page = (
+      <div className="lawn-atelier__chapter lawn-panel-surface">
+        <MaintenancePanel app={app} />
+      </div>
+    );
+  } else if (chapter === 'seasonal') {
+    page = (
+      <div className="lawn-atelier__chapter lawn-panel-surface">
+        <SeasonTimeline app={app} />
+      </div>
+    );
+  } else if (chapter === 'more') {
+    page = (
+      <div className="lawn-atelier__studio">
+        <p className="lawn-atelier__studio-lede">Studio tools</p>
+        <button
+          type="button"
+          className="lawn-atelier__studio-row"
+          onClick={() => void runFullCloudSync()}
+          disabled={syncBusy}
+        >
+          <span>Cloud sync</span>
+          <span>{syncLabel}</span>
+        </button>
+        <button
+          type="button"
+          className="lawn-atelier__studio-row"
+          onClick={() => setActiveScreen('materials')}
+        >
+          <span className="inline-flex items-center gap-2">
+            <CalculatorIcon className="w-3.5 h-3.5" /> Materials calculator
+          </span>
+          <span aria-hidden="true">→</span>
+        </button>
+        <button
+          type="button"
+          className="lawn-atelier__studio-row"
+          onClick={() => setActiveScreen('guides')}
+        >
+          <span>Guides & PDFs</span>
+          <span aria-hidden="true">→</span>
+        </button>
+        <button
+          type="button"
+          className="lawn-atelier__studio-row"
+          onClick={() => setActiveScreen('settings')}
+        >
+          <span>Setup</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </div>
+    );
+  } else {
+    page = (
+      <div className="lawn-atelier__cover">
+        <p className="lawn-atelier__kicker">{weatherLocationLabel}</p>
+        <h2 className="lawn-atelier__season">{SEASONS[currentSeason]?.name ?? 'Season'}</h2>
+        <p className="lawn-atelier__size">
+          {sqm} m² · {length}×{width}m
+        </p>
+        <p className="lawn-atelier__weather">{weatherStatusText}</p>
+
+        {(petLockoutActive || seedEstablishmentActive || springPackIncomplete) && (
+          <ul className="lawn-atelier__notices">
+            {petLockoutActive && <li>Pets off the lawn — chemical drying.</li>}
+            {seedEstablishmentActive && <li>Seed lock — no mowing while establishing.</li>}
+            {springPackIncomplete && (
+              <li>
+                Spring Pack: {incompleteSpringSteps.length} step
+                {incompleteSpringSteps.length !== 1 ? 's' : ''} left.
+              </li>
+            )}
+          </ul>
+        )}
+
+        <div className="lawn-atelier__ledger" aria-label="Care ledger">
+          {dueLines.map((line, index) => (
+            <button
+              key={line.id}
+              type="button"
+              className={`lawn-atelier__line${line.due ? ' is-due' : ''}`}
+              style={{ animationDelay: `${80 + index * 60}ms` }}
+              onClick={() => setActiveRoom('maintenance')}
+            >
+              <span className="lawn-atelier__line-label">{line.label}</span>
+              <span className="lawn-atelier__line-rule" aria-hidden="true" />
+              <span className="lawn-atelier__line-state">
+                {line.due ? 'Due' : line.next ? line.next : '—'}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="lawn-atelier__cover-actions">
+          <button
+            type="button"
+            className="lawn-atelier__open"
+            onClick={() => setActiveRoom('maintenance')}
+          >
+            Open Care chapter
+          </button>
+          <button
+            type="button"
+            className="lawn-atelier__open lawn-atelier__open--ghost"
+            onClick={() => setActiveRoom('seasonal')}
+          >
+            Open Pack chapter
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="lawn-atelier" data-atelier-chapter={chapter}>
+      <nav className="lawn-atelier__spine" aria-label="Journal chapters">
+        {chapters.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`lawn-atelier__spine-btn${chapter === item.id ? ' is-active' : ''}`}
+            onClick={() =>
+              setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))
+            }
+            aria-current={chapter === item.id ? 'page' : undefined}
+            title={item.label}
+          >
+            <span className="lawn-atelier__spine-short">{item.short}</span>
+            <span className="lawn-atelier__spine-label">{item.label}</span>
+            {item.badge ? <span className="lawn-atelier__spine-badge">{item.badge}</span> : null}
+          </button>
+        ))}
+      </nav>
+      <div className="lawn-atelier__page">{page}</div>
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/lawn/LawnCanopyBoard.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
+
+/**
+ * Canopy — bright daylight timeline. Not a dark shell, not bottom tabs.
+ * Vertical due ribbon under a sky hero; Care/Pack open as sheets via floating dock.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnCanopyBoard({ app }) {
+  const {
+    sqm,
+    mowingDue,
+    wateringDue,
+    verticutDue,
+    gypsumDue,
+    seedEstablishmentActive,
+    seedDaysRemaining,
+    mowingNextDate,
+    wateringNextDate,
+    verticutNextDate,
+    gypsumDueDate,
+    currentSeason,
+    springPackIncomplete,
+    incompleteSpringSteps,
+    weatherStatusText,
+    weatherLocationLabel,
+    currentSoilTemp,
+    setActiveRoom,
+    setActiveScreen,
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    petLockoutActive,
+    petLockoutHoursRemaining,
+    todayStr,
+  } = app;
+
+  /** @type {{ id: string, title: string, detail: string, go: 'maintenance' | 'seasonal', urgent: boolean }[]} */
+  const queue = [];
+
+  if (petLockoutActive) {
+    queue.push({
+      id: 'pets',
+      title: 'Pet lockout',
+      detail: `Safe in ${petLockoutHoursRemaining}h`,
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (seedEstablishmentActive) {
+    queue.push({
+      id: 'seed',
+      title: 'No mowing',
+      detail: `${seedDaysRemaining} day${seedDaysRemaining !== 1 ? 's' : ''} left on seed lock`,
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (mowingDue && !seedEstablishmentActive) {
+    queue.push({
+      id: 'mow',
+      title: 'Mow the lawn',
+      detail: mowingNextDate ? `Was due ${mowingNextDate}` : 'Due now',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (wateringDue) {
+    queue.push({
+      id: 'water',
+      title: 'Water',
+      detail: wateringNextDate ? `Was due ${wateringNextDate}` : 'Due now',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (verticutDue) {
+    queue.push({
+      id: 'verticut',
+      title: 'Verticut',
+      detail: verticutNextDate ? `Was due ${verticutNextDate}` : 'Due now',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (gypsumDue) {
+    queue.push({
+      id: 'gypsum',
+      title: 'Liquid gypsum',
+      detail: gypsumDueDate ? formatDisplayDate(gypsumDueDate) : 'Due now',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (springPackIncomplete) {
+    queue.push({
+      id: 'spring',
+      title: 'Spring Pack',
+      detail: `${incompleteSpringSteps.length} step${incompleteSpringSteps.length !== 1 ? 's' : ''} left`,
+      go: 'seasonal',
+      urgent: true,
+    });
+  }
+
+  if (queue.length === 0) {
+    queue.push({
+      id: 'clear',
+      title: 'Clear skies',
+      detail: `${SEASONS[currentSeason]?.name ?? 'Season'} · ${sqm} m² — nothing due today`,
+      go: 'maintenance',
+      urgent: false,
+    });
+  }
+
+  const dateLabel = formatDisplayDate(todayStr);
+  const syncBusy = cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing';
+  const urgentCount = queue.filter((item) => item.urgent).length;
+
+  return (
+    <div className="lawn-canopy">
+      <header className="lawn-canopy__sky">
+        <div className="lawn-canopy__sky-glow" aria-hidden="true" />
+        <p className="lawn-canopy__date">{dateLabel}</p>
+        <h2 className="lawn-canopy__place">{weatherLocationLabel}</h2>
+        <p className="lawn-canopy__weather">{weatherStatusText}</p>
+        <div className="lawn-canopy__vitals">
+          <span>{sqm} m²</span>
+          <span>{currentSoilTemp != null ? `${currentSoilTemp.toFixed(0)}°C soil` : 'Soil —'}</span>
+          <span>
+            {urgentCount > 0 ? `${urgentCount} due` : 'All clear'}
+          </span>
+        </div>
+      </header>
+
+      <section className="lawn-canopy__ribbon" aria-label="Today">
+        <p className="lawn-canopy__ribbon-title">Today</p>
+        <ol className="lawn-canopy__timeline">
+          {queue.map((item, index) => (
+            <li key={item.id} style={{ animationDelay: `${100 + index * 70}ms` }}>
+              <button
+                type="button"
+                className={`lawn-canopy__node${item.urgent ? ' is-urgent' : ''}`}
+                onClick={() => setActiveRoom(item.go)}
+              >
+                <span className="lawn-canopy__node-dot" aria-hidden="true" />
+                <span className="lawn-canopy__node-copy">
+                  <span className="lawn-canopy__node-title">{item.title}</span>
+                  <span className="lawn-canopy__node-detail">{item.detail}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <div className="lawn-canopy__dock" role="navigation" aria-label="Open sheets">
+        <button type="button" className="lawn-canopy__dock-main" onClick={() => setActiveRoom('maintenance')}>
+          Care
+        </button>
+        <button type="button" className="lawn-canopy__dock-main" onClick={() => setActiveRoom('seasonal')}>
+          Pack
+        </button>
+        <button type="button" onClick={() => void runFullCloudSync()} disabled={syncBusy}>
+          {syncBusy
+            ? '…'
+            : cloudSyncStatus === 'synced' && lastCloudSyncAt
+              ? formatSyncTimeAgo(lastCloudSyncAt)
+              : 'Sync'}
+        </button>
+        <button type="button" onClick={() => setActiveScreen('materials')}>
+          Kit
+        </button>
+        <button type="button" onClick={() => setActiveScreen('guides')}>
+          Guides
+        </button>
+        <button type="button" onClick={() => setActiveScreen('settings')}>
+          Setup
+        </button>
+      </div>
+    </div>
+  );
 }
 </file>
 
@@ -3688,157 +3688,6 @@ export function resolveFocusRoom(focusRaw) {
 }
 </file>
 
-<file path="src/components/lawn/LawnMainView.jsx">
-import React from 'react';
-import MaintenancePanel from './MaintenancePanel';
-import SeasonTimeline from './SeasonTimeline';
-import LawnWorkflow from './LawnWorkflow';
-import LawnAlerts from './LawnAlerts';
-import LawnStatusBoard, { LawnSignalMore } from './LawnStatusBoard';
-import LawnAtelierBoard from './LawnAtelierBoard';
-import LawnCanopyBoard from './LawnCanopyBoard';
-
-/**
- * Signal — bottom tabs (unchanged).
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-function LawnTabsLayout({ app }) {
-  const { activeRoom, setActiveRoom } = app;
-  const tab =
-    activeRoom === 'maintenance' || activeRoom === 'seasonal' || activeRoom === 'more'
-      ? activeRoom
-      : 'hub';
-
-  const tabs = [
-    { id: 'hub', label: 'Status' },
-    { id: 'maintenance', label: 'Care' },
-    { id: 'seasonal', label: 'Pack' },
-    { id: 'more', label: 'More' },
-  ];
-
-  let body = null;
-  if (tab === 'maintenance') {
-    body = (
-      <div className="lawn-panel-surface">
-        <MaintenancePanel app={app} />
-      </div>
-    );
-  } else if (tab === 'seasonal') {
-    body = (
-      <div className="lawn-panel-surface">
-        <SeasonTimeline app={app} />
-      </div>
-    );
-  } else if (tab === 'more') {
-    body = <LawnSignalMore app={app} />;
-  } else {
-    body = (
-      <>
-        <LawnAlerts app={app} />
-        <LawnStatusBoard app={app} />
-      </>
-    );
-  }
-
-  return (
-    <div className="lawn-tabs">
-      <div className="lawn-tabs__body">{body}</div>
-      <nav className="lawn-tabs__nav" aria-label="Primary">
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`lawn-tabs__tab${tab === item.id ? ' is-active' : ''}`}
-            onClick={() =>
-              setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))
-            }
-            aria-current={tab === item.id ? 'page' : undefined}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-    </div>
-  );
-}
-
-/**
- * Atelier — journal spine + chapter page.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-function LawnRoomsLayout({ app }) {
-  return (
-    <div className="lawn-atelier-shell">
-      <LawnAlerts app={app} />
-      <LawnAtelierBoard app={app} />
-    </div>
-  );
-}
-
-/**
- * Canopy — daylight timeline + sheet overlays for Care/Pack.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-function LawnTodayLayout({ app }) {
-  const { activeRoom, setActiveRoom } = app;
-  const sheet = activeRoom === 'maintenance' || activeRoom === 'seasonal' ? activeRoom : null;
-
-  if (sheet) {
-    return (
-      <div className="lawn-canopy-sheet">
-        <div className="lawn-canopy-sheet__bar">
-          <button type="button" className="lawn-canopy-sheet__back" onClick={() => setActiveRoom('hub')}>
-            ← Today
-          </button>
-          <h2 className="lawn-canopy-sheet__title">{sheet === 'maintenance' ? 'Care' : 'Pack'}</h2>
-          <button
-            type="button"
-            className="lawn-canopy-sheet__setup"
-            onClick={() => app.setActiveScreen('settings')}
-          >
-            Setup
-          </button>
-        </div>
-        <LawnAlerts app={app} />
-        <div className="lawn-panel-surface">
-          {sheet === 'maintenance' ? <MaintenancePanel app={app} /> : <SeasonTimeline app={app} />}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <LawnAlerts app={app} />
-      <LawnCanopyBoard app={app} />
-    </>
-  );
-}
-
-/**
- * Main content switcher across classic / rooms / tabs / today.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-export default function LawnMainView({ app }) {
-  const { activeTheme } = app;
-  const layout = activeTheme.layout;
-
-  if (layout === 'tabs') {
-    return <LawnTabsLayout app={app} />;
-  }
-
-  if (layout === 'rooms') {
-    return <LawnRoomsLayout app={app} />;
-  }
-
-  if (layout === 'today') {
-    return <LawnTodayLayout app={app} />;
-  }
-
-  return <LawnWorkflow app={app} />;
-}
-</file>
-
 <file path="src/lib/supabase.js">
 import { createClient } from '@supabase/supabase-js';
 
@@ -4163,6 +4012,157 @@ export default function LawnGuides({ setActiveScreen }) {
       )}
     </>
   );
+}
+</file>
+
+<file path="src/components/lawn/LawnMainView.jsx">
+import React from 'react';
+import MaintenancePanel from './MaintenancePanel';
+import SeasonTimeline from './SeasonTimeline';
+import LawnWorkflow from './LawnWorkflow';
+import LawnAlerts from './LawnAlerts';
+import LawnStatusBoard, { LawnSignalMore } from './LawnStatusBoard';
+import LawnAtelierBoard from './LawnAtelierBoard';
+import LawnCanopyBoard from './LawnCanopyBoard';
+
+/**
+ * Signal — bottom tabs (unchanged).
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+function LawnTabsLayout({ app }) {
+  const { activeRoom, setActiveRoom } = app;
+  const tab =
+    activeRoom === 'maintenance' || activeRoom === 'seasonal' || activeRoom === 'more'
+      ? activeRoom
+      : 'hub';
+
+  const tabs = [
+    { id: 'hub', label: 'Status' },
+    { id: 'maintenance', label: 'Care' },
+    { id: 'seasonal', label: 'Pack' },
+    { id: 'more', label: 'More' },
+  ];
+
+  let body = null;
+  if (tab === 'maintenance') {
+    body = (
+      <div className="lawn-panel-surface">
+        <MaintenancePanel app={app} />
+      </div>
+    );
+  } else if (tab === 'seasonal') {
+    body = (
+      <div className="lawn-panel-surface">
+        <SeasonTimeline app={app} />
+      </div>
+    );
+  } else if (tab === 'more') {
+    body = <LawnSignalMore app={app} />;
+  } else {
+    body = (
+      <>
+        <LawnAlerts app={app} />
+        <LawnStatusBoard app={app} />
+      </>
+    );
+  }
+
+  return (
+    <div className="lawn-tabs">
+      <div className="lawn-tabs__body">{body}</div>
+      <nav className="lawn-tabs__nav" aria-label="Primary">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`lawn-tabs__tab${tab === item.id ? ' is-active' : ''}`}
+            onClick={() =>
+              setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))
+            }
+            aria-current={tab === item.id ? 'page' : undefined}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+/**
+ * Atelier — journal spine + chapter page.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+function LawnRoomsLayout({ app }) {
+  return (
+    <div className="lawn-atelier-shell">
+      <LawnAlerts app={app} />
+      <LawnAtelierBoard app={app} />
+    </div>
+  );
+}
+
+/**
+ * Canopy — daylight timeline + sheet overlays for Care/Pack.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+function LawnTodayLayout({ app }) {
+  const { activeRoom, setActiveRoom } = app;
+  const sheet = activeRoom === 'maintenance' || activeRoom === 'seasonal' ? activeRoom : null;
+
+  if (sheet) {
+    return (
+      <div className="lawn-canopy-sheet">
+        <div className="lawn-canopy-sheet__bar">
+          <button type="button" className="lawn-canopy-sheet__back" onClick={() => setActiveRoom('hub')}>
+            ← Today
+          </button>
+          <h2 className="lawn-canopy-sheet__title">{sheet === 'maintenance' ? 'Care' : 'Pack'}</h2>
+          <button
+            type="button"
+            className="lawn-canopy-sheet__setup"
+            onClick={() => app.setActiveScreen('settings')}
+          >
+            Setup
+          </button>
+        </div>
+        <LawnAlerts app={app} />
+        <div className="lawn-panel-surface">
+          {sheet === 'maintenance' ? <MaintenancePanel app={app} /> : <SeasonTimeline app={app} />}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <LawnAlerts app={app} />
+      <LawnCanopyBoard app={app} />
+    </>
+  );
+}
+
+/**
+ * Main content switcher across classic / rooms / tabs / today.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnMainView({ app }) {
+  const { activeTheme } = app;
+  const layout = activeTheme.layout;
+
+  if (layout === 'tabs') {
+    return <LawnTabsLayout app={app} />;
+  }
+
+  if (layout === 'rooms') {
+    return <LawnRoomsLayout app={app} />;
+  }
+
+  if (layout === 'today') {
+    return <LawnTodayLayout app={app} />;
+  }
+
+  return <LawnWorkflow app={app} />;
 }
 </file>
 
@@ -5451,6 +5451,445 @@ export function applyLawnFocusFromUrl(options = {}) {
 }
 </file>
 
+<file path="vite.config.js">
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'prompt',
+      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'The Lawn Pack Companion',
+        short_name: 'Lawn Pack',
+        description:
+          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
+        theme_color: '#14532d',
+        background_color: '#f3f4f6',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
+        lang: 'en-GB',
+        categories: ['lifestyle', 'utilities'],
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
+        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
+        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'open-meteo-forecast',
+              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
+            },
+          },
+          {
+            urlPattern: /\.(pdf|docx)$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'lawn-pack-guides',
+              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+          {
+            urlPattern: /\/guides\/masterclass\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'lawn-masterclass-images',
+              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+        ],
+      },
+    }),
+  ],
+});
+</file>
+
+<file path="src/components/lawn/LawnCareApp.jsx">
+import React, { useCallback, useEffect } from 'react';
+import { useLawnCareApp } from '../../hooks/useLawnCareApp';
+import {
+  useMobileBackNavigation,
+  useRegisterBackHandler,
+} from '../../hooks/useMobileBackNavigation';
+import { pushAppHistoryState } from '../../utils/backNavigation';
+import { isSectionedLayout } from '../../data/lawnThemes';
+import LawnSettings from './LawnSettings';
+import LawnMainView from './LawnMainView';
+import LawnGuides from './LawnGuides';
+import LawnMaterials from './LawnMaterials';
+import SprinklerLightbox from './SprinklerLightbox';
+
+export default function LawnCareApp() {
+  const app = useLawnCareApp();
+  const sectioned = isSectionedLayout(app.activeTheme.layout);
+
+  const isAtRoot = useCallback(
+    () =>
+      app.activeScreen === 'main' &&
+      (!sectioned || app.activeRoom === 'hub') &&
+      !app.enlargedSprinkler &&
+      !app.showLevellingGuide,
+    [
+      app.activeScreen,
+      sectioned,
+      app.activeRoom,
+      app.enlargedSprinkler,
+      app.showLevellingGuide,
+    ]
+  );
+
+  const onReturnToMain = useCallback(() => {
+    app.setActiveScreen('main');
+    if (sectioned) {
+      app.setActiveRoom('hub');
+    }
+    app.setShowLevellingGuide(false);
+    app.setEnlargedSprinkler(null);
+  }, [app, sectioned]);
+
+  useMobileBackNavigation({ isAtRoot, onReturnToMain });
+
+  useEffect(() => {
+    if (app.activeScreen !== 'main') {
+      pushAppHistoryState({ screen: app.activeScreen });
+    }
+  }, [app.activeScreen]);
+
+  useEffect(() => {
+    if (sectioned && app.activeRoom !== 'hub' && app.activeScreen === 'main') {
+      pushAppHistoryState({ room: app.activeRoom });
+    }
+  }, [app.activeRoom, sectioned, app.activeScreen]);
+
+  useEffect(() => {
+    if (app.enlargedSprinkler) {
+      pushAppHistoryState({ overlay: 'sprinkler' });
+    }
+  }, [app.enlargedSprinkler]);
+
+  useEffect(() => {
+    if (app.showLevellingGuide) {
+      pushAppHistoryState({ overlay: 'levelling' });
+    }
+  }, [app.showLevellingGuide]);
+
+  useRegisterBackHandler(() => {
+    if (app.enlargedSprinkler) {
+      app.setEnlargedSprinkler(null);
+      return true;
+    }
+    return false;
+  }, Boolean(app.enlargedSprinkler));
+
+  useRegisterBackHandler(() => {
+    if (app.showLevellingGuide) {
+      app.setShowLevellingGuide(false);
+      return true;
+    }
+    return false;
+  }, Boolean(app.showLevellingGuide));
+
+  useRegisterBackHandler(() => {
+    if (sectioned && app.activeScreen === 'main' && app.activeRoom !== 'hub') {
+      app.setActiveRoom('hub');
+      return true;
+    }
+    return false;
+  }, sectioned && app.activeScreen === 'main' && app.activeRoom !== 'hub');
+
+  return (
+    <div
+      className="lawn-app-shell w-full max-w-xl mx-auto overflow-hidden"
+      data-lawn-theme={app.activeTheme.id}
+      data-lawn-layout={app.activeTheme.layout}
+    >
+      {app.activeScreen === 'settings' ? (
+        <LawnSettings app={app} />
+      ) : app.activeScreen === 'guides' ? (
+        <LawnGuides setActiveScreen={app.setActiveScreen} />
+      ) : app.activeScreen === 'materials' ? (
+        <LawnMaterials app={app} />
+      ) : (
+        <LawnMainView app={app} />
+      )}
+
+      {app.enlargedSprinkler && (
+        <SprinklerLightbox
+          enlargedSprinkler={app.enlargedSprinkler}
+          onClose={() => app.setEnlargedSprinkler(null)}
+        />
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="src/services/lawnTaskInboundSync.js">
+import { SEASONS, makeStepKey } from '../data/LawnPackData';
+import {
+  MOW_TASK_NAME,
+  WATER_TASK_NAME,
+  VERTICUT_TASK_NAME,
+  WATERING_SESSION_NAMES,
+  pickLatestIsoDate,
+} from './lawnMaintenanceSync';
+
+export const GYPSUM_TASK_NAME = 'Apply Liquid Gypsum';
+export const GYPSUM_LOG_KEY = 'lastGypsumDate';
+export const GYPSUM_POSTPONE_KEY = 'gypsumPostponedUntil';
+export const TASK_SKIPS_LOG_KEY = 'taskSkips';
+
+/** @type {Array<{ label: string, days: number }>} */
+export const GYPSUM_POSTPONE_OPTIONS = [
+  { label: '4 weeks', days: 28 },
+  { label: '3 months', days: 91 },
+  { label: '6 months', days: 182 },
+];
+
+/** @type {Map<string, string> | null} */
+let taskNameToStepKey = null;
+
+function getTaskNameToStepKeyMap() {
+  if (!taskNameToStepKey) {
+    taskNameToStepKey = new Map();
+    for (const seasonKey of Object.keys(SEASONS)) {
+      for (const step of SEASONS[seasonKey].steps) {
+        taskNameToStepKey.set(step.label, makeStepKey(seasonKey, step.id));
+      }
+    }
+    taskNameToStepKey.set(
+      'Step 2: Apply Deeper Green Iron Sulphate',
+      makeStepKey('WINTER', 'iron1')
+    );
+  }
+  return taskNameToStepKey;
+}
+
+/**
+ * @typedef {Object} InboundTaskRow
+ * @property {string} task_name
+ * @property {string} due_date
+ * @property {boolean} is_completed
+ * @property {string | null} [last_completed_date]
+ * @property {string | null} [skipped_on]
+ */
+
+/**
+ * @typedef {{ taskName: string, skippedOn: string }} TaskSkipEntry
+ */
+
+/** @param {Record<string, string>} userLogs */
+export function parseTaskSkips(userLogs) {
+  const raw = userLogs[TASK_SKIPS_LOG_KEY];
+  if (!raw) return /** @type {TaskSkipEntry[]} */ ([]);
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * @param {InboundTaskRow[]} rows
+ * @param {Record<string, string>} userLogs
+ */
+export function applyInboundTaskSkips(rows, userLogs) {
+  /** @type {Record<string, string>} */
+  const nextLogs = { ...userLogs };
+  const existing = parseTaskSkips(nextLogs);
+  const seen = new Set(existing.map((entry) => `${entry.taskName}:${entry.skippedOn}`));
+  let updated = false;
+
+  for (const row of rows) {
+    if (!row.skipped_on) continue;
+    const key = `${row.task_name}:${row.skipped_on}`;
+    if (seen.has(key)) continue;
+    existing.push({ taskName: row.task_name, skippedOn: row.skipped_on });
+    seen.add(key);
+    updated = true;
+  }
+
+  if (updated) {
+    nextLogs[TASK_SKIPS_LOG_KEY] = JSON.stringify(existing);
+  }
+
+  return nextLogs;
+}
+
+/**
+ * @param {string} todayStr
+ * @param {string} fromIso
+ */
+function daysBetweenIso(todayStr, fromIso) {
+  const start = new Date(`${fromIso}T12:00:00`);
+  const end = new Date(`${todayStr}T12:00:00`);
+  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * @param {Record<string, string>} userLogs
+ * @param {string} todayStr
+ * @param {number} [withinDays]
+ */
+export function countRecentWateringSkips(userLogs, todayStr, withinDays = 7) {
+  const skips = parseTaskSkips(userLogs);
+  let count = 0;
+
+  for (const skip of skips) {
+    if (
+      skip.taskName !== WATER_TASK_NAME &&
+      !skip.taskName.startsWith('Water lawn (')
+    ) {
+      continue;
+    }
+    const days = daysBetweenIso(todayStr, skip.skippedOn);
+    if (days >= 0 && days <= withinDays) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+/**
+ * @param {Record<string, string>} userLogs
+ * @param {string} todayStr
+ * @param {number} [withinDays]
+ */
+export function countFullySkippedWateringDays(userLogs, todayStr, withinDays = 7) {
+  const skips = parseTaskSkips(userLogs);
+  /** @type {Map<string, Set<string>>} */
+  const byDate = new Map();
+
+  for (const skip of skips) {
+    if (!skip.taskName.startsWith('Water lawn (')) continue;
+    const days = daysBetweenIso(todayStr, skip.skippedOn);
+    if (days < 0 || days > withinDays) continue;
+    if (!byDate.has(skip.skippedOn)) byDate.set(skip.skippedOn, new Set());
+    byDate.get(skip.skippedOn)?.add(skip.taskName);
+  }
+
+  let fullDays = 0;
+  for (const names of byDate.values()) {
+    if (WATERING_SESSION_NAMES.every((name) => names.has(name))) {
+      fullDays += 1;
+    }
+  }
+
+  return fullDays;
+}
+
+/**
+ * Merge Tasks app / Supabase completions into lawn pack logs and maintenance dates.
+ * @param {InboundTaskRow[]} rows
+ * @param {string} todayStr
+ * @param {Record<string, string>} userLogs
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
+ */
+export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenance = {}) {
+  const stepMap = getTaskNameToStepKeyMap();
+  /** @type {Record<string, string>} */
+  const nextLogs = { ...userLogs };
+  let lastMowedDate = maintenance.lastMowedDate ?? null;
+  let lastWateredDate = maintenance.lastWateredDate ?? null;
+  let lastVerticutDate = maintenance.lastVerticutDate ?? null;
+  let packStepsUpdated = 0;
+  let maintenanceUpdated = false;
+
+  for (const row of rows) {
+    // Tasks app keeps recurring lawn rows open (is_completed=false) and writes
+    // last_completed_date instead — treat that as a real completion.
+    const completionDate =
+      row.last_completed_date ??
+      (row.is_completed && row.due_date && row.due_date <= todayStr ? row.due_date : null);
+    if (!completionDate) continue;
+
+    if (row.task_name === MOW_TASK_NAME) {
+      const merged = pickLatestIsoDate(lastMowedDate, completionDate);
+      if (merged !== lastMowedDate) {
+        lastMowedDate = merged;
+        maintenanceUpdated = true;
+      }
+      continue;
+    }
+
+    if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith('Water lawn (')) {
+      const merged = pickLatestIsoDate(lastWateredDate, completionDate);
+      if (merged !== lastWateredDate) {
+        lastWateredDate = merged;
+        maintenanceUpdated = true;
+      }
+      continue;
+    }
+
+    if (row.task_name === VERTICUT_TASK_NAME) {
+      const merged = pickLatestIsoDate(lastVerticutDate, completionDate);
+      if (merged !== lastVerticutDate) {
+        lastVerticutDate = merged;
+        maintenanceUpdated = true;
+      }
+      continue;
+    }
+
+    if (row.task_name === GYPSUM_TASK_NAME) {
+      const merged = pickLatestIsoDate(nextLogs[GYPSUM_LOG_KEY], completionDate);
+      if (merged && merged !== nextLogs[GYPSUM_LOG_KEY]) {
+        nextLogs[GYPSUM_LOG_KEY] = merged;
+        packStepsUpdated += 1;
+      }
+      continue;
+    }
+
+    const stepKey = stepMap.get(row.task_name);
+    if (stepKey) {
+      const merged = pickLatestIsoDate(nextLogs[stepKey], completionDate);
+      if (merged && merged !== nextLogs[stepKey]) {
+        nextLogs[stepKey] = merged;
+        packStepsUpdated += 1;
+      }
+    }
+  }
+
+  return {
+    userLogs: nextLogs,
+    lastMowedDate,
+    lastWateredDate,
+    lastVerticutDate,
+    packStepsUpdated,
+    maintenanceUpdated,
+  };
+}
+</file>
+
 <file path="src/index.css">
 @tailwind base;
 @tailwind components;
@@ -6400,7 +6839,7 @@ export function applyLawnFocusFromUrl(options = {}) {
   <head>
     <script>
       (function () {
-        var key = 'lawn-app-sw-reset-v1';
+        var key = 'lawn-app-sw-reset-v2';
         try {
           if (localStorage.getItem(key) === '1') return;
           localStorage.setItem(key, '1');
@@ -6461,445 +6900,6 @@ export function applyLawnFocusFromUrl(options = {}) {
 </html>
 </file>
 
-<file path="vite.config.js">
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
-
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      registerType: 'prompt',
-      includeAssets: ['icon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'The Lawn Pack Companion',
-        short_name: 'Lawn Pack',
-        description:
-          'Data-driven lawn care workflow — seasonal packs, mowing, watering, and weather-aware reminders.',
-        theme_color: '#14532d',
-        background_color: '#f3f4f6',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
-        lang: 'en-GB',
-        categories: ['lifestyle', 'utilities'],
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,jfif,woff2}'],
-        // Let /public PDFs and DOCXs bypass SPA fallback (fixes broken guide links in PWA).
-        navigateFallbackDenylist: [/^\/api\//, /\.pdf$/i, /\.docx$/i],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'open-meteo-forecast',
-              expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 },
-            },
-          },
-          {
-            urlPattern: /\.(pdf|docx)$/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'lawn-pack-guides',
-              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-          {
-            urlPattern: /\/guides\/masterclass\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'lawn-masterclass-images',
-              expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-        ],
-      },
-    }),
-  ],
-});
-</file>
-
-<file path="src/components/lawn/LawnCareApp.jsx">
-import React, { useCallback, useEffect } from 'react';
-import { useLawnCareApp } from '../../hooks/useLawnCareApp';
-import {
-  useMobileBackNavigation,
-  useRegisterBackHandler,
-} from '../../hooks/useMobileBackNavigation';
-import { pushAppHistoryState } from '../../utils/backNavigation';
-import { isSectionedLayout } from '../../data/lawnThemes';
-import LawnSettings from './LawnSettings';
-import LawnMainView from './LawnMainView';
-import LawnGuides from './LawnGuides';
-import LawnMaterials from './LawnMaterials';
-import SprinklerLightbox from './SprinklerLightbox';
-
-export default function LawnCareApp() {
-  const app = useLawnCareApp();
-  const sectioned = isSectionedLayout(app.activeTheme.layout);
-
-  const isAtRoot = useCallback(
-    () =>
-      app.activeScreen === 'main' &&
-      (!sectioned || app.activeRoom === 'hub') &&
-      !app.enlargedSprinkler &&
-      !app.showLevellingGuide,
-    [
-      app.activeScreen,
-      sectioned,
-      app.activeRoom,
-      app.enlargedSprinkler,
-      app.showLevellingGuide,
-    ]
-  );
-
-  const onReturnToMain = useCallback(() => {
-    app.setActiveScreen('main');
-    if (sectioned) {
-      app.setActiveRoom('hub');
-    }
-    app.setShowLevellingGuide(false);
-    app.setEnlargedSprinkler(null);
-  }, [app, sectioned]);
-
-  useMobileBackNavigation({ isAtRoot, onReturnToMain });
-
-  useEffect(() => {
-    if (app.activeScreen !== 'main') {
-      pushAppHistoryState({ screen: app.activeScreen });
-    }
-  }, [app.activeScreen]);
-
-  useEffect(() => {
-    if (sectioned && app.activeRoom !== 'hub' && app.activeScreen === 'main') {
-      pushAppHistoryState({ room: app.activeRoom });
-    }
-  }, [app.activeRoom, sectioned, app.activeScreen]);
-
-  useEffect(() => {
-    if (app.enlargedSprinkler) {
-      pushAppHistoryState({ overlay: 'sprinkler' });
-    }
-  }, [app.enlargedSprinkler]);
-
-  useEffect(() => {
-    if (app.showLevellingGuide) {
-      pushAppHistoryState({ overlay: 'levelling' });
-    }
-  }, [app.showLevellingGuide]);
-
-  useRegisterBackHandler(() => {
-    if (app.enlargedSprinkler) {
-      app.setEnlargedSprinkler(null);
-      return true;
-    }
-    return false;
-  }, Boolean(app.enlargedSprinkler));
-
-  useRegisterBackHandler(() => {
-    if (app.showLevellingGuide) {
-      app.setShowLevellingGuide(false);
-      return true;
-    }
-    return false;
-  }, Boolean(app.showLevellingGuide));
-
-  useRegisterBackHandler(() => {
-    if (sectioned && app.activeScreen === 'main' && app.activeRoom !== 'hub') {
-      app.setActiveRoom('hub');
-      return true;
-    }
-    return false;
-  }, sectioned && app.activeScreen === 'main' && app.activeRoom !== 'hub');
-
-  return (
-    <div
-      className="lawn-app-shell w-full max-w-xl mx-auto overflow-hidden"
-      data-lawn-theme={app.activeTheme.id}
-      data-lawn-layout={app.activeTheme.layout}
-    >
-      {app.activeScreen === 'settings' ? (
-        <LawnSettings app={app} />
-      ) : app.activeScreen === 'guides' ? (
-        <LawnGuides setActiveScreen={app.setActiveScreen} />
-      ) : app.activeScreen === 'materials' ? (
-        <LawnMaterials app={app} />
-      ) : (
-        <LawnMainView app={app} />
-      )}
-
-      {app.enlargedSprinkler && (
-        <SprinklerLightbox
-          enlargedSprinkler={app.enlargedSprinkler}
-          onClose={() => app.setEnlargedSprinkler(null)}
-        />
-      )}
-    </div>
-  );
-}
-</file>
-
-<file path="src/services/lawnTaskInboundSync.js">
-import { SEASONS, makeStepKey } from '../data/LawnPackData';
-import {
-  MOW_TASK_NAME,
-  WATER_TASK_NAME,
-  VERTICUT_TASK_NAME,
-  WATERING_SESSION_NAMES,
-  pickLatestIsoDate,
-} from './lawnMaintenanceSync';
-
-export const GYPSUM_TASK_NAME = 'Apply Liquid Gypsum';
-export const GYPSUM_LOG_KEY = 'lastGypsumDate';
-export const GYPSUM_POSTPONE_KEY = 'gypsumPostponedUntil';
-export const TASK_SKIPS_LOG_KEY = 'taskSkips';
-
-/** @type {Array<{ label: string, days: number }>} */
-export const GYPSUM_POSTPONE_OPTIONS = [
-  { label: '4 weeks', days: 28 },
-  { label: '3 months', days: 91 },
-  { label: '6 months', days: 182 },
-];
-
-/** @type {Map<string, string> | null} */
-let taskNameToStepKey = null;
-
-function getTaskNameToStepKeyMap() {
-  if (!taskNameToStepKey) {
-    taskNameToStepKey = new Map();
-    for (const seasonKey of Object.keys(SEASONS)) {
-      for (const step of SEASONS[seasonKey].steps) {
-        taskNameToStepKey.set(step.label, makeStepKey(seasonKey, step.id));
-      }
-    }
-    taskNameToStepKey.set(
-      'Step 2: Apply Deeper Green Iron Sulphate',
-      makeStepKey('WINTER', 'iron1')
-    );
-  }
-  return taskNameToStepKey;
-}
-
-/**
- * @typedef {Object} InboundTaskRow
- * @property {string} task_name
- * @property {string} due_date
- * @property {boolean} is_completed
- * @property {string | null} [last_completed_date]
- * @property {string | null} [skipped_on]
- */
-
-/**
- * @typedef {{ taskName: string, skippedOn: string }} TaskSkipEntry
- */
-
-/** @param {Record<string, string>} userLogs */
-export function parseTaskSkips(userLogs) {
-  const raw = userLogs[TASK_SKIPS_LOG_KEY];
-  if (!raw) return /** @type {TaskSkipEntry[]} */ ([]);
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * @param {InboundTaskRow[]} rows
- * @param {Record<string, string>} userLogs
- */
-export function applyInboundTaskSkips(rows, userLogs) {
-  /** @type {Record<string, string>} */
-  const nextLogs = { ...userLogs };
-  const existing = parseTaskSkips(nextLogs);
-  const seen = new Set(existing.map((entry) => `${entry.taskName}:${entry.skippedOn}`));
-  let updated = false;
-
-  for (const row of rows) {
-    if (!row.skipped_on) continue;
-    const key = `${row.task_name}:${row.skipped_on}`;
-    if (seen.has(key)) continue;
-    existing.push({ taskName: row.task_name, skippedOn: row.skipped_on });
-    seen.add(key);
-    updated = true;
-  }
-
-  if (updated) {
-    nextLogs[TASK_SKIPS_LOG_KEY] = JSON.stringify(existing);
-  }
-
-  return nextLogs;
-}
-
-/**
- * @param {string} todayStr
- * @param {string} fromIso
- */
-function daysBetweenIso(todayStr, fromIso) {
-  const start = new Date(`${fromIso}T12:00:00`);
-  const end = new Date(`${todayStr}T12:00:00`);
-  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-/**
- * @param {Record<string, string>} userLogs
- * @param {string} todayStr
- * @param {number} [withinDays]
- */
-export function countRecentWateringSkips(userLogs, todayStr, withinDays = 7) {
-  const skips = parseTaskSkips(userLogs);
-  let count = 0;
-
-  for (const skip of skips) {
-    if (
-      skip.taskName !== WATER_TASK_NAME &&
-      !skip.taskName.startsWith('Water lawn (')
-    ) {
-      continue;
-    }
-    const days = daysBetweenIso(todayStr, skip.skippedOn);
-    if (days >= 0 && days <= withinDays) {
-      count += 1;
-    }
-  }
-
-  return count;
-}
-
-/**
- * @param {Record<string, string>} userLogs
- * @param {string} todayStr
- * @param {number} [withinDays]
- */
-export function countFullySkippedWateringDays(userLogs, todayStr, withinDays = 7) {
-  const skips = parseTaskSkips(userLogs);
-  /** @type {Map<string, Set<string>>} */
-  const byDate = new Map();
-
-  for (const skip of skips) {
-    if (!skip.taskName.startsWith('Water lawn (')) continue;
-    const days = daysBetweenIso(todayStr, skip.skippedOn);
-    if (days < 0 || days > withinDays) continue;
-    if (!byDate.has(skip.skippedOn)) byDate.set(skip.skippedOn, new Set());
-    byDate.get(skip.skippedOn)?.add(skip.taskName);
-  }
-
-  let fullDays = 0;
-  for (const names of byDate.values()) {
-    if (WATERING_SESSION_NAMES.every((name) => names.has(name))) {
-      fullDays += 1;
-    }
-  }
-
-  return fullDays;
-}
-
-/**
- * Merge Tasks app / Supabase completions into lawn pack logs and maintenance dates.
- * @param {InboundTaskRow[]} rows
- * @param {string} todayStr
- * @param {Record<string, string>} userLogs
- * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
- */
-export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenance = {}) {
-  const stepMap = getTaskNameToStepKeyMap();
-  /** @type {Record<string, string>} */
-  const nextLogs = { ...userLogs };
-  let lastMowedDate = maintenance.lastMowedDate ?? null;
-  let lastWateredDate = maintenance.lastWateredDate ?? null;
-  let lastVerticutDate = maintenance.lastVerticutDate ?? null;
-  let packStepsUpdated = 0;
-  let maintenanceUpdated = false;
-
-  for (const row of rows) {
-    // Tasks app keeps recurring lawn rows open (is_completed=false) and writes
-    // last_completed_date instead — treat that as a real completion.
-    const completionDate =
-      row.last_completed_date ??
-      (row.is_completed && row.due_date && row.due_date <= todayStr ? row.due_date : null);
-    if (!completionDate) continue;
-
-    if (row.task_name === MOW_TASK_NAME) {
-      const merged = pickLatestIsoDate(lastMowedDate, completionDate);
-      if (merged !== lastMowedDate) {
-        lastMowedDate = merged;
-        maintenanceUpdated = true;
-      }
-      continue;
-    }
-
-    if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith('Water lawn (')) {
-      const merged = pickLatestIsoDate(lastWateredDate, completionDate);
-      if (merged !== lastWateredDate) {
-        lastWateredDate = merged;
-        maintenanceUpdated = true;
-      }
-      continue;
-    }
-
-    if (row.task_name === VERTICUT_TASK_NAME) {
-      const merged = pickLatestIsoDate(lastVerticutDate, completionDate);
-      if (merged !== lastVerticutDate) {
-        lastVerticutDate = merged;
-        maintenanceUpdated = true;
-      }
-      continue;
-    }
-
-    if (row.task_name === GYPSUM_TASK_NAME) {
-      const merged = pickLatestIsoDate(nextLogs[GYPSUM_LOG_KEY], completionDate);
-      if (merged && merged !== nextLogs[GYPSUM_LOG_KEY]) {
-        nextLogs[GYPSUM_LOG_KEY] = merged;
-        packStepsUpdated += 1;
-      }
-      continue;
-    }
-
-    const stepKey = stepMap.get(row.task_name);
-    if (stepKey) {
-      const merged = pickLatestIsoDate(nextLogs[stepKey], completionDate);
-      if (merged && merged !== nextLogs[stepKey]) {
-        nextLogs[stepKey] = merged;
-        packStepsUpdated += 1;
-      }
-    }
-  }
-
-  return {
-    userLogs: nextLogs,
-    lastMowedDate,
-    lastWateredDate,
-    lastVerticutDate,
-    packStepsUpdated,
-    maintenanceUpdated,
-  };
-}
-</file>
-
 <file path="package.json">
 {
   "name": "lawn-care-app",
@@ -6931,494 +6931,6 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
     "vite": "^5.4.19",
     "vite-plugin-pwa": "^0.21.1"
   }
-}
-</file>
-
-<file path="src/components/lawn/LawnSettings.jsx">
-import React, { useEffect, useRef, useState } from 'react';
-import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
-import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
-import { LAWN_THEMES } from '../../data/lawnThemes';
-
-/**
- * Snapshot of Setup fields that apply immediately while editing.
- * Cancel restores this; Save keeps the current values and leaves Setup.
- * @param {ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>} app
- */
-function captureSettingsSnapshot(app) {
-  return {
-    length: app.length,
-    width: app.width,
-    mowerModel: app.mowerModel,
-    lawnSurface: app.lawnSurface,
-    selectedEquipment: app.selectedEquipment,
-    selectedSprinkler: app.selectedSprinkler,
-    themeId: app.themeId,
-    activeRoom: app.activeRoom,
-  };
-}
-
-/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
-export default function LawnSettings({ app }) {
-  const {
-    length,
-    setLength,
-    width,
-    setWidth,
-    sqm,
-    mowerModel,
-    setMowerModel,
-    lawnSurface,
-    setLawnSurface,
-    showLevellingGuide,
-    setShowLevellingGuide,
-    selectedEquipment,
-    setSelectedEquipment,
-    weatherLocation,
-    postcodeInput,
-    setPostcodeInput,
-    weatherLocationError,
-    weatherLocationSaving,
-    weatherLocationLabel,
-    selectedSprinkler,
-    setSelectedSprinkler,
-    setEnlargedSprinkler,
-    supabaseSyncError,
-    jsonCopied,
-    handleCopyTasksJson,
-    handleSaveWeatherPostcode,
-    handleUseMyLocationForWeather,
-    handleResetWeatherLocation,
-    setActiveScreen,
-    setWeatherLocationError,
-    themeId,
-    setThemeId,
-    setActiveRoom,
-  } = app;
-
-  const snapshotRef = useRef(/** @type {ReturnType<typeof captureSettingsSnapshot> | null} */ (null));
-  const [dirty, setDirty] = useState(false);
-
-  useEffect(() => {
-    snapshotRef.current = captureSettingsSnapshot(app);
-    setDirty(false);
-    // Capture once when Setup opens — intentional empty deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount snapshot only
-  }, []);
-
-  useEffect(() => {
-    const snap = snapshotRef.current;
-    if (!snap) return;
-    setDirty(
-      length !== snap.length ||
-        width !== snap.width ||
-        mowerModel !== snap.mowerModel ||
-        lawnSurface !== snap.lawnSurface ||
-        selectedEquipment !== snap.selectedEquipment ||
-        selectedSprinkler !== snap.selectedSprinkler ||
-        themeId !== snap.themeId
-    );
-  }, [
-    length,
-    width,
-    mowerModel,
-    lawnSurface,
-    selectedEquipment,
-    selectedSprinkler,
-    themeId,
-  ]);
-
-  const leaveSetup = () => {
-    setShowLevellingGuide(false);
-    setActiveScreen('main');
-  };
-
-  const handleCancel = () => {
-    const snap = snapshotRef.current;
-    if (snap) {
-      setLength(snap.length);
-      setWidth(snap.width);
-      setMowerModel(snap.mowerModel);
-      setLawnSurface(snap.lawnSurface);
-      setSelectedEquipment(snap.selectedEquipment);
-      setSelectedSprinkler(snap.selectedSprinkler);
-      setThemeId(snap.themeId);
-      setActiveRoom(snap.activeRoom);
-    }
-    leaveSetup();
-  };
-
-  const handleSave = () => {
-    leaveSetup();
-  };
-
-  return (
-    <>
-      <div className="flex justify-between items-center mb-6 border-b pb-4 gap-3">
-        <div className="min-w-0">
-          <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
-          <p className="text-sm text-green-700 mt-1">
-            Configure appearance, lawn size, equipment, and surface profile.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
-        >
-          ← Back
-        </button>
-      </div>
-
-      <div className="space-y-5 pb-24">
-        <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
-          <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
-          <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
-            Four completely different layouts: Classic (long page), Atelier (journal spine),
-            Signal (status board + bottom tabs), and Canopy (daylight today timeline). Changes
-            apply while you browse — use Cancel to undo, or Save to keep them.
-          </p>
-          <div className="grid gap-2">
-            {LAWN_THEMES.map((theme) => {
-              const selected = themeId === theme.id;
-              return (
-                <button
-                  key={theme.id}
-                  type="button"
-                  onClick={() => {
-                    setThemeId(theme.id);
-                    setActiveRoom('hub');
-                  }}
-                  className={`text-left rounded-xl border p-3 transition-all ${
-                    selected
-                      ? 'border-emerald-600 bg-white ring-2 ring-emerald-500/30'
-                      : 'border-emerald-100 bg-white/80 hover:border-emerald-300'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-900">{theme.name}</p>
-                      <p className="text-[11px] font-semibold text-emerald-800 mt-0.5">
-                        {theme.tagline}
-                      </p>
-                      <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
-                        {theme.description}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md ${
-                        selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'
-                      }`}
-                    >
-                      {selected ? 'Active' : 'Try'}
-                    </span>
-                  </div>
-                  <div className="flex gap-1.5 mt-3" aria-hidden="true">
-                    {theme.swatches.map((color) => (
-                      <span
-                        key={color}
-                        className="h-4 w-4 rounded-full border border-black/10"
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <div>
-          <label className="block text-sm font-medium text-green-900 mb-1">
-            Lawn Length: <span className="font-bold text-green-700">{length}m</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            value={length}
-            onChange={(e) => setLength(parseInt(e.target.value, 10))}
-            className="w-full accent-green-600"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-green-900 mb-1">
-            Lawn Width: <span className="font-bold text-green-700">{width}m</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            value={width}
-            onChange={(e) => setWidth(parseInt(e.target.value, 10))}
-            className="w-full accent-green-600"
-          />
-        </div>
-        <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-sm text-green-800">
-          <span className="font-black">{sqm} SQM</span>
-          <span className="text-green-600 ml-1.5">
-            ({length}m × {width}m)
-          </span>
-        </div>
-        <div>
-          <label htmlFor="mower-select" className="block text-sm font-medium text-green-900 mb-1">
-            Lawnmower Model
-          </label>
-          <select
-            id="mower-select"
-            value={mowerModel}
-            onChange={(e) => setMowerModel(e.target.value)}
-            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
-          >
-            {Object.values(MOWER_OPTIONS).map((mower) => (
-              <option key={mower.id} value={mower.id}>
-                {mower.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mb-2">
-            <p className="text-sm font-medium text-green-900">Lawn Surface Condition</p>
-            <button
-              type="button"
-              onClick={() => setShowLevellingGuide((open) => !open)}
-              aria-expanded={showLevellingGuide}
-              className="ml-2 text-emerald-600 hover:text-emerald-800 text-xs underline font-medium"
-            >
-              ℹ️ How to fix a bumpy lawn
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {Object.values(LAWN_SURFACE_OPTIONS).map((option) => {
-              const isSelected = lawnSurface === option.id;
-
-              return (
-                <label
-                  key={option.id}
-                  className={`flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer text-sm font-medium transition-all ${
-                    isSelected
-                      ? 'border-green-600 bg-green-100/80 text-green-900 ring-1 ring-green-500/30'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="lawn-surface"
-                    value={option.id}
-                    checked={isSelected}
-                    onChange={(e) => setLawnSurface(e.target.value)}
-                    className="accent-green-600"
-                  />
-                  {option.label}
-                </label>
-              );
-            })}
-          </div>
-          <div
-            className={`grid transition-all duration-300 ease-in-out ${
-              showLevellingGuide
-                ? 'grid-rows-[1fr] opacity-100 mt-3'
-                : 'grid-rows-[0fr] opacity-0 mt-0'
-            }`}
-          >
-            <div className="overflow-hidden">
-              <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-emerald-900">Lawn Levelling Guide</h4>
-                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                      Choose the method that matches your dip depth. Once levelled, switch your
-                      surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut height
-                      recommendation.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowLevellingGuide(false)}
-                    className="shrink-0 text-xs font-bold text-gray-400 hover:text-gray-600"
-                    aria-label="Close levelling guide"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {LEVELLING_GUIDE_METHODS.map((method) => (
-                    <div
-                      key={method.title}
-                      className="rounded-lg border border-green-100 bg-green-50/40 p-3.5"
-                    >
-                      <p className="text-xs font-bold text-green-900 mb-1.5">{method.title}</p>
-                      <p className="text-xs text-gray-600 leading-relaxed">{method.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div>
-          <label htmlFor="equipment-select" className="block text-sm font-bold text-gray-700 mb-1.5">
-            Application Tool Profile:
-          </label>
-          <select
-            id="equipment-select"
-            value={selectedEquipment}
-            onChange={(e) => setSelectedEquipment(e.target.value)}
-            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
-          >
-            {Object.values(EQUIPMENT_OPTIONS).map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
-          <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
-          <p className="text-[11px] text-sky-900/80 mb-3 leading-snug">
-            Rain and soil temperature forecasts use this postcode. Defaults to the Wallsend area
-            until you set your own. This section saves on its own (separate from Cancel / Save
-            below).
-          </p>
-          <label htmlFor="weather-postcode" className="block text-xs font-semibold text-sky-950 mb-1">
-            UK postcode
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="weather-postcode"
-              type="text"
-              value={postcodeInput}
-              onChange={(event) => {
-                setPostcodeInput(event.target.value.toUpperCase());
-                setWeatherLocationError(null);
-              }}
-              placeholder="NE28 9AB"
-              autoComplete="postal-code"
-              className="flex-1 min-w-0 bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm text-gray-800 font-medium focus:ring-2 focus:ring-sky-400"
-            />
-            <button
-              type="button"
-              onClick={() => void handleSaveWeatherPostcode()}
-              disabled={weatherLocationSaving || !postcodeInput.trim()}
-              className="shrink-0 text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
-            >
-              {weatherLocationSaving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-2">
-            <button
-              type="button"
-              onClick={() => void handleUseMyLocationForWeather()}
-              disabled={weatherLocationSaving}
-              className="text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
-            >
-              📍 Use my location
-            </button>
-            {weatherLocation.source !== 'default' && (
-              <button
-                type="button"
-                onClick={() => void handleResetWeatherLocation()}
-                disabled={weatherLocationSaving}
-                className="text-xs font-semibold py-2 px-3 rounded-lg text-sky-800 hover:bg-sky-100/80 disabled:opacity-50"
-              >
-                Reset to default
-              </button>
-            )}
-          </div>
-          <p className="mt-2 text-xs font-medium text-sky-900">
-            Forecast for: {weatherLocationLabel}
-          </p>
-          {weatherLocationError && (
-            <p className="mt-2 text-xs font-semibold text-red-700">{weatherLocationError}</p>
-          )}
-        </div>
-
-        <div>
-          <p className="block text-sm font-bold text-gray-700 mb-1">
-            Irrigation Profile — Select Your Primary Sprinkler:
-          </p>
-          <p className="text-[11px] text-gray-500 mb-2 leading-snug">
-            Match the photo and description to the sprinkler you own. Tap a photo to enlarge it.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {Object.values(SPRINKLER_OPTIONS).map((sprinkler) => {
-              const isSelected = selectedSprinkler === sprinkler.id;
-
-              return (
-                <button
-                  key={sprinkler.id}
-                  type="button"
-                  onClick={() => setSelectedSprinkler(sprinkler.id)}
-                  className={`text-left rounded-lg border p-3 transition-all ${
-                    isSelected
-                      ? 'border-green-600 bg-green-100/80 shadow-sm ring-1 ring-green-500/30'
-                      : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
-                  }`}
-                >
-                  <img
-                    src={sprinkler.image}
-                    alt={sprinkler.name}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setEnlargedSprinkler({
-                        image: sprinkler.image,
-                        name: sprinkler.name,
-                      });
-                    }}
-                    className="w-16 h-16 object-cover rounded-md mb-2 mx-auto border border-gray-200 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
-                  />
-                  <span className="text-xs font-bold text-gray-900 leading-snug block">
-                    {sprinkler.name}
-                  </span>
-                  <span className="text-[10px] font-semibold text-green-700 block mb-1.5">
-                    ~{sprinkler.ratePerHour}mm / hour
-                  </span>
-                  <p className="text-[10px] text-gray-700 leading-snug mb-1">
-                    {sprinkler.description}
-                  </p>
-                  <p className="text-[10px] text-gray-500 leading-snug italic">
-                    {sprinkler.identification}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="border-t border-green-200 pt-4 mt-2">
-          <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
-          {supabaseSyncError && (
-            <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
-          )}
-          <button
-            type="button"
-            onClick={handleCopyTasksJson}
-            className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
-          >
-            {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
-          </button>
-        </div>
-      </div>
-
-      <div className="sticky bottom-0 -mx-1 mt-4 border-t border-emerald-200 bg-white/95 backdrop-blur px-1 pt-3 pb-1 flex gap-2">
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
-        >
-          {dirty ? 'Save changes' : 'Done'}
-        </button>
-      </div>
-    </>
-  );
 }
 </file>
 
@@ -7608,7 +7120,41 @@ export default function MaintenancePanel({ app }) {
       data-pet-lockout-until={petLockoutUntil ?? ''}
       className="mb-6 rounded-xl border border-sky-100 bg-sky-50/40 p-4"
     >
-      <h3 className="text-sm font-bold text-gray-800 mb-3">🔧 Maintenance Panel</h3>
+      <h3 className="text-sm font-bold text-gray-800 mb-2">🔧 Maintenance Panel</h3>
+
+      <div
+        className="maintenance-item-tabs mb-3 grid grid-cols-4 gap-1 rounded-xl border-2 border-sky-300 bg-white p-1.5 shadow-sm"
+        role="tablist"
+        aria-label="Maintenance items"
+      >
+        {itemTabs.map((tab) => {
+          const selected = activeItemTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setActiveItemTab(tab.id)}
+              className={`relative min-h-[2.75rem] rounded-lg px-1 py-2 text-[11px] font-black tracking-wide transition-all ${
+                selected
+                  ? 'bg-sky-700 text-white shadow'
+                  : 'bg-sky-50 text-sky-950 hover:bg-sky-100'
+              }`}
+            >
+              {tab.label}
+              {tab.due && (
+                <span
+                  className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ring-2 ${
+                    selected ? 'bg-amber-300 ring-sky-700' : 'bg-amber-500 ring-white'
+                  }`}
+                  aria-label="Due"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       <div
         className={`mb-3 rounded-lg border p-3 text-xs font-semibold ${
@@ -7681,42 +7227,8 @@ export default function MaintenancePanel({ app }) {
       </div>
 
       <p className="text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
-        Regular Maintenance
+        {itemTabs.find((tab) => tab.id === activeItemTab)?.label ?? 'Maintenance'}
       </p>
-
-      <div
-        className="mb-3 flex gap-1 overflow-x-auto rounded-lg border border-sky-200 bg-white/80 p-1"
-        role="tablist"
-        aria-label="Maintenance items"
-      >
-        {itemTabs.map((tab) => {
-          const selected = activeItemTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => setActiveItemTab(tab.id)}
-              className={`relative shrink-0 flex-1 min-w-[4.5rem] rounded-md px-2 py-2 text-[11px] font-bold transition-all ${
-                selected
-                  ? 'bg-sky-700 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-sky-50 hover:text-sky-900'
-              }`}
-            >
-              {tab.label}
-              {tab.due && (
-                <span
-                  className={`absolute top-1 right-1 h-1.5 w-1.5 rounded-full ${
-                    selected ? 'bg-amber-300' : 'bg-amber-500'
-                  }`}
-                  aria-label="Due"
-                />
-              )}
-            </button>
-          );
-        })}
-      </div>
 
       <div className="grid gap-3">
         <div
@@ -9040,6 +8552,494 @@ export function isWeatherSnapshotFresh(fetchedAt, maxAgeHours = 6) {
   if (!fetchedAt) return false;
   const ageMs = Date.now() - new Date(fetchedAt).getTime();
   return ageMs >= 0 && ageMs < maxAgeHours * 60 * 60 * 1000;
+}
+</file>
+
+<file path="src/components/lawn/LawnSettings.jsx">
+import React, { useEffect, useRef, useState } from 'react';
+import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
+import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
+import { LAWN_THEMES } from '../../data/lawnThemes';
+
+/**
+ * Snapshot of Setup fields that apply immediately while editing.
+ * Cancel restores this; Save keeps the current values and leaves Setup.
+ * @param {ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>} app
+ */
+function captureSettingsSnapshot(app) {
+  return {
+    length: app.length,
+    width: app.width,
+    mowerModel: app.mowerModel,
+    lawnSurface: app.lawnSurface,
+    selectedEquipment: app.selectedEquipment,
+    selectedSprinkler: app.selectedSprinkler,
+    themeId: app.themeId,
+    activeRoom: app.activeRoom,
+  };
+}
+
+/** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
+export default function LawnSettings({ app }) {
+  const {
+    length,
+    setLength,
+    width,
+    setWidth,
+    sqm,
+    mowerModel,
+    setMowerModel,
+    lawnSurface,
+    setLawnSurface,
+    showLevellingGuide,
+    setShowLevellingGuide,
+    selectedEquipment,
+    setSelectedEquipment,
+    weatherLocation,
+    postcodeInput,
+    setPostcodeInput,
+    weatherLocationError,
+    weatherLocationSaving,
+    weatherLocationLabel,
+    selectedSprinkler,
+    setSelectedSprinkler,
+    setEnlargedSprinkler,
+    supabaseSyncError,
+    jsonCopied,
+    handleCopyTasksJson,
+    handleSaveWeatherPostcode,
+    handleUseMyLocationForWeather,
+    handleResetWeatherLocation,
+    setActiveScreen,
+    setWeatherLocationError,
+    themeId,
+    setThemeId,
+    setActiveRoom,
+  } = app;
+
+  const snapshotRef = useRef(/** @type {ReturnType<typeof captureSettingsSnapshot> | null} */ (null));
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    snapshotRef.current = captureSettingsSnapshot(app);
+    setDirty(false);
+    // Capture once when Setup opens — intentional empty deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount snapshot only
+  }, []);
+
+  useEffect(() => {
+    const snap = snapshotRef.current;
+    if (!snap) return;
+    setDirty(
+      length !== snap.length ||
+        width !== snap.width ||
+        mowerModel !== snap.mowerModel ||
+        lawnSurface !== snap.lawnSurface ||
+        selectedEquipment !== snap.selectedEquipment ||
+        selectedSprinkler !== snap.selectedSprinkler ||
+        themeId !== snap.themeId
+    );
+  }, [
+    length,
+    width,
+    mowerModel,
+    lawnSurface,
+    selectedEquipment,
+    selectedSprinkler,
+    themeId,
+  ]);
+
+  const leaveSetup = () => {
+    setShowLevellingGuide(false);
+    setActiveScreen('main');
+  };
+
+  const handleCancel = () => {
+    const snap = snapshotRef.current;
+    if (snap) {
+      setLength(snap.length);
+      setWidth(snap.width);
+      setMowerModel(snap.mowerModel);
+      setLawnSurface(snap.lawnSurface);
+      setSelectedEquipment(snap.selectedEquipment);
+      setSelectedSprinkler(snap.selectedSprinkler);
+      setThemeId(snap.themeId);
+      setActiveRoom(snap.activeRoom);
+    }
+    leaveSetup();
+  };
+
+  const handleSave = () => {
+    leaveSetup();
+  };
+
+  return (
+    <>
+      <div className="flex justify-between items-center mb-6 border-b pb-4 gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
+          <p className="text-sm text-green-700 mt-1">
+            Configure appearance, lawn size, equipment, and surface profile.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+        >
+          ← Back
+        </button>
+      </div>
+
+      <div className="space-y-5 pb-24">
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+          <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
+          <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
+            Four completely different layouts: Classic (long page), Atelier (journal spine),
+            Signal (status board + bottom tabs), and Canopy (daylight today timeline). Changes
+            apply while you browse — use Cancel to undo, or Save to keep them.
+          </p>
+          <div className="grid gap-2">
+            {LAWN_THEMES.map((theme) => {
+              const selected = themeId === theme.id;
+              return (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => {
+                    setThemeId(theme.id);
+                    setActiveRoom('hub');
+                  }}
+                  className={`text-left rounded-xl border p-3 transition-all ${
+                    selected
+                      ? 'border-emerald-600 bg-white ring-2 ring-emerald-500/30'
+                      : 'border-emerald-100 bg-white/80 hover:border-emerald-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900">{theme.name}</p>
+                      <p className="text-[11px] font-semibold text-emerald-800 mt-0.5">
+                        {theme.tagline}
+                      </p>
+                      <p className="text-[11px] text-gray-600 mt-1.5 leading-snug">
+                        {theme.description}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md ${
+                        selected ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {selected ? 'Active' : 'Try'}
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5 mt-3" aria-hidden="true">
+                    {theme.swatches.map((color) => (
+                      <span
+                        key={color}
+                        className="h-4 w-4 rounded-full border border-black/10"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <div>
+          <label className="block text-sm font-medium text-green-900 mb-1">
+            Lawn Length: <span className="font-bold text-green-700">{length}m</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            value={length}
+            onChange={(e) => setLength(parseInt(e.target.value, 10))}
+            className="w-full accent-green-600"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-green-900 mb-1">
+            Lawn Width: <span className="font-bold text-green-700">{width}m</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            value={width}
+            onChange={(e) => setWidth(parseInt(e.target.value, 10))}
+            className="w-full accent-green-600"
+          />
+        </div>
+        <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-sm text-green-800">
+          <span className="font-black">{sqm} SQM</span>
+          <span className="text-green-600 ml-1.5">
+            ({length}m × {width}m)
+          </span>
+        </div>
+        <div>
+          <label htmlFor="mower-select" className="block text-sm font-medium text-green-900 mb-1">
+            Lawnmower Model
+          </label>
+          <select
+            id="mower-select"
+            value={mowerModel}
+            onChange={(e) => setMowerModel(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+          >
+            {Object.values(MOWER_OPTIONS).map((mower) => (
+              <option key={mower.id} value={mower.id}>
+                {mower.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-1 mb-2">
+            <p className="text-sm font-medium text-green-900">Lawn Surface Condition</p>
+            <button
+              type="button"
+              onClick={() => setShowLevellingGuide((open) => !open)}
+              aria-expanded={showLevellingGuide}
+              className="ml-2 text-emerald-600 hover:text-emerald-800 text-xs underline font-medium"
+            >
+              ℹ️ How to fix a bumpy lawn
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {Object.values(LAWN_SURFACE_OPTIONS).map((option) => {
+              const isSelected = lawnSurface === option.id;
+
+              return (
+                <label
+                  key={option.id}
+                  className={`flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer text-sm font-medium transition-all ${
+                    isSelected
+                      ? 'border-green-600 bg-green-100/80 text-green-900 ring-1 ring-green-500/30'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="lawn-surface"
+                    value={option.id}
+                    checked={isSelected}
+                    onChange={(e) => setLawnSurface(e.target.value)}
+                    className="accent-green-600"
+                  />
+                  {option.label}
+                </label>
+              );
+            })}
+          </div>
+          <div
+            className={`grid transition-all duration-300 ease-in-out ${
+              showLevellingGuide
+                ? 'grid-rows-[1fr] opacity-100 mt-3'
+                : 'grid-rows-[0fr] opacity-0 mt-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-emerald-900">Lawn Levelling Guide</h4>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Choose the method that matches your dip depth. Once levelled, switch your
+                      surface setting to &ldquo;Perfectly Flat / Smooth&rdquo; for a lower cut height
+                      recommendation.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLevellingGuide(false)}
+                    className="shrink-0 text-xs font-bold text-gray-400 hover:text-gray-600"
+                    aria-label="Close levelling guide"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {LEVELLING_GUIDE_METHODS.map((method) => (
+                    <div
+                      key={method.title}
+                      className="rounded-lg border border-green-100 bg-green-50/40 p-3.5"
+                    >
+                      <p className="text-xs font-bold text-green-900 mb-1.5">{method.title}</p>
+                      <p className="text-xs text-gray-600 leading-relaxed">{method.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label htmlFor="equipment-select" className="block text-sm font-bold text-gray-700 mb-1.5">
+            Application Tool Profile:
+          </label>
+          <select
+            id="equipment-select"
+            value={selectedEquipment}
+            onChange={(e) => setSelectedEquipment(e.target.value)}
+            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-sm text-gray-700 font-medium focus:ring-2 focus:ring-green-500"
+          >
+            {Object.values(EQUIPMENT_OPTIONS).map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4">
+          <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
+          <p className="text-[11px] text-sky-900/80 mb-3 leading-snug">
+            Rain and soil temperature forecasts use this postcode. Defaults to the Wallsend area
+            until you set your own. This section saves on its own (separate from Cancel / Save
+            below).
+          </p>
+          <label htmlFor="weather-postcode" className="block text-xs font-semibold text-sky-950 mb-1">
+            UK postcode
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="weather-postcode"
+              type="text"
+              value={postcodeInput}
+              onChange={(event) => {
+                setPostcodeInput(event.target.value.toUpperCase());
+                setWeatherLocationError(null);
+              }}
+              placeholder="NE28 9AB"
+              autoComplete="postal-code"
+              className="flex-1 min-w-0 bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm text-gray-800 font-medium focus:ring-2 focus:ring-sky-400"
+            />
+            <button
+              type="button"
+              onClick={() => void handleSaveWeatherPostcode()}
+              disabled={weatherLocationSaving || !postcodeInput.trim()}
+              className="shrink-0 text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+            >
+              {weatherLocationSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => void handleUseMyLocationForWeather()}
+              disabled={weatherLocationSaving}
+              className="text-xs font-bold py-2 px-3 rounded-lg border border-sky-300 bg-white text-sky-900 hover:bg-sky-100 disabled:opacity-50"
+            >
+              📍 Use my location
+            </button>
+            {weatherLocation.source !== 'default' && (
+              <button
+                type="button"
+                onClick={() => void handleResetWeatherLocation()}
+                disabled={weatherLocationSaving}
+                className="text-xs font-semibold py-2 px-3 rounded-lg text-sky-800 hover:bg-sky-100/80 disabled:opacity-50"
+              >
+                Reset to default
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-xs font-medium text-sky-900">
+            Forecast for: {weatherLocationLabel}
+          </p>
+          {weatherLocationError && (
+            <p className="mt-2 text-xs font-semibold text-red-700">{weatherLocationError}</p>
+          )}
+        </div>
+
+        <div>
+          <p className="block text-sm font-bold text-gray-700 mb-1">
+            Irrigation Profile — Select Your Primary Sprinkler:
+          </p>
+          <p className="text-[11px] text-gray-500 mb-2 leading-snug">
+            Match the photo and description to the sprinkler you own. Tap a photo to enlarge it.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {Object.values(SPRINKLER_OPTIONS).map((sprinkler) => {
+              const isSelected = selectedSprinkler === sprinkler.id;
+
+              return (
+                <button
+                  key={sprinkler.id}
+                  type="button"
+                  onClick={() => setSelectedSprinkler(sprinkler.id)}
+                  className={`text-left rounded-lg border p-3 transition-all ${
+                    isSelected
+                      ? 'border-green-600 bg-green-100/80 shadow-sm ring-1 ring-green-500/30'
+                      : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/50'
+                  }`}
+                >
+                  <img
+                    src={sprinkler.image}
+                    alt={sprinkler.name}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setEnlargedSprinkler({
+                        image: sprinkler.image,
+                        name: sprinkler.name,
+                      });
+                    }}
+                    className="w-16 h-16 object-cover rounded-md mb-2 mx-auto border border-gray-200 shadow-sm cursor-zoom-in hover:opacity-90 transition-opacity"
+                  />
+                  <span className="text-xs font-bold text-gray-900 leading-snug block">
+                    {sprinkler.name}
+                  </span>
+                  <span className="text-[10px] font-semibold text-green-700 block mb-1.5">
+                    ~{sprinkler.ratePerHour}mm / hour
+                  </span>
+                  <p className="text-[10px] text-gray-700 leading-snug mb-1">
+                    {sprinkler.description}
+                  </p>
+                  <p className="text-[10px] text-gray-500 leading-snug italic">
+                    {sprinkler.identification}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="border-t border-green-200 pt-4 mt-2">
+          <p className="text-sm font-bold text-gray-700 mb-2">Developer / Debug Mode</p>
+          {supabaseSyncError && (
+            <p className="mb-2 text-[11px] font-medium text-red-700">{supabaseSyncError}</p>
+          )}
+          <button
+            type="button"
+            onClick={handleCopyTasksJson}
+            className="w-full text-xs font-bold py-2 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+          >
+            {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
+          </button>
+        </div>
+      </div>
+
+      <div className="sticky bottom-0 -mx-1 mt-4 border-t border-emerald-200 bg-white/95 backdrop-blur px-1 pt-3 pb-1 flex gap-2">
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
+        >
+          {dirty ? 'Save changes' : 'Done'}
+        </button>
+      </div>
+    </>
+  );
 }
 </file>
 
