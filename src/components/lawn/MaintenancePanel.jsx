@@ -123,24 +123,27 @@ export default function MaintenancePanel({ app }) {
     setLastVerticutDate,
   } = app;
 
+  const { maintenanceFocusTab, setMaintenanceFocusTab } = app;
+
   const [activeItemTab, setActiveItemTab] = useState(
     /** @type {MaintenanceItemTab} */ (
-      app.maintenanceFocusTab ??
-        resolveMaintenanceTabFromFocus(getFocusFromUrl()) ??
-        'mowing'
+      maintenanceFocusTab ?? resolveMaintenanceTabFromFocus(getFocusFromUrl()) ?? 'mowing'
     )
   );
 
   useEffect(() => {
-    const fromApp = app.maintenanceFocusTab;
-    if (fromApp) {
-      setActiveItemTab(fromApp);
-      app.setMaintenanceFocusTab(null);
-      return;
-    }
+    if (!maintenanceFocusTab) return;
+    setActiveItemTab(maintenanceFocusTab);
+    setMaintenanceFocusTab(null);
+  }, [maintenanceFocusTab, setMaintenanceFocusTab]);
+
+  useEffect(() => {
+    if (maintenanceFocusTab) return;
     const fromFocus = resolveMaintenanceTabFromFocus(getFocusFromUrl());
     if (fromFocus) setActiveItemTab(fromFocus);
-  }, [app.maintenanceFocusTab, app.setMaintenanceFocusTab]);
+    // Mount-only URL deep link; hub passes maintenanceFocusTab instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount read
+  }, []);
 
   const mowingDaysOverdue =
     mowingNextDueIso && mowingDue ? daysBetween(mowingNextDueIso, todayStr) : null;

@@ -234,6 +234,24 @@ create policy "Allow delete access to tasks"
   using (true);
 </file>
 
+<file path=".gitignore">
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
+.vercel
+</file>
+
 <file path="jsconfig.json">
 {
   "compilerOptions": {
@@ -2218,24 +2236,6 @@ create trigger tasks_set_updated_at
   before update on public.tasks
   for each row
   execute function public.set_tasks_updated_at();
-</file>
-
-<file path=".gitignore">
-node_modules/
-dist/
-dist-ssr/
-*.local
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.DS_Store
-.vercel
 </file>
 
 <file path="README.md">
@@ -5550,219 +5550,6 @@ export default function LawnCareApp() {
 }
 </file>
 
-<file path="src/components/lawn/LawnHub.jsx">
-import React from 'react';
-import { SEASONS } from '../../data/LawnPackData';
-import { formatSyncTimeAgo } from '../../utils/lawnDates';
-import { CalculatorIcon } from './LawnMaterials';
-
-/**
- * Hub home for sectioned themes.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-export default function LawnHub({ app }) {
-  const {
-    runFullCloudSync,
-    cloudSyncStatus,
-    lastCloudSyncAt,
-    setActiveScreen,
-    setActiveRoom,
-    setMaintenanceFocusTab,
-    mowingDue,
-    wateringDue,
-    verticutDue,
-    gypsumDue,
-    seedEstablishmentActive,
-    isDormantSeason,
-    isNatureProvidingFullSoak,
-    isVerticutSeason,
-    petLockoutActive,
-    springPackIncomplete,
-    incompleteSpringSteps,
-    currentSeason,
-    weatherStatusText,
-    weatherLocationLabel,
-  } = app;
-
-  /** @type {Array<'mowing' | 'watering' | 'verticut' | 'gypsum'>} */
-  const dueTabs = [
-    mowingDue && !isDormantSeason && !seedEstablishmentActive ? 'mowing' : null,
-    wateringDue && !isDormantSeason && !isNatureProvidingFullSoak ? 'watering' : null,
-    verticutDue && isVerticutSeason ? 'verticut' : null,
-    gypsumDue ? 'gypsum' : null,
-  ].filter(Boolean);
-  const dueCount = dueTabs.length;
-  const dueLabels = {
-    mowing: 'Mowing',
-    watering: 'Watering',
-    verticut: 'Verticut',
-    gypsum: 'Gypsum',
-  };
-  const dueItems = dueTabs.map((tab) => dueLabels[tab]);
-
-  const openMaintenance = (tab = dueTabs[0] ?? null) => {
-    if (tab) setMaintenanceFocusTab(tab);
-    else if (seedEstablishmentActive) setMaintenanceFocusTab('mowing');
-    setActiveRoom('maintenance');
-  };
-
-  const heroStatus = seedEstablishmentActive
-    ? {
-        title: 'Seed lock',
-        lede: 'Mowing paused while seed establishes.',
-        tone: 'alert',
-      }
-    : dueCount > 0
-      ? {
-          title: dueCount === 1 ? '1 task due' : `${dueCount} tasks due`,
-          lede: dueItems.join(' · '),
-          tone: 'alert',
-        }
-      : {
-          title: 'All clear',
-          lede: 'Nothing due right now.',
-          tone: 'ok',
-        };
-
-  const syncLabel =
-    cloudSyncStatus === 'pulling'
-      ? 'Pull…'
-      : cloudSyncStatus === 'pushing'
-        ? 'Push…'
-        : cloudSyncStatus === 'error'
-          ? 'Retry'
-          : cloudSyncStatus === 'idle'
-            ? 'Sync'
-            : null;
-
-  const rooms = [
-    {
-      id: 'maintenance',
-      title: 'Maintenance',
-      meta: dueCount > 0 ? `${dueCount} due` : seedEstablishmentActive ? 'Seed lock' : 'Up to date',
-      tone: dueCount > 0 || seedEstablishmentActive ? 'alert' : 'ok',
-      icon: '✂️',
-    },
-    {
-      id: 'seasonal',
-      title: 'Seasonal Pack',
-      meta: springPackIncomplete
-        ? `${incompleteSpringSteps.length} Spring left`
-        : SEASONS[currentSeason]?.name ?? 'Open',
-      tone: springPackIncomplete ? 'warn' : 'ok',
-      icon: '📋',
-    },
-  ];
-
-  return (
-    <div className="lawn-hub">
-      <header className={`lawn-hub__hero lawn-hub__hero--${heroStatus.tone}`}>
-        {dueCount > 0 || seedEstablishmentActive ? (
-          <button
-            type="button"
-            className="lawn-hub__hero-open"
-            onClick={() => openMaintenance()}
-          >
-            <span className="lawn-hub__hero-open-copy">
-              <span className="lawn-hub__kicker">Today</span>
-              <span className="lawn-hub__title">{heroStatus.title}</span>
-              <span className="lawn-hub__lede">{heroStatus.lede}</span>
-            </span>
-            <span className="lawn-hub__hero-open-icon" aria-hidden="true">
-              →
-            </span>
-            <span className="sr-only">Open Maintenance</span>
-          </button>
-        ) : (
-          <>
-            <p className="lawn-hub__kicker">Today</p>
-            <h2 className="lawn-hub__title">{heroStatus.title}</h2>
-            <p className="lawn-hub__lede">{heroStatus.lede}</p>
-          </>
-        )}
-      </header>
-
-      {(petLockoutActive || springPackIncomplete) && (
-        <div className="lawn-hub__notices" aria-live="polite">
-          {petLockoutActive && (
-            <p className="lawn-hub__notice lawn-hub__notice--alert">
-              Chemical drying — pets off the lawn for now.
-            </p>
-          )}
-          {springPackIncomplete && (
-            <p className="lawn-hub__notice lawn-hub__notice--warn">
-              Spring Pack still in progress — open Seasonal Pack to finish.
-            </p>
-          )}
-        </div>
-      )}
-
-      <section className="lawn-hub__weather" aria-label="Weather">
-        <p className="lawn-hub__weather-text">
-          {weatherLocationLabel}: {weatherStatusText}
-        </p>
-      </section>
-
-      <section className="lawn-hub__rooms" aria-label="Sections">
-        <div className="lawn-hub__room-grid">
-          {rooms.map((room) => (
-            <button
-              key={room.id}
-              type="button"
-              className={`lawn-hub__room lawn-hub__room--${room.tone}`}
-              onClick={() =>
-                room.id === 'maintenance' ? openMaintenance() : setActiveRoom(room.id)
-              }
-            >
-              <span className="lawn-hub__room-icon" aria-hidden="true">
-                {room.icon}
-              </span>
-              <span className="lawn-hub__room-copy">
-                <span className="lawn-hub__room-title">{room.title}</span>
-              </span>
-              <span className="lawn-hub__room-meta">{room.meta}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="lawn-hub__tools" aria-label="Tools">
-        <div className="lawn-hub__tool-grid">
-          <button
-            type="button"
-            onClick={() => void runFullCloudSync()}
-            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
-            className="lawn-hub__tool"
-            title={
-              cloudSyncStatus === 'synced' && lastCloudSyncAt
-                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
-                : 'Sync schedule to cloud'
-            }
-          >
-            <span aria-hidden="true">
-              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
-            </span>
-            <span>{syncLabel ?? 'Synced'}</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('materials')} className="lawn-hub__tool">
-            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
-            <span>Materials</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('guides')} className="lawn-hub__tool">
-            <span aria-hidden="true">📚</span>
-            <span>Guides</span>
-          </button>
-          <button type="button" onClick={() => setActiveScreen('settings')} className="lawn-hub__tool">
-            <span aria-hidden="true">⚙️</span>
-            <span>Setup</span>
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-</file>
-
 <file path="src/data/lawnGuidesData.js">
 import masterclassManifest from './masterclassManifest.json';
 
@@ -6266,6 +6053,219 @@ export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenanc
     packStepsUpdated,
     maintenanceUpdated,
   };
+}
+</file>
+
+<file path="src/components/lawn/LawnHub.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatSyncTimeAgo } from '../../utils/lawnDates';
+import { CalculatorIcon } from './LawnMaterials';
+
+/**
+ * Hub home for sectioned themes.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnHub({ app }) {
+  const {
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    setActiveScreen,
+    setActiveRoom,
+    setMaintenanceFocusTab,
+    mowingDue,
+    wateringDue,
+    verticutDue,
+    gypsumDue,
+    seedEstablishmentActive,
+    isDormantSeason,
+    isNatureProvidingFullSoak,
+    isVerticutSeason,
+    petLockoutActive,
+    springPackIncomplete,
+    incompleteSpringSteps,
+    currentSeason,
+    weatherStatusText,
+    weatherLocationLabel,
+  } = app;
+
+  /** @type {Array<'mowing' | 'watering' | 'verticut' | 'gypsum'>} */
+  const dueTabs = [
+    mowingDue && !isDormantSeason && !seedEstablishmentActive ? 'mowing' : null,
+    wateringDue && !isDormantSeason && !isNatureProvidingFullSoak ? 'watering' : null,
+    verticutDue && isVerticutSeason ? 'verticut' : null,
+    gypsumDue ? 'gypsum' : null,
+  ].filter(Boolean);
+  const dueCount = dueTabs.length;
+  const dueLabels = {
+    mowing: 'Mowing',
+    watering: 'Watering',
+    verticut: 'Verticut',
+    gypsum: 'Gypsum',
+  };
+  const dueItems = dueTabs.map((tab) => dueLabels[tab]);
+
+  const openMaintenance = (tab = dueTabs[0] ?? null) => {
+    if (tab) setMaintenanceFocusTab(tab);
+    else if (seedEstablishmentActive) setMaintenanceFocusTab('mowing');
+    setActiveRoom('maintenance');
+  };
+
+  const heroStatus = seedEstablishmentActive
+    ? {
+        title: 'Seed lock',
+        lede: 'Mowing paused while seed establishes.',
+        tone: 'alert',
+      }
+    : dueCount > 0
+      ? {
+          title: dueCount === 1 ? '1 task due' : `${dueCount} tasks due`,
+          lede: dueItems.join(' · '),
+          tone: 'alert',
+        }
+      : {
+          title: 'All clear',
+          lede: 'Nothing due right now.',
+          tone: 'ok',
+        };
+
+  const syncLabel =
+    cloudSyncStatus === 'pulling'
+      ? 'Pull…'
+      : cloudSyncStatus === 'pushing'
+        ? 'Push…'
+        : cloudSyncStatus === 'error'
+          ? 'Retry'
+          : cloudSyncStatus === 'idle'
+            ? 'Sync'
+            : null;
+
+  const rooms = [
+    {
+      id: 'maintenance',
+      title: 'Maintenance',
+      meta: dueCount > 0 ? `${dueCount} due` : seedEstablishmentActive ? 'Seed lock' : 'Up to date',
+      tone: dueCount > 0 || seedEstablishmentActive ? 'alert' : 'ok',
+      icon: '✂️',
+    },
+    {
+      id: 'seasonal',
+      title: 'Seasonal Pack',
+      meta: springPackIncomplete
+        ? `${incompleteSpringSteps.length} Spring left`
+        : SEASONS[currentSeason]?.name ?? 'Open',
+      tone: springPackIncomplete ? 'warn' : 'ok',
+      icon: '📋',
+    },
+  ];
+
+  return (
+    <div className="lawn-hub">
+      <header className={`lawn-hub__hero lawn-hub__hero--${heroStatus.tone}`}>
+        {dueCount > 0 || seedEstablishmentActive ? (
+          <button
+            type="button"
+            className="lawn-hub__hero-open"
+            onClick={() => openMaintenance()}
+          >
+            <span className="lawn-hub__hero-open-copy">
+              <span className="lawn-hub__kicker">Today</span>
+              <span className="lawn-hub__title">{heroStatus.title}</span>
+              <span className="lawn-hub__lede">{heroStatus.lede}</span>
+            </span>
+            <span className="lawn-hub__hero-open-icon" aria-hidden="true">
+              →
+            </span>
+            <span className="sr-only">Open Maintenance</span>
+          </button>
+        ) : (
+          <>
+            <p className="lawn-hub__kicker">Today</p>
+            <h2 className="lawn-hub__title">{heroStatus.title}</h2>
+            <p className="lawn-hub__lede">{heroStatus.lede}</p>
+          </>
+        )}
+      </header>
+
+      {(petLockoutActive || springPackIncomplete) && (
+        <div className="lawn-hub__notices" aria-live="polite">
+          {petLockoutActive && (
+            <p className="lawn-hub__notice lawn-hub__notice--alert">
+              Chemical drying — pets off the lawn for now.
+            </p>
+          )}
+          {springPackIncomplete && (
+            <p className="lawn-hub__notice lawn-hub__notice--warn">
+              Spring Pack still in progress — open Seasonal Pack to finish.
+            </p>
+          )}
+        </div>
+      )}
+
+      <section className="lawn-hub__weather" aria-label="Weather">
+        <p className="lawn-hub__weather-text">
+          {weatherLocationLabel}: {weatherStatusText}
+        </p>
+      </section>
+
+      <section className="lawn-hub__rooms" aria-label="Sections">
+        <div className="lawn-hub__room-grid">
+          {rooms.map((room) => (
+            <button
+              key={room.id}
+              type="button"
+              className={`lawn-hub__room lawn-hub__room--${room.tone}`}
+              onClick={() =>
+                room.id === 'maintenance' ? openMaintenance() : setActiveRoom(room.id)
+              }
+            >
+              <span className="lawn-hub__room-icon" aria-hidden="true">
+                {room.icon}
+              </span>
+              <span className="lawn-hub__room-copy">
+                <span className="lawn-hub__room-title">{room.title}</span>
+              </span>
+              <span className="lawn-hub__room-meta">{room.meta}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="lawn-hub__tools" aria-label="Tools">
+        <div className="lawn-hub__tool-grid">
+          <button
+            type="button"
+            onClick={() => void runFullCloudSync()}
+            disabled={cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing'}
+            className="lawn-hub__tool"
+            title={
+              cloudSyncStatus === 'synced' && lastCloudSyncAt
+                ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)} — tap to refresh`
+                : 'Sync schedule to cloud'
+            }
+          >
+            <span aria-hidden="true">
+              {cloudSyncStatus === 'synced' ? '☁️✓' : cloudSyncStatus === 'error' ? '☁️!' : '☁️↻'}
+            </span>
+            <span>{syncLabel ?? 'Synced'}</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('materials')} className="lawn-hub__tool">
+            <CalculatorIcon className="w-3.5 h-3.5 shrink-0" />
+            <span>Materials</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('guides')} className="lawn-hub__tool">
+            <span aria-hidden="true">📚</span>
+            <span>Guides</span>
+          </button>
+          <button type="button" onClick={() => setActiveScreen('settings')} className="lawn-hub__tool">
+            <span aria-hidden="true">⚙️</span>
+            <span>Setup</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
 </file>
 
@@ -6988,6 +6988,264 @@ export default function App() {
       </div>
     </>
   );
+}
+</file>
+
+<file path="src/server/runLawnCloudSync.js">
+/**
+ * Server-side full lawn sync (same pipeline as Lawn app “Sync” button).
+ * Used by POST /api/sync-lawn — not imported by the browser bundle.
+ */
+import { createInitialPendingDates, stripStalePetLockout, makeStepKey, migrateUserLogs } from '../data/LawnPackData.js';
+import { getSupabaseConfigError, initServerSupabase } from '../lib/supabase.js';
+import { fetchLawnAppStateFromSupabase, saveLawnScheduleSnapshot, saveLawnUserLogsToSupabase } from '../services/lawnAppState.js';
+import {
+  inferMaintenanceDatesFromRows,
+  mergeMaintenanceDate,
+  MOW_TASK_NAME,
+  WATER_TASK_NAME,
+  VERTICUT_TASK_NAME,
+  resolveSeedWateringNextDueIso,
+} from '../services/lawnMaintenanceSync.js';
+import { buildMaintenanceSchedule, getScheduleReason } from '../services/lawnScheduleEngine.js';
+import {
+  applyInboundTaskCompletions,
+  applyInboundTaskSkips,
+  countFullySkippedWateringDays,
+  countRecentWateringSkips,
+  GYPSUM_POSTPONE_KEY,
+} from '../services/lawnTaskInboundSync.js';
+import {
+  fetchLawnTasksForInboundSync,
+  syncLawnTasksToSupabase,
+} from '../services/lawnTasks.js';
+import { resolveWeatherLocation } from '../services/lawnLocation.js';
+import {
+  computeWateringRainContext,
+  fetchLawnWeatherFromOpenMeteo,
+  getEffectiveNearTermRain,
+  getEffectiveRecentPastRain,
+  saveLawnWeatherSnapshot,
+} from '../services/lawnWeather.js';
+import { compileAllLawnTasks } from '../utils/compileLawnTasks.js';
+import { getTodayLondon } from '../services/lawnScheduleEngine.js';
+
+/**
+ * @returns {Promise<{ ok: boolean, taskCount: number, message?: string }>}
+ */
+export async function runLawnCloudSync() {
+  const configError = getSupabaseConfigError({ server: true });
+  if (configError) {
+    return { ok: false, taskCount: 0, message: configError };
+  }
+
+  initServerSupabase();
+
+  const todayStr = getTodayLondon();
+  const cloudState = await fetchLawnAppStateFromSupabase();
+
+  if (!cloudState) {
+    return {
+      ok: false,
+      taskCount: 0,
+      message: 'Lawn cloud state not set up. Run supabase/lawn_app_state.sql in Supabase.',
+    };
+  }
+
+  let userLogs = migrateUserLogs(stripStalePetLockout({ ...cloudState.userLogs }, todayStr));
+  const scheduleSnapshot = cloudState.scheduleSnapshot ?? {};
+
+  let lastMowedDate = scheduleSnapshot.lastMowedDate ?? null;
+  let lastWateredDate = scheduleSnapshot.lastWateredDate ?? null;
+  let lastVerticutDate = scheduleSnapshot.lastVerticutDate ?? null;
+
+  const inboundRows = await fetchLawnTasksForInboundSync();
+  const inbound = applyInboundTaskCompletions(inboundRows, todayStr, userLogs, {
+    lastMowedDate,
+    lastWateredDate,
+    lastVerticutDate,
+  });
+  userLogs = migrateUserLogs(stripStalePetLockout(inbound.userLogs, todayStr));
+  lastMowedDate = inbound.lastMowedDate ?? lastMowedDate;
+  lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
+  lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
+
+  userLogs = applyInboundTaskSkips(inboundRows, userLogs);
+
+  const maintenanceRows = inboundRows.filter((row) =>
+    [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name) ||
+    (typeof row.task_name === 'string' && row.task_name.startsWith('Water lawn ('))
+  );
+  const inferred = inferMaintenanceDatesFromRows(maintenanceRows, todayStr);
+  lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
+  lastWateredDate = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
+  lastVerticutDate = mergeMaintenanceDate(lastVerticutDate, inferred.lastVerticutDate);
+
+  const establishmentExtraDays = Math.min(
+    7,
+    countFullySkippedWateringDays(userLogs, todayStr)
+  );
+
+  await saveLawnUserLogsToSupabase(userLogs);
+
+  const weatherLocation = resolveWeatherLocation(scheduleSnapshot.weatherLocation);
+
+  // Skip Open-Meteo if the stored snapshot is less than 30 minutes old — the
+  // main speed gain on frequent syncs (tasks app returning from background etc.).
+  const WEATHER_FRESH_MS = 30 * 60 * 1000;
+  const cachedWeather = cloudState.weatherSnapshot;
+  const cachedFetchedAt = cachedWeather?.fetchedAt ? new Date(cachedWeather.fetchedAt).getTime() : 0;
+  const weatherIsFresh = Date.now() - cachedFetchedAt < WEATHER_FRESH_MS;
+
+  let weather;
+  if (weatherIsFresh && cachedWeather && typeof cachedWeather.forecastedRainSum === 'number') {
+    weather = cachedWeather;
+    console.log('[Lawn sync API] Using cached weather snapshot (fresh).');
+  } else {
+    try {
+      weather = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
+      await saveLawnWeatherSnapshot(weather);
+    } catch (err) {
+      console.warn('[Lawn sync API] Weather fetch failed, using cloud snapshot:', err);
+      const fromCloud = cloudState.weatherSnapshot;
+      if (fromCloud && typeof fromCloud.forecastedRainSum === 'number') {
+        weather = fromCloud;
+      } else if (typeof scheduleSnapshot.forecastedRainSum === 'number') {
+        const nearTerm = getEffectiveNearTermRain({
+          forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+          forecastedRainSumNearTerm: scheduleSnapshot.forecastedRainSumNearTerm,
+        });
+        const pastRain = getEffectiveRecentPastRain({
+          recentPastRainSum: scheduleSnapshot.recentPastRainSum,
+        });
+        const watering = computeWateringRainContext(pastRain, nearTerm);
+        weather = {
+          forecastedRainSum: scheduleSnapshot.forecastedRainSum,
+          forecastedRainSumNearTerm: nearTerm,
+          recentPastRainSum: pastRain,
+          rainCreditMm: watering.rainCreditMm,
+          currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
+          currentSoilTempMin: null,
+          isRainForecasted: nearTerm >= 5 || pastRain >= 5,
+          isNatureProvidingFullSoak:
+            scheduleSnapshot.isNatureProvidingFullSoak ?? watering.isNatureProvidingFullSoak,
+          soilRecentlyWet: watering.soilRecentlyWet,
+          netWaterNeeded: watering.netWaterNeeded,
+          fetchedAt: scheduleSnapshot.savedAt ?? new Date().toISOString(),
+          source: 'open-meteo',
+        };
+      } else {
+        throw new Error('Weather forecast unavailable and no cached snapshot in cloud.');
+      }
+    }
+  }
+
+  const forecastedRainSum = weather.forecastedRainSum;
+  const forecastedRainSumNearTerm = getEffectiveNearTermRain(weather);
+  const recentPastRainSum = getEffectiveRecentPastRain(weather);
+  const currentSoilTemp = weather.currentSoilTemp;
+  const isNatureProvidingFullSoak = weather.isNatureProvidingFullSoak;
+  const soilRecentlyWet = weather.soilRecentlyWet ?? false;
+  const dailyForecastByDate = weather.dailyForecastByDate ?? [];
+  const recentPastRainBeforeToday =
+    weather.recentPastRainBeforeToday ??
+    Math.max(0, recentPastRainSum - (weather.todayRainMm ?? 0));
+  const todayRainMm = weather.todayRainMm ?? 0;
+  const todayHourlyPrecipMm = weather.todayHourlyPrecipMm ?? [];
+  const todayRainObservedMm = weather.todayRainObservedMm ?? 0;
+
+  const pendingDates =
+    scheduleSnapshot.pendingDates ??
+    createInitialPendingDates(null, userLogs);
+
+  const maintenance = buildMaintenanceSchedule({
+    todayStr,
+    userLogs,
+    forecastedRainSumNearTerm,
+    recentPastRainSum,
+    currentSoilTemp,
+    isNatureProvidingFullSoak,
+    soilRecentlyWetToday: soilRecentlyWet,
+    lastMowedDate,
+    lastWateredDate,
+    lastVerticutDate,
+    establishmentExtraDays,
+  });
+
+  let wateringNextDueIso = maintenance.wateringNextDueIso;
+  if (maintenance.seedEstablishmentActive) {
+    wateringNextDueIso = resolveSeedWateringNextDueIso(
+      wateringNextDueIso,
+      maintenanceRows,
+      todayStr
+    );
+  }
+
+  const scheduleReason = getScheduleReason({
+    forecastedRainSumNearTerm,
+    forecastedRainSumWeek: forecastedRainSum,
+    recentPastRainSum,
+    currentSoilTemp,
+    springSeedDate: userLogs[makeStepKey('SPRING', 'seed')] ?? null,
+    seedEstablishmentActive: maintenance.seedEstablishmentActive,
+    todayStr,
+    userLogs,
+  });
+
+  const compiledTasks = compileAllLawnTasks({
+    todayStr,
+    userLogs,
+    pendingDates,
+    isDormantSeason: maintenance.isDormantSeason,
+    isNatureProvidingFullSoak: maintenance.isNatureProvidingFullSoak,
+    soilRecentlyWet,
+    dailyForecastByDate,
+    recentPastRainBeforeToday,
+    todayRainMm,
+    todayHourlyPrecipMm,
+    todayRainObservedMm,
+    seedEstablishmentActive: maintenance.seedEstablishmentActive,
+    mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
+    mowingNextDueIso: maintenance.mowingNextDueIso,
+    wateringNextDueIso,
+    isVerticutSeason: maintenance.isVerticutSeason,
+    renovationHoldActive: maintenance.renovationHoldActive,
+    verticutLockedUntilIso: maintenance.verticutLockedUntilIso,
+    verticutHeatDroughtPaused: maintenance.verticutHeatDroughtPaused,
+    verticutNextDueIso: maintenance.verticutNextDueIso,
+    verticutPairedWithMow: maintenance.verticutPairedWithMow,
+    lastGypsumDate: userLogs.lastGypsumDate ?? null,
+    gypsumPostponedUntil: userLogs[GYPSUM_POSTPONE_KEY] ?? null,
+    scheduleReason,
+    recentWateringSkips: countRecentWateringSkips(userLogs, todayStr),
+  });
+
+  await syncLawnTasksToSupabase(
+    compiledTasks,
+    { lastMowedDate, lastWateredDate, lastVerticutDate },
+    todayStr
+  );
+
+  await saveLawnScheduleSnapshot(
+    {
+      lastMowedDate,
+      lastWateredDate,
+      lastVerticutDate,
+      mowingNextDueIso: maintenance.mowingNextDueIso,
+      wateringNextDueIso,
+      verticutNextDueIso: maintenance.verticutNextDueIso,
+      forecastedRainSum,
+      forecastedRainSumNearTerm,
+      recentPastRainSum,
+      weatherLocation,
+      currentSoilTemp,
+      isNatureProvidingFullSoak,
+      pendingDates,
+    },
+    userLogs
+  );
+
+  return { ok: true, taskCount: compiledTasks.length };
 }
 </file>
 
@@ -8004,264 +8262,6 @@ export default function MaintenancePanel({ app }) {
       )}
     </section>
   );
-}
-</file>
-
-<file path="src/server/runLawnCloudSync.js">
-/**
- * Server-side full lawn sync (same pipeline as Lawn app “Sync” button).
- * Used by POST /api/sync-lawn — not imported by the browser bundle.
- */
-import { createInitialPendingDates, stripStalePetLockout, makeStepKey, migrateUserLogs } from '../data/LawnPackData.js';
-import { getSupabaseConfigError, initServerSupabase } from '../lib/supabase.js';
-import { fetchLawnAppStateFromSupabase, saveLawnScheduleSnapshot, saveLawnUserLogsToSupabase } from '../services/lawnAppState.js';
-import {
-  inferMaintenanceDatesFromRows,
-  mergeMaintenanceDate,
-  MOW_TASK_NAME,
-  WATER_TASK_NAME,
-  VERTICUT_TASK_NAME,
-  resolveSeedWateringNextDueIso,
-} from '../services/lawnMaintenanceSync.js';
-import { buildMaintenanceSchedule, getScheduleReason } from '../services/lawnScheduleEngine.js';
-import {
-  applyInboundTaskCompletions,
-  applyInboundTaskSkips,
-  countFullySkippedWateringDays,
-  countRecentWateringSkips,
-  GYPSUM_POSTPONE_KEY,
-} from '../services/lawnTaskInboundSync.js';
-import {
-  fetchLawnTasksForInboundSync,
-  syncLawnTasksToSupabase,
-} from '../services/lawnTasks.js';
-import { resolveWeatherLocation } from '../services/lawnLocation.js';
-import {
-  computeWateringRainContext,
-  fetchLawnWeatherFromOpenMeteo,
-  getEffectiveNearTermRain,
-  getEffectiveRecentPastRain,
-  saveLawnWeatherSnapshot,
-} from '../services/lawnWeather.js';
-import { compileAllLawnTasks } from '../utils/compileLawnTasks.js';
-import { getTodayLondon } from '../services/lawnScheduleEngine.js';
-
-/**
- * @returns {Promise<{ ok: boolean, taskCount: number, message?: string }>}
- */
-export async function runLawnCloudSync() {
-  const configError = getSupabaseConfigError({ server: true });
-  if (configError) {
-    return { ok: false, taskCount: 0, message: configError };
-  }
-
-  initServerSupabase();
-
-  const todayStr = getTodayLondon();
-  const cloudState = await fetchLawnAppStateFromSupabase();
-
-  if (!cloudState) {
-    return {
-      ok: false,
-      taskCount: 0,
-      message: 'Lawn cloud state not set up. Run supabase/lawn_app_state.sql in Supabase.',
-    };
-  }
-
-  let userLogs = migrateUserLogs(stripStalePetLockout({ ...cloudState.userLogs }, todayStr));
-  const scheduleSnapshot = cloudState.scheduleSnapshot ?? {};
-
-  let lastMowedDate = scheduleSnapshot.lastMowedDate ?? null;
-  let lastWateredDate = scheduleSnapshot.lastWateredDate ?? null;
-  let lastVerticutDate = scheduleSnapshot.lastVerticutDate ?? null;
-
-  const inboundRows = await fetchLawnTasksForInboundSync();
-  const inbound = applyInboundTaskCompletions(inboundRows, todayStr, userLogs, {
-    lastMowedDate,
-    lastWateredDate,
-    lastVerticutDate,
-  });
-  userLogs = migrateUserLogs(stripStalePetLockout(inbound.userLogs, todayStr));
-  lastMowedDate = inbound.lastMowedDate ?? lastMowedDate;
-  lastWateredDate = inbound.lastWateredDate ?? lastWateredDate;
-  lastVerticutDate = inbound.lastVerticutDate ?? lastVerticutDate;
-
-  userLogs = applyInboundTaskSkips(inboundRows, userLogs);
-
-  const maintenanceRows = inboundRows.filter((row) =>
-    [MOW_TASK_NAME, WATER_TASK_NAME, VERTICUT_TASK_NAME].includes(row.task_name) ||
-    (typeof row.task_name === 'string' && row.task_name.startsWith('Water lawn ('))
-  );
-  const inferred = inferMaintenanceDatesFromRows(maintenanceRows, todayStr);
-  lastMowedDate = mergeMaintenanceDate(lastMowedDate, inferred.lastMowedDate);
-  lastWateredDate = mergeMaintenanceDate(lastWateredDate, inferred.lastWateredDate);
-  lastVerticutDate = mergeMaintenanceDate(lastVerticutDate, inferred.lastVerticutDate);
-
-  const establishmentExtraDays = Math.min(
-    7,
-    countFullySkippedWateringDays(userLogs, todayStr)
-  );
-
-  await saveLawnUserLogsToSupabase(userLogs);
-
-  const weatherLocation = resolveWeatherLocation(scheduleSnapshot.weatherLocation);
-
-  // Skip Open-Meteo if the stored snapshot is less than 30 minutes old — the
-  // main speed gain on frequent syncs (tasks app returning from background etc.).
-  const WEATHER_FRESH_MS = 30 * 60 * 1000;
-  const cachedWeather = cloudState.weatherSnapshot;
-  const cachedFetchedAt = cachedWeather?.fetchedAt ? new Date(cachedWeather.fetchedAt).getTime() : 0;
-  const weatherIsFresh = Date.now() - cachedFetchedAt < WEATHER_FRESH_MS;
-
-  let weather;
-  if (weatherIsFresh && cachedWeather && typeof cachedWeather.forecastedRainSum === 'number') {
-    weather = cachedWeather;
-    console.log('[Lawn sync API] Using cached weather snapshot (fresh).');
-  } else {
-    try {
-      weather = await fetchLawnWeatherFromOpenMeteo(weatherLocation);
-      await saveLawnWeatherSnapshot(weather);
-    } catch (err) {
-      console.warn('[Lawn sync API] Weather fetch failed, using cloud snapshot:', err);
-      const fromCloud = cloudState.weatherSnapshot;
-      if (fromCloud && typeof fromCloud.forecastedRainSum === 'number') {
-        weather = fromCloud;
-      } else if (typeof scheduleSnapshot.forecastedRainSum === 'number') {
-        const nearTerm = getEffectiveNearTermRain({
-          forecastedRainSum: scheduleSnapshot.forecastedRainSum,
-          forecastedRainSumNearTerm: scheduleSnapshot.forecastedRainSumNearTerm,
-        });
-        const pastRain = getEffectiveRecentPastRain({
-          recentPastRainSum: scheduleSnapshot.recentPastRainSum,
-        });
-        const watering = computeWateringRainContext(pastRain, nearTerm);
-        weather = {
-          forecastedRainSum: scheduleSnapshot.forecastedRainSum,
-          forecastedRainSumNearTerm: nearTerm,
-          recentPastRainSum: pastRain,
-          rainCreditMm: watering.rainCreditMm,
-          currentSoilTemp: scheduleSnapshot.currentSoilTemp ?? null,
-          currentSoilTempMin: null,
-          isRainForecasted: nearTerm >= 5 || pastRain >= 5,
-          isNatureProvidingFullSoak:
-            scheduleSnapshot.isNatureProvidingFullSoak ?? watering.isNatureProvidingFullSoak,
-          soilRecentlyWet: watering.soilRecentlyWet,
-          netWaterNeeded: watering.netWaterNeeded,
-          fetchedAt: scheduleSnapshot.savedAt ?? new Date().toISOString(),
-          source: 'open-meteo',
-        };
-      } else {
-        throw new Error('Weather forecast unavailable and no cached snapshot in cloud.');
-      }
-    }
-  }
-
-  const forecastedRainSum = weather.forecastedRainSum;
-  const forecastedRainSumNearTerm = getEffectiveNearTermRain(weather);
-  const recentPastRainSum = getEffectiveRecentPastRain(weather);
-  const currentSoilTemp = weather.currentSoilTemp;
-  const isNatureProvidingFullSoak = weather.isNatureProvidingFullSoak;
-  const soilRecentlyWet = weather.soilRecentlyWet ?? false;
-  const dailyForecastByDate = weather.dailyForecastByDate ?? [];
-  const recentPastRainBeforeToday =
-    weather.recentPastRainBeforeToday ??
-    Math.max(0, recentPastRainSum - (weather.todayRainMm ?? 0));
-  const todayRainMm = weather.todayRainMm ?? 0;
-  const todayHourlyPrecipMm = weather.todayHourlyPrecipMm ?? [];
-  const todayRainObservedMm = weather.todayRainObservedMm ?? 0;
-
-  const pendingDates =
-    scheduleSnapshot.pendingDates ??
-    createInitialPendingDates(null, userLogs);
-
-  const maintenance = buildMaintenanceSchedule({
-    todayStr,
-    userLogs,
-    forecastedRainSumNearTerm,
-    recentPastRainSum,
-    currentSoilTemp,
-    isNatureProvidingFullSoak,
-    soilRecentlyWetToday: soilRecentlyWet,
-    lastMowedDate,
-    lastWateredDate,
-    lastVerticutDate,
-    establishmentExtraDays,
-  });
-
-  let wateringNextDueIso = maintenance.wateringNextDueIso;
-  if (maintenance.seedEstablishmentActive) {
-    wateringNextDueIso = resolveSeedWateringNextDueIso(
-      wateringNextDueIso,
-      maintenanceRows,
-      todayStr
-    );
-  }
-
-  const scheduleReason = getScheduleReason({
-    forecastedRainSumNearTerm,
-    forecastedRainSumWeek: forecastedRainSum,
-    recentPastRainSum,
-    currentSoilTemp,
-    springSeedDate: userLogs[makeStepKey('SPRING', 'seed')] ?? null,
-    seedEstablishmentActive: maintenance.seedEstablishmentActive,
-    todayStr,
-    userLogs,
-  });
-
-  const compiledTasks = compileAllLawnTasks({
-    todayStr,
-    userLogs,
-    pendingDates,
-    isDormantSeason: maintenance.isDormantSeason,
-    isNatureProvidingFullSoak: maintenance.isNatureProvidingFullSoak,
-    soilRecentlyWet,
-    dailyForecastByDate,
-    recentPastRainBeforeToday,
-    todayRainMm,
-    todayHourlyPrecipMm,
-    todayRainObservedMm,
-    seedEstablishmentActive: maintenance.seedEstablishmentActive,
-    mowingLockedUntilIso: maintenance.mowingLockedUntilIso,
-    mowingNextDueIso: maintenance.mowingNextDueIso,
-    wateringNextDueIso,
-    isVerticutSeason: maintenance.isVerticutSeason,
-    renovationHoldActive: maintenance.renovationHoldActive,
-    verticutLockedUntilIso: maintenance.verticutLockedUntilIso,
-    verticutHeatDroughtPaused: maintenance.verticutHeatDroughtPaused,
-    verticutNextDueIso: maintenance.verticutNextDueIso,
-    verticutPairedWithMow: maintenance.verticutPairedWithMow,
-    lastGypsumDate: userLogs.lastGypsumDate ?? null,
-    gypsumPostponedUntil: userLogs[GYPSUM_POSTPONE_KEY] ?? null,
-    scheduleReason,
-    recentWateringSkips: countRecentWateringSkips(userLogs, todayStr),
-  });
-
-  await syncLawnTasksToSupabase(
-    compiledTasks,
-    { lastMowedDate, lastWateredDate, lastVerticutDate },
-    todayStr
-  );
-
-  await saveLawnScheduleSnapshot(
-    {
-      lastMowedDate,
-      lastWateredDate,
-      lastVerticutDate,
-      mowingNextDueIso: maintenance.mowingNextDueIso,
-      wateringNextDueIso,
-      verticutNextDueIso: maintenance.verticutNextDueIso,
-      forecastedRainSum,
-      forecastedRainSumNearTerm,
-      recentPastRainSum,
-      weatherLocation,
-      currentSoilTemp,
-      isNatureProvidingFullSoak,
-      pendingDates,
-    },
-    userLogs
-  );
-
-  return { ok: true, taskCount: compiledTasks.length };
 }
 </file>
 
