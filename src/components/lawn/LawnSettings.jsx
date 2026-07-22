@@ -3,6 +3,8 @@ import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
 import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
 import { LAWN_THEMES } from '../../data/lawnThemes';
 
+const DEBUG_TOOLS_STORAGE_KEY = 'lawnPackShowDebugTools';
+
 /**
  * Snapshot of Setup fields that apply immediately while editing.
  * Cancel restores this; Save keeps the current values and leaves Setup.
@@ -61,10 +63,9 @@ export default function LawnSettings({ app }) {
 
   const snapshotRef = useRef(/** @type {ReturnType<typeof captureSettingsSnapshot> | null} */ (null));
   const [dirty, setDirty] = useState(false);
-  const DEBUG_STORAGE_KEY = 'lawnPackShowDebugTools';
   const [showDebugTools, setShowDebugTools] = useState(() => {
     try {
-      return localStorage.getItem(DEBUG_STORAGE_KEY) === '1';
+      return localStorage.getItem(DEBUG_TOOLS_STORAGE_KEY) === '1';
     } catch {
       return false;
     }
@@ -74,8 +75,8 @@ export default function LawnSettings({ app }) {
   const setDebugToolsVisible = (visible) => {
     setShowDebugTools(visible);
     try {
-      if (visible) localStorage.setItem(DEBUG_STORAGE_KEY, '1');
-      else localStorage.removeItem(DEBUG_STORAGE_KEY);
+      if (visible) localStorage.setItem(DEBUG_TOOLS_STORAGE_KEY, '1');
+      else localStorage.removeItem(DEBUG_TOOLS_STORAGE_KEY);
     } catch {
       /* ignore */
     }
