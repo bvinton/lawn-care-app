@@ -1,4 +1,4 @@
-/** @typedef {'classic' | 'tabs'} LawnThemeLayout */
+/** @typedef {'classic' | 'rooms' | 'tabs' | 'today'} LawnThemeLayout */
 
 /**
  * @typedef {Object} LawnTheme
@@ -14,12 +14,6 @@
 
 export const LAWN_THEME_STORAGE_KEY = 'lawnPackUiTheme';
 
-/** Older theme ids map onto the two kept options. */
-const LEGACY_THEME_IDS = {
-  atelier: 'signal',
-  canopy: 'signal',
-};
-
 /** @type {LawnTheme[]} */
 export const LAWN_THEMES = [
   {
@@ -34,6 +28,17 @@ export const LAWN_THEMES = [
     fontBody: '"Segoe UI", system-ui, sans-serif',
   },
   {
+    id: 'atelier',
+    name: 'Atelier',
+    tagline: 'Journal spine · chapters',
+    description:
+      'Porcelain studio look. A vertical chapter spine (Cover, Care, Pack, Studio) — open one chapter at a time like a field journal, not a tab bar or long page.',
+    layout: 'rooms',
+    swatches: ['#e7eef3', '#1c2430', '#f4f7fa', '#b45309'],
+    fontDisplay: '"Literata", Georgia, serif',
+    fontBody: '"Source Sans 3", "Segoe UI", sans-serif',
+  },
+  {
     id: 'signal',
     name: 'Signal',
     tagline: 'Bottom tabs · status board',
@@ -44,17 +49,27 @@ export const LAWN_THEMES = [
     fontDisplay: '"Space Grotesk", "Segoe UI", sans-serif',
     fontBody: '"IBM Plex Sans", "Segoe UI", sans-serif',
   },
+  {
+    id: 'canopy',
+    name: 'Canopy',
+    tagline: 'Daylight timeline · due ribbon',
+    description:
+      'Bright sky-to-meadow shell. Starts on a vertical Today timeline of what’s due, with Care / Pack opened as full sheets from a floating dock — not bottom tabs.',
+    layout: 'today',
+    swatches: ['#7eb8d9', '#e8f5d8', '#ffffff', '#2f6b3a'],
+    fontDisplay: '"Sora", "Segoe UI", sans-serif',
+    fontBody: '"Nunito Sans", "Segoe UI", sans-serif',
+  },
 ];
 
 export const DEFAULT_LAWN_THEME_ID = 'classic';
 
 /** Layouts that use section navigation via activeRoom (not the classic long page). */
-export const SECTIONED_LAYOUTS = new Set(['tabs']);
+export const SECTIONED_LAYOUTS = new Set(['rooms', 'tabs', 'today']);
 
 /** @param {string | null | undefined} id */
 export function normalizeLawnThemeId(id) {
   if (!id || typeof id !== 'string') return DEFAULT_LAWN_THEME_ID;
-  if (LEGACY_THEME_IDS[id]) return LEGACY_THEME_IDS[id];
   if (LAWN_THEMES.some((theme) => theme.id === id)) return id;
   return DEFAULT_LAWN_THEME_ID;
 }

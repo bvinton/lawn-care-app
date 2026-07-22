@@ -133,6 +133,8 @@ src/
     lawn/
       GuideViewerModal.jsx
       LawnAlerts.jsx
+      LawnAtelierBoard.jsx
+      LawnCanopyBoard.jsx
       LawnCareApp.jsx
       LawnGuides.jsx
       LawnMainView.jsx
@@ -208,6 +210,416 @@ vite.config.js
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/components/lawn/LawnAtelierBoard.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
+import { CalculatorIcon } from './LawnMaterials';
+import MaintenancePanel from './MaintenancePanel';
+import SeasonTimeline from './SeasonTimeline';
+
+/**
+ * Atelier — field-journal spine. Not a room hub list, not bottom tabs.
+ * Vertical chapter rail + one open chapter (Cover / Care / Pack / Studio).
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnAtelierBoard({ app }) {
+  const {
+    sqm,
+    length,
+    width,
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    setActiveScreen,
+    setActiveRoom,
+    activeRoom,
+    mowingDue,
+    wateringDue,
+    verticutDue,
+    gypsumDue,
+    seedEstablishmentActive,
+    petLockoutActive,
+    springPackIncomplete,
+    incompleteSpringSteps,
+    currentSeason,
+    weatherStatusText,
+    weatherLocationLabel,
+    mowingNextDate,
+    wateringNextDate,
+    verticutNextDate,
+    gypsumDueDate,
+  } = app;
+
+  const dueCount = [mowingDue, wateringDue, verticutDue, gypsumDue].filter(Boolean).length;
+  const chapter =
+    activeRoom === 'maintenance' || activeRoom === 'seasonal' || activeRoom === 'more'
+      ? activeRoom
+      : 'hub';
+
+  const syncBusy = cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing';
+  const syncLabel =
+    cloudSyncStatus === 'pulling'
+      ? 'Pulling…'
+      : cloudSyncStatus === 'pushing'
+        ? 'Pushing…'
+        : cloudSyncStatus === 'error'
+          ? 'Retry sync'
+          : cloudSyncStatus === 'synced' && lastCloudSyncAt
+            ? `Synced ${formatSyncTimeAgo(lastCloudSyncAt)}`
+            : 'Sync now';
+
+  const chapters = [
+    { id: 'hub', label: 'Cover', short: 'Cv' },
+    { id: 'maintenance', label: 'Care', short: 'Cr', badge: dueCount > 0 ? String(dueCount) : null },
+    {
+      id: 'seasonal',
+      label: 'Pack',
+      short: 'Pk',
+      badge: springPackIncomplete ? String(incompleteSpringSteps.length) : null,
+    },
+    { id: 'more', label: 'Studio', short: 'St' },
+  ];
+
+  const dueLines = [
+    { id: 'mow', label: 'Mowing', due: mowingDue && !seedEstablishmentActive, next: mowingNextDate },
+    { id: 'water', label: 'Watering', due: wateringDue, next: wateringNextDate },
+    { id: 'verticut', label: 'Verticut', due: verticutDue, next: verticutNextDate },
+    {
+      id: 'gypsum',
+      label: 'Gypsum',
+      due: gypsumDue,
+      next: gypsumDueDate ? formatDisplayDate(gypsumDueDate) : null,
+    },
+  ];
+
+  let page = null;
+  if (chapter === 'maintenance') {
+    page = (
+      <div className="lawn-atelier__chapter lawn-panel-surface">
+        <MaintenancePanel app={app} />
+      </div>
+    );
+  } else if (chapter === 'seasonal') {
+    page = (
+      <div className="lawn-atelier__chapter lawn-panel-surface">
+        <SeasonTimeline app={app} />
+      </div>
+    );
+  } else if (chapter === 'more') {
+    page = (
+      <div className="lawn-atelier__studio">
+        <p className="lawn-atelier__studio-lede">Studio tools</p>
+        <button
+          type="button"
+          className="lawn-atelier__studio-row"
+          onClick={() => void runFullCloudSync()}
+          disabled={syncBusy}
+        >
+          <span>Cloud sync</span>
+          <span>{syncLabel}</span>
+        </button>
+        <button
+          type="button"
+          className="lawn-atelier__studio-row"
+          onClick={() => setActiveScreen('materials')}
+        >
+          <span className="inline-flex items-center gap-2">
+            <CalculatorIcon className="w-3.5 h-3.5" /> Materials calculator
+          </span>
+          <span aria-hidden="true">→</span>
+        </button>
+        <button
+          type="button"
+          className="lawn-atelier__studio-row"
+          onClick={() => setActiveScreen('guides')}
+        >
+          <span>Guides & PDFs</span>
+          <span aria-hidden="true">→</span>
+        </button>
+        <button
+          type="button"
+          className="lawn-atelier__studio-row"
+          onClick={() => setActiveScreen('settings')}
+        >
+          <span>Setup</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </div>
+    );
+  } else {
+    page = (
+      <div className="lawn-atelier__cover">
+        <p className="lawn-atelier__kicker">{weatherLocationLabel}</p>
+        <h2 className="lawn-atelier__season">{SEASONS[currentSeason]?.name ?? 'Season'}</h2>
+        <p className="lawn-atelier__size">
+          {sqm} m² · {length}×{width}m
+        </p>
+        <p className="lawn-atelier__weather">{weatherStatusText}</p>
+
+        {(petLockoutActive || seedEstablishmentActive || springPackIncomplete) && (
+          <ul className="lawn-atelier__notices">
+            {petLockoutActive && <li>Pets off the lawn — chemical drying.</li>}
+            {seedEstablishmentActive && <li>Seed lock — no mowing while establishing.</li>}
+            {springPackIncomplete && (
+              <li>
+                Spring Pack: {incompleteSpringSteps.length} step
+                {incompleteSpringSteps.length !== 1 ? 's' : ''} left.
+              </li>
+            )}
+          </ul>
+        )}
+
+        <div className="lawn-atelier__ledger" aria-label="Care ledger">
+          {dueLines.map((line, index) => (
+            <button
+              key={line.id}
+              type="button"
+              className={`lawn-atelier__line${line.due ? ' is-due' : ''}`}
+              style={{ animationDelay: `${80 + index * 60}ms` }}
+              onClick={() => setActiveRoom('maintenance')}
+            >
+              <span className="lawn-atelier__line-label">{line.label}</span>
+              <span className="lawn-atelier__line-rule" aria-hidden="true" />
+              <span className="lawn-atelier__line-state">
+                {line.due ? 'Due' : line.next ? line.next : '—'}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="lawn-atelier__cover-actions">
+          <button
+            type="button"
+            className="lawn-atelier__open"
+            onClick={() => setActiveRoom('maintenance')}
+          >
+            Open Care chapter
+          </button>
+          <button
+            type="button"
+            className="lawn-atelier__open lawn-atelier__open--ghost"
+            onClick={() => setActiveRoom('seasonal')}
+          >
+            Open Pack chapter
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="lawn-atelier" data-atelier-chapter={chapter}>
+      <nav className="lawn-atelier__spine" aria-label="Journal chapters">
+        {chapters.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`lawn-atelier__spine-btn${chapter === item.id ? ' is-active' : ''}`}
+            onClick={() =>
+              setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))
+            }
+            aria-current={chapter === item.id ? 'page' : undefined}
+            title={item.label}
+          >
+            <span className="lawn-atelier__spine-short">{item.short}</span>
+            <span className="lawn-atelier__spine-label">{item.label}</span>
+            {item.badge ? <span className="lawn-atelier__spine-badge">{item.badge}</span> : null}
+          </button>
+        ))}
+      </nav>
+      <div className="lawn-atelier__page">{page}</div>
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/lawn/LawnCanopyBoard.jsx">
+import React from 'react';
+import { SEASONS } from '../../data/LawnPackData';
+import { formatDisplayDate, formatSyncTimeAgo } from '../../utils/lawnDates';
+
+/**
+ * Canopy — bright daylight timeline. Not a dark shell, not bottom tabs.
+ * Vertical due ribbon under a sky hero; Care/Pack open as sheets via floating dock.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnCanopyBoard({ app }) {
+  const {
+    sqm,
+    mowingDue,
+    wateringDue,
+    verticutDue,
+    gypsumDue,
+    seedEstablishmentActive,
+    seedDaysRemaining,
+    mowingNextDate,
+    wateringNextDate,
+    verticutNextDate,
+    gypsumDueDate,
+    currentSeason,
+    springPackIncomplete,
+    incompleteSpringSteps,
+    weatherStatusText,
+    weatherLocationLabel,
+    currentSoilTemp,
+    setActiveRoom,
+    setActiveScreen,
+    runFullCloudSync,
+    cloudSyncStatus,
+    lastCloudSyncAt,
+    petLockoutActive,
+    petLockoutHoursRemaining,
+    todayStr,
+  } = app;
+
+  /** @type {{ id: string, title: string, detail: string, go: 'maintenance' | 'seasonal', urgent: boolean }[]} */
+  const queue = [];
+
+  if (petLockoutActive) {
+    queue.push({
+      id: 'pets',
+      title: 'Pet lockout',
+      detail: `Safe in ${petLockoutHoursRemaining}h`,
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (seedEstablishmentActive) {
+    queue.push({
+      id: 'seed',
+      title: 'No mowing',
+      detail: `${seedDaysRemaining} day${seedDaysRemaining !== 1 ? 's' : ''} left on seed lock`,
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (mowingDue && !seedEstablishmentActive) {
+    queue.push({
+      id: 'mow',
+      title: 'Mow the lawn',
+      detail: mowingNextDate ? `Was due ${mowingNextDate}` : 'Due now',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (wateringDue) {
+    queue.push({
+      id: 'water',
+      title: 'Water',
+      detail: wateringNextDate ? `Was due ${wateringNextDate}` : 'Due now',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (verticutDue) {
+    queue.push({
+      id: 'verticut',
+      title: 'Verticut',
+      detail: verticutNextDate ? `Was due ${verticutNextDate}` : 'Due now',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (gypsumDue) {
+    queue.push({
+      id: 'gypsum',
+      title: 'Liquid gypsum',
+      detail: gypsumDueDate ? formatDisplayDate(gypsumDueDate) : 'Due now',
+      go: 'maintenance',
+      urgent: true,
+    });
+  }
+  if (springPackIncomplete) {
+    queue.push({
+      id: 'spring',
+      title: 'Spring Pack',
+      detail: `${incompleteSpringSteps.length} step${incompleteSpringSteps.length !== 1 ? 's' : ''} left`,
+      go: 'seasonal',
+      urgent: true,
+    });
+  }
+
+  if (queue.length === 0) {
+    queue.push({
+      id: 'clear',
+      title: 'Clear skies',
+      detail: `${SEASONS[currentSeason]?.name ?? 'Season'} · ${sqm} m² — nothing due today`,
+      go: 'maintenance',
+      urgent: false,
+    });
+  }
+
+  const dateLabel = formatDisplayDate(todayStr);
+  const syncBusy = cloudSyncStatus === 'pulling' || cloudSyncStatus === 'pushing';
+  const urgentCount = queue.filter((item) => item.urgent).length;
+
+  return (
+    <div className="lawn-canopy">
+      <header className="lawn-canopy__sky">
+        <div className="lawn-canopy__sky-glow" aria-hidden="true" />
+        <p className="lawn-canopy__date">{dateLabel}</p>
+        <h2 className="lawn-canopy__place">{weatherLocationLabel}</h2>
+        <p className="lawn-canopy__weather">{weatherStatusText}</p>
+        <div className="lawn-canopy__vitals">
+          <span>{sqm} m²</span>
+          <span>{currentSoilTemp != null ? `${currentSoilTemp.toFixed(0)}°C soil` : 'Soil —'}</span>
+          <span>
+            {urgentCount > 0 ? `${urgentCount} due` : 'All clear'}
+          </span>
+        </div>
+      </header>
+
+      <section className="lawn-canopy__ribbon" aria-label="Today">
+        <p className="lawn-canopy__ribbon-title">Today</p>
+        <ol className="lawn-canopy__timeline">
+          {queue.map((item, index) => (
+            <li key={item.id} style={{ animationDelay: `${100 + index * 70}ms` }}>
+              <button
+                type="button"
+                className={`lawn-canopy__node${item.urgent ? ' is-urgent' : ''}`}
+                onClick={() => setActiveRoom(item.go)}
+              >
+                <span className="lawn-canopy__node-dot" aria-hidden="true" />
+                <span className="lawn-canopy__node-copy">
+                  <span className="lawn-canopy__node-title">{item.title}</span>
+                  <span className="lawn-canopy__node-detail">{item.detail}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <div className="lawn-canopy__dock" role="navigation" aria-label="Open sheets">
+        <button type="button" className="lawn-canopy__dock-main" onClick={() => setActiveRoom('maintenance')}>
+          Care
+        </button>
+        <button type="button" className="lawn-canopy__dock-main" onClick={() => setActiveRoom('seasonal')}>
+          Pack
+        </button>
+        <button type="button" onClick={() => void runFullCloudSync()} disabled={syncBusy}>
+          {syncBusy
+            ? '…'
+            : cloudSyncStatus === 'synced' && lastCloudSyncAt
+              ? formatSyncTimeAgo(lastCloudSyncAt)
+              : 'Sync'}
+        </button>
+        <button type="button" onClick={() => setActiveScreen('materials')}>
+          Kit
+        </button>
+        <button type="button" onClick={() => setActiveScreen('guides')}>
+          Guides
+        </button>
+        <button type="button" onClick={() => setActiveScreen('settings')}>
+          Setup
+        </button>
+      </div>
+    </div>
+  );
+}
+</file>
 
 <file path=".cursor/rules/git-workflow.mdc">
 ---
@@ -2454,124 +2866,6 @@ export default function LawnAlerts({ app }) {
 }
 </file>
 
-<file path="src/data/lawnThemes.js">
-/** @typedef {'classic' | 'tabs'} LawnThemeLayout */
-
-/**
- * @typedef {Object} LawnTheme
- * @property {string} id
- * @property {string} name
- * @property {string} tagline
- * @property {string} description
- * @property {LawnThemeLayout} layout
- * @property {string[]} swatches
- * @property {string} fontDisplay
- * @property {string} fontBody
- */
-
-export const LAWN_THEME_STORAGE_KEY = 'lawnPackUiTheme';
-
-/** Older theme ids map onto the two kept options. */
-const LEGACY_THEME_IDS = {
-  atelier: 'signal',
-  canopy: 'signal',
-};
-
-/** @type {LawnTheme[]} */
-export const LAWN_THEMES = [
-  {
-    id: 'classic',
-    name: 'Classic',
-    tagline: 'Original long page',
-    description:
-      'Everything on one scrolling page — the familiar layout if you want to go back.',
-    layout: 'classic',
-    swatches: ['#14532d', '#dcfce7', '#ffffff', '#e5e7eb'],
-    fontDisplay: '"Segoe UI", system-ui, sans-serif',
-    fontBody: '"Segoe UI", system-ui, sans-serif',
-  },
-  {
-    id: 'signal',
-    name: 'Signal',
-    tagline: 'Bottom tabs · status board',
-    description:
-      'Cool slate utility layout. Persistent bottom tabs (Status, Care, Pack, More) and a dense status board — a clear alternative to the long Classic page.',
-    layout: 'tabs',
-    swatches: ['#0b1220', '#64748b', '#e2e8f0', '#0f766e'],
-    fontDisplay: '"Space Grotesk", "Segoe UI", sans-serif',
-    fontBody: '"IBM Plex Sans", "Segoe UI", sans-serif',
-  },
-];
-
-export const DEFAULT_LAWN_THEME_ID = 'classic';
-
-/** Layouts that use section navigation via activeRoom (not the classic long page). */
-export const SECTIONED_LAYOUTS = new Set(['tabs']);
-
-/** @param {string | null | undefined} id */
-export function normalizeLawnThemeId(id) {
-  if (!id || typeof id !== 'string') return DEFAULT_LAWN_THEME_ID;
-  if (LEGACY_THEME_IDS[id]) return LEGACY_THEME_IDS[id];
-  if (LAWN_THEMES.some((theme) => theme.id === id)) return id;
-  return DEFAULT_LAWN_THEME_ID;
-}
-
-/** @param {string | null | undefined} id */
-export function getLawnTheme(id) {
-  const normalized = normalizeLawnThemeId(id);
-  return LAWN_THEMES.find((theme) => theme.id === normalized) ?? LAWN_THEMES[0];
-}
-
-/** @param {string | null | undefined} layout */
-export function isSectionedLayout(layout) {
-  return SECTIONED_LAYOUTS.has(layout);
-}
-
-/** @returns {string} */
-export function readStoredLawnThemeId() {
-  try {
-    const saved = localStorage.getItem(LAWN_THEME_STORAGE_KEY);
-    return normalizeLawnThemeId(saved);
-  } catch {
-    /* ignore */
-  }
-  return DEFAULT_LAWN_THEME_ID;
-}
-
-/**
- * Map a Tasks deep-link focus target to a section room.
- * @param {string | null | undefined} focusRaw
- * @returns {'hub' | 'maintenance' | 'seasonal' | null}
- */
-export function resolveFocusRoom(focusRaw) {
-  if (!focusRaw || typeof focusRaw !== 'string') return null;
-  const trimmed = focusRaw.trim().toLowerCase();
-  if (!trimmed) return null;
-
-  if (trimmed.startsWith('step-') || /^step-(spring|summer|autumn|winter)-/.test(trimmed)) {
-    return 'seasonal';
-  }
-
-  if (
-    trimmed === 'maintenance' ||
-    trimmed === 'mow' ||
-    trimmed === 'water' ||
-    trimmed === 'verticut' ||
-    trimmed === 'gypsum' ||
-    trimmed === 'maintenance-panel' ||
-    trimmed === 'maintenance-mowing-tracker' ||
-    trimmed === 'maintenance-watering-tracker' ||
-    trimmed === 'maintenance-verticut-tracker' ||
-    trimmed === 'soil-treatments-tracker' ||
-    trimmed === 'environmental-status-card'
-  ) {
-    return 'maintenance';
-  }
-
-  return null;
-}
-</file>
-
 <file path="src/lib/googleSignIn.js">
 import {
   APP_OAUTH_LABEL,
@@ -2980,94 +3274,6 @@ export default function GuideViewerModal({ guide, onClose }) {
 }
 </file>
 
-<file path="src/components/lawn/LawnMainView.jsx">
-import React from 'react';
-import MaintenancePanel from './MaintenancePanel';
-import SeasonTimeline from './SeasonTimeline';
-import LawnWorkflow from './LawnWorkflow';
-import LawnAlerts from './LawnAlerts';
-import LawnStatusBoard, { LawnSignalMore } from './LawnStatusBoard';
-
-/**
- * Signal — bottom tabs.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-function LawnTabsLayout({ app }) {
-  const { activeRoom, setActiveRoom } = app;
-  const tab =
-    activeRoom === 'maintenance' || activeRoom === 'seasonal' || activeRoom === 'more'
-      ? activeRoom
-      : 'hub';
-
-  const tabs = [
-    { id: 'hub', label: 'Status' },
-    { id: 'maintenance', label: 'Care' },
-    { id: 'seasonal', label: 'Pack' },
-    { id: 'more', label: 'More' },
-  ];
-
-  let body = null;
-  if (tab === 'maintenance') {
-    body = (
-      <div className="lawn-panel-surface">
-        <MaintenancePanel app={app} />
-      </div>
-    );
-  } else if (tab === 'seasonal') {
-    body = (
-      <div className="lawn-panel-surface">
-        <SeasonTimeline app={app} />
-      </div>
-    );
-  } else if (tab === 'more') {
-    body = <LawnSignalMore app={app} />;
-  } else {
-    body = (
-      <>
-        <LawnAlerts app={app} />
-        <LawnStatusBoard app={app} />
-      </>
-    );
-  }
-
-  return (
-    <div className="lawn-tabs">
-      <div className="lawn-tabs__body">{body}</div>
-      <nav className="lawn-tabs__nav" aria-label="Primary">
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`lawn-tabs__tab${tab === item.id ? ' is-active' : ''}`}
-            onClick={() =>
-              setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))
-            }
-            aria-current={tab === item.id ? 'page' : undefined}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-    </div>
-  );
-}
-
-/**
- * Main content switcher across classic long page and Signal tabs.
- * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
- */
-export default function LawnMainView({ app }) {
-  const { activeTheme } = app;
-  const layout = activeTheme.layout;
-
-  if (layout === 'tabs') {
-    return <LawnTabsLayout app={app} />;
-  }
-
-  return <LawnWorkflow app={app} />;
-}
-</file>
-
 <file path="src/components/lawn/SeasonTimeline.jsx">
 import React from 'react';
 import { SEASONS, makeStepKey } from '../../data/LawnPackData';
@@ -3346,6 +3552,290 @@ export default function SeasonTimeline({ app }) {
       )}
     </>
   );
+}
+</file>
+
+<file path="src/data/lawnThemes.js">
+/** @typedef {'classic' | 'rooms' | 'tabs' | 'today'} LawnThemeLayout */
+
+/**
+ * @typedef {Object} LawnTheme
+ * @property {string} id
+ * @property {string} name
+ * @property {string} tagline
+ * @property {string} description
+ * @property {LawnThemeLayout} layout
+ * @property {string[]} swatches
+ * @property {string} fontDisplay
+ * @property {string} fontBody
+ */
+
+export const LAWN_THEME_STORAGE_KEY = 'lawnPackUiTheme';
+
+/** @type {LawnTheme[]} */
+export const LAWN_THEMES = [
+  {
+    id: 'classic',
+    name: 'Classic',
+    tagline: 'Original long page',
+    description:
+      'Everything on one scrolling page — the familiar layout if you want to go back.',
+    layout: 'classic',
+    swatches: ['#14532d', '#dcfce7', '#ffffff', '#e5e7eb'],
+    fontDisplay: '"Segoe UI", system-ui, sans-serif',
+    fontBody: '"Segoe UI", system-ui, sans-serif',
+  },
+  {
+    id: 'atelier',
+    name: 'Atelier',
+    tagline: 'Journal spine · chapters',
+    description:
+      'Porcelain studio look. A vertical chapter spine (Cover, Care, Pack, Studio) — open one chapter at a time like a field journal, not a tab bar or long page.',
+    layout: 'rooms',
+    swatches: ['#e7eef3', '#1c2430', '#f4f7fa', '#b45309'],
+    fontDisplay: '"Literata", Georgia, serif',
+    fontBody: '"Source Sans 3", "Segoe UI", sans-serif',
+  },
+  {
+    id: 'signal',
+    name: 'Signal',
+    tagline: 'Bottom tabs · status board',
+    description:
+      'Cool slate utility layout. Persistent bottom tabs (Status, Care, Pack, More) and a dense status board — a clear alternative to the long Classic page.',
+    layout: 'tabs',
+    swatches: ['#0b1220', '#64748b', '#e2e8f0', '#0f766e'],
+    fontDisplay: '"Space Grotesk", "Segoe UI", sans-serif',
+    fontBody: '"IBM Plex Sans", "Segoe UI", sans-serif',
+  },
+  {
+    id: 'canopy',
+    name: 'Canopy',
+    tagline: 'Daylight timeline · due ribbon',
+    description:
+      'Bright sky-to-meadow shell. Starts on a vertical Today timeline of what’s due, with Care / Pack opened as full sheets from a floating dock — not bottom tabs.',
+    layout: 'today',
+    swatches: ['#7eb8d9', '#e8f5d8', '#ffffff', '#2f6b3a'],
+    fontDisplay: '"Sora", "Segoe UI", sans-serif',
+    fontBody: '"Nunito Sans", "Segoe UI", sans-serif',
+  },
+];
+
+export const DEFAULT_LAWN_THEME_ID = 'classic';
+
+/** Layouts that use section navigation via activeRoom (not the classic long page). */
+export const SECTIONED_LAYOUTS = new Set(['rooms', 'tabs', 'today']);
+
+/** @param {string | null | undefined} id */
+export function normalizeLawnThemeId(id) {
+  if (!id || typeof id !== 'string') return DEFAULT_LAWN_THEME_ID;
+  if (LAWN_THEMES.some((theme) => theme.id === id)) return id;
+  return DEFAULT_LAWN_THEME_ID;
+}
+
+/** @param {string | null | undefined} id */
+export function getLawnTheme(id) {
+  const normalized = normalizeLawnThemeId(id);
+  return LAWN_THEMES.find((theme) => theme.id === normalized) ?? LAWN_THEMES[0];
+}
+
+/** @param {string | null | undefined} layout */
+export function isSectionedLayout(layout) {
+  return SECTIONED_LAYOUTS.has(layout);
+}
+
+/** @returns {string} */
+export function readStoredLawnThemeId() {
+  try {
+    const saved = localStorage.getItem(LAWN_THEME_STORAGE_KEY);
+    return normalizeLawnThemeId(saved);
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_LAWN_THEME_ID;
+}
+
+/**
+ * Map a Tasks deep-link focus target to a section room.
+ * @param {string | null | undefined} focusRaw
+ * @returns {'hub' | 'maintenance' | 'seasonal' | null}
+ */
+export function resolveFocusRoom(focusRaw) {
+  if (!focusRaw || typeof focusRaw !== 'string') return null;
+  const trimmed = focusRaw.trim().toLowerCase();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('step-') || /^step-(spring|summer|autumn|winter)-/.test(trimmed)) {
+    return 'seasonal';
+  }
+
+  if (
+    trimmed === 'maintenance' ||
+    trimmed === 'mow' ||
+    trimmed === 'water' ||
+    trimmed === 'verticut' ||
+    trimmed === 'gypsum' ||
+    trimmed === 'maintenance-panel' ||
+    trimmed === 'maintenance-mowing-tracker' ||
+    trimmed === 'maintenance-watering-tracker' ||
+    trimmed === 'maintenance-verticut-tracker' ||
+    trimmed === 'soil-treatments-tracker' ||
+    trimmed === 'environmental-status-card'
+  ) {
+    return 'maintenance';
+  }
+
+  return null;
+}
+</file>
+
+<file path="src/components/lawn/LawnMainView.jsx">
+import React from 'react';
+import MaintenancePanel from './MaintenancePanel';
+import SeasonTimeline from './SeasonTimeline';
+import LawnWorkflow from './LawnWorkflow';
+import LawnAlerts from './LawnAlerts';
+import LawnStatusBoard, { LawnSignalMore } from './LawnStatusBoard';
+import LawnAtelierBoard from './LawnAtelierBoard';
+import LawnCanopyBoard from './LawnCanopyBoard';
+
+/**
+ * Signal — bottom tabs (unchanged).
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+function LawnTabsLayout({ app }) {
+  const { activeRoom, setActiveRoom } = app;
+  const tab =
+    activeRoom === 'maintenance' || activeRoom === 'seasonal' || activeRoom === 'more'
+      ? activeRoom
+      : 'hub';
+
+  const tabs = [
+    { id: 'hub', label: 'Status' },
+    { id: 'maintenance', label: 'Care' },
+    { id: 'seasonal', label: 'Pack' },
+    { id: 'more', label: 'More' },
+  ];
+
+  let body = null;
+  if (tab === 'maintenance') {
+    body = (
+      <div className="lawn-panel-surface">
+        <MaintenancePanel app={app} />
+      </div>
+    );
+  } else if (tab === 'seasonal') {
+    body = (
+      <div className="lawn-panel-surface">
+        <SeasonTimeline app={app} />
+      </div>
+    );
+  } else if (tab === 'more') {
+    body = <LawnSignalMore app={app} />;
+  } else {
+    body = (
+      <>
+        <LawnAlerts app={app} />
+        <LawnStatusBoard app={app} />
+      </>
+    );
+  }
+
+  return (
+    <div className="lawn-tabs">
+      <div className="lawn-tabs__body">{body}</div>
+      <nav className="lawn-tabs__nav" aria-label="Primary">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`lawn-tabs__tab${tab === item.id ? ' is-active' : ''}`}
+            onClick={() =>
+              setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))
+            }
+            aria-current={tab === item.id ? 'page' : undefined}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+/**
+ * Atelier — journal spine + chapter page.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+function LawnRoomsLayout({ app }) {
+  return (
+    <div className="lawn-atelier-shell">
+      <LawnAlerts app={app} />
+      <LawnAtelierBoard app={app} />
+    </div>
+  );
+}
+
+/**
+ * Canopy — daylight timeline + sheet overlays for Care/Pack.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+function LawnTodayLayout({ app }) {
+  const { activeRoom, setActiveRoom } = app;
+  const sheet = activeRoom === 'maintenance' || activeRoom === 'seasonal' ? activeRoom : null;
+
+  if (sheet) {
+    return (
+      <div className="lawn-canopy-sheet">
+        <div className="lawn-canopy-sheet__bar">
+          <button type="button" className="lawn-canopy-sheet__back" onClick={() => setActiveRoom('hub')}>
+            ← Today
+          </button>
+          <h2 className="lawn-canopy-sheet__title">{sheet === 'maintenance' ? 'Care' : 'Pack'}</h2>
+          <button
+            type="button"
+            className="lawn-canopy-sheet__setup"
+            onClick={() => app.setActiveScreen('settings')}
+          >
+            Setup
+          </button>
+        </div>
+        <LawnAlerts app={app} />
+        <div className="lawn-panel-surface">
+          {sheet === 'maintenance' ? <MaintenancePanel app={app} /> : <SeasonTimeline app={app} />}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <LawnAlerts app={app} />
+      <LawnCanopyBoard app={app} />
+    </>
+  );
+}
+
+/**
+ * Main content switcher across classic / rooms / tabs / today.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+export default function LawnMainView({ app }) {
+  const { activeTheme } = app;
+  const layout = activeTheme.layout;
+
+  if (layout === 'tabs') {
+    return <LawnTabsLayout app={app} />;
+  }
+
+  if (layout === 'rooms') {
+    return <LawnRoomsLayout app={app} />;
+  }
+
+  if (layout === 'today') {
+    return <LawnTodayLayout app={app} />;
+  }
+
+  return <LawnWorkflow app={app} />;
 }
 </file>
 
@@ -4487,212 +4977,6 @@ export function getLawnAppStateSetupHint() {
 }
 </file>
 
-<file path="src/utils/lawnDeepLink.js">
-/** Short keys used in ?focus= from the Tasks app */
-export const LAWN_FOCUS_ALIASES = {
-  water: 'maintenance-watering-tracker',
-  mow: 'maintenance-mowing-tracker',
-  verticut: 'maintenance-verticut-tracker',
-  gypsum: 'soil-treatments-tracker',
-  maintenance: 'maintenance-panel',
-};
-
-const PACK_STEP_FOCUS_PATTERN = /^step-(SPRING|SUMMER|AUTUMN|WINTER)-([a-z0-9]+)$/i;
-
-const HIGHLIGHT_CLASS = 'lawn-focus-highlight';
-
-/**
- * @param {string} seasonKey
- * @param {string} stepId
- * @returns {string}
- */
-export function packStepDomId(seasonKey, stepId) {
-  return `step-${seasonKey}-${stepId}`;
-}
-
-/**
- * @param {string | null | undefined} raw
- * @returns {{ season: string, stepId: string, domId: string } | null}
- */
-export function parsePackStepFocus(raw) {
-  if (!raw || typeof raw !== 'string') return null;
-  const match = raw.trim().match(PACK_STEP_FOCUS_PATTERN);
-  if (!match) return null;
-
-  const season = match[1].toUpperCase();
-  const stepId = match[2].toLowerCase();
-  return { season, stepId, domId: packStepDomId(season, stepId) };
-}
-
-/**
- * @param {string | null | undefined} raw
- * @returns {string | null} DOM id to scroll to
- */
-export function resolveLawnFocusTarget(raw) {
-  if (!raw || typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-
-  const alias = LAWN_FOCUS_ALIASES[trimmed.toLowerCase()];
-  if (alias) return alias;
-
-  const pack = parsePackStepFocus(trimmed);
-  if (pack) return pack.domId;
-
-  if (/^[a-z][a-z0-9-]*$/i.test(trimmed)) {
-    return trimmed;
-  }
-
-  return null;
-}
-
-/**
- * Map a focus target to a Maintenance Panel item tab.
- * @param {string | null | undefined} raw
- * @returns {'mowing' | 'watering' | 'verticut' | 'gypsum' | null}
- */
-export function resolveMaintenanceTabFromFocus(raw) {
-  const target = resolveLawnFocusTarget(raw)?.toLowerCase() ?? '';
-  if (!target) return null;
-  if (target.includes('mowing') || target === 'mow') return 'mowing';
-  if (target.includes('watering') || target === 'water') return 'watering';
-  if (target.includes('verticut')) return 'verticut';
-  if (target.includes('soil') || target.includes('gypsum')) return 'gypsum';
-  return null;
-}
-
-/**
- * @returns {string | null}
- */
-export function getFocusFromUrl() {
-  if (typeof window === 'undefined') return null;
-
-  const params = new URLSearchParams(window.location.search);
-  const fromQuery = params.get('focus');
-  if (fromQuery) return fromQuery;
-
-  const hash = window.location.hash.replace(/^#/, '');
-  if (hash) return hash;
-
-  return null;
-}
-
-/**
- * Scroll to a maintenance / treatment section and briefly highlight it.
- * @param {string} targetId
- * @param {{ delayMs?: number }} [options]
- */
-export function scrollToLawnFocus(targetId, options = {}) {
-  const { delayMs = 400 } = options;
-
-  const run = () => {
-    const el = document.getElementById(targetId);
-    if (!el) return false;
-
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.classList.add(HIGHLIGHT_CLASS);
-    window.setTimeout(() => el.classList.remove(HIGHLIGHT_CLASS), 3200);
-    return true;
-  };
-
-  if (delayMs <= 0) {
-    return run();
-  }
-
-  window.setTimeout(run, delayMs);
-  return true;
-}
-
-/**
- * Apply ?focus= / #hash from the current URL once the main UI is mounted.
- * @param {{ delayMs?: number, retries?: number, targetId?: string | null }} [options]
- */
-export function applyLawnFocusFromUrl(options = {}) {
-  const focusRaw = getFocusFromUrl();
-  const targetId = options.targetId ?? resolveLawnFocusTarget(focusRaw);
-  if (!targetId) return;
-
-  const delayMs = options.delayMs ?? 300;
-  const retries = options.retries ?? 8;
-
-  const attempt = (left) => {
-    if (scrollToLawnFocus(targetId, { delayMs: 0 })) return;
-    if (left > 0) {
-      window.setTimeout(() => attempt(left - 1), 200);
-    }
-  };
-
-  window.setTimeout(() => attempt(retries), delayMs);
-}
-</file>
-
-<file path="index.html">
-<!doctype html>
-<html lang="en-GB">
-  <head>
-    <script>
-      (function () {
-        var key = 'lawn-app-sw-reset-v1';
-        try {
-          if (localStorage.getItem(key) === '1') return;
-          localStorage.setItem(key, '1');
-        } catch (e) {
-          return;
-        }
-        var reloadAfterReset = function () {
-          window.location.reload();
-        };
-        var clearCaches = function () {
-          if (!('caches' in window)) {
-            reloadAfterReset();
-            return;
-          }
-          caches
-            .keys()
-            .then(function (keys) {
-              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
-            })
-            .finally(reloadAfterReset);
-        };
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker
-            .getRegistrations()
-            .then(function (regs) {
-              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
-            })
-            .then(clearCaches)
-            .catch(clearCaches);
-        } else {
-          clearCaches();
-        }
-      })();
-    </script>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#14532d" />
-    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>The Lawn Pack Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-</file>
-
 <file path="src/components/lawn/LawnWorkflow.jsx">
 import React from 'react';
 import { formatSyncTimeAgo } from '../../utils/lawnDates';
@@ -5028,6 +5312,145 @@ export function useAuth() {
 }
 </file>
 
+<file path="src/utils/lawnDeepLink.js">
+/** Short keys used in ?focus= from the Tasks app */
+export const LAWN_FOCUS_ALIASES = {
+  water: 'maintenance-watering-tracker',
+  mow: 'maintenance-mowing-tracker',
+  verticut: 'maintenance-verticut-tracker',
+  gypsum: 'soil-treatments-tracker',
+  maintenance: 'maintenance-panel',
+};
+
+const PACK_STEP_FOCUS_PATTERN = /^step-(SPRING|SUMMER|AUTUMN|WINTER)-([a-z0-9]+)$/i;
+
+const HIGHLIGHT_CLASS = 'lawn-focus-highlight';
+
+/**
+ * @param {string} seasonKey
+ * @param {string} stepId
+ * @returns {string}
+ */
+export function packStepDomId(seasonKey, stepId) {
+  return `step-${seasonKey}-${stepId}`;
+}
+
+/**
+ * @param {string | null | undefined} raw
+ * @returns {{ season: string, stepId: string, domId: string } | null}
+ */
+export function parsePackStepFocus(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const match = raw.trim().match(PACK_STEP_FOCUS_PATTERN);
+  if (!match) return null;
+
+  const season = match[1].toUpperCase();
+  const stepId = match[2].toLowerCase();
+  return { season, stepId, domId: packStepDomId(season, stepId) };
+}
+
+/**
+ * @param {string | null | undefined} raw
+ * @returns {string | null} DOM id to scroll to
+ */
+export function resolveLawnFocusTarget(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const alias = LAWN_FOCUS_ALIASES[trimmed.toLowerCase()];
+  if (alias) return alias;
+
+  const pack = parsePackStepFocus(trimmed);
+  if (pack) return pack.domId;
+
+  if (/^[a-z][a-z0-9-]*$/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
+}
+
+/**
+ * Map a focus target to a Maintenance Panel item tab.
+ * @param {string | null | undefined} raw
+ * @returns {'mowing' | 'watering' | 'verticut' | 'gypsum' | null}
+ */
+export function resolveMaintenanceTabFromFocus(raw) {
+  const target = resolveLawnFocusTarget(raw)?.toLowerCase() ?? '';
+  if (!target) return null;
+  if (target.includes('mowing') || target === 'mow') return 'mowing';
+  if (target.includes('watering') || target === 'water') return 'watering';
+  if (target.includes('verticut')) return 'verticut';
+  if (target.includes('soil') || target.includes('gypsum')) return 'gypsum';
+  return null;
+}
+
+/**
+ * @returns {string | null}
+ */
+export function getFocusFromUrl() {
+  if (typeof window === 'undefined') return null;
+
+  const params = new URLSearchParams(window.location.search);
+  const fromQuery = params.get('focus');
+  if (fromQuery) return fromQuery;
+
+  const hash = window.location.hash.replace(/^#/, '');
+  if (hash) return hash;
+
+  return null;
+}
+
+/**
+ * Scroll to a maintenance / treatment section and briefly highlight it.
+ * @param {string} targetId
+ * @param {{ delayMs?: number }} [options]
+ */
+export function scrollToLawnFocus(targetId, options = {}) {
+  const { delayMs = 400 } = options;
+
+  const run = () => {
+    const el = document.getElementById(targetId);
+    if (!el) return false;
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add(HIGHLIGHT_CLASS);
+    window.setTimeout(() => el.classList.remove(HIGHLIGHT_CLASS), 3200);
+    return true;
+  };
+
+  if (delayMs <= 0) {
+    return run();
+  }
+
+  window.setTimeout(run, delayMs);
+  return true;
+}
+
+/**
+ * Apply ?focus= / #hash from the current URL once the main UI is mounted.
+ * @param {{ delayMs?: number, retries?: number, targetId?: string | null }} [options]
+ */
+export function applyLawnFocusFromUrl(options = {}) {
+  const focusRaw = getFocusFromUrl();
+  const targetId = options.targetId ?? resolveLawnFocusTarget(focusRaw);
+  if (!targetId) return;
+
+  const delayMs = options.delayMs ?? 300;
+  const retries = options.retries ?? 8;
+
+  const attempt = (left) => {
+    if (scrollToLawnFocus(targetId, { delayMs: 0 })) return;
+    if (left > 0) {
+      window.setTimeout(() => attempt(left - 1), 200);
+    }
+  };
+
+  window.setTimeout(() => attempt(retries), delayMs);
+}
+</file>
+
 <file path="src/index.css">
 @tailwind base;
 @tailwind components;
@@ -5115,21 +5538,40 @@ export function useAuth() {
   --lawn-accent-soft: #dcfce7;
 }
 
-/* —— Atelier: calm moss workshop, sectioned —— */
+/* —— Atelier: porcelain journal · spine chapters (not green, not dark slate) —— */
 [data-lawn-theme='atelier'] {
   --lawn-page-bg:
-    radial-gradient(1200px 500px at 10% -10%, #d7e8db 0%, transparent 55%),
-    linear-gradient(165deg, #eef5f0 0%, #dce8df 48%, #cfdfd3 100%);
-  --lawn-page-ink: #1a3a2a;
-  --lawn-shell-bg: rgba(255, 255, 255, 0.82);
-  --lawn-shell-border: rgba(47, 107, 79, 0.18);
-  --lawn-shell-radius: 1.25rem;
-  --lawn-shell-shadow: 0 18px 40px rgba(26, 58, 42, 0.1);
-  --lawn-accent: #2f6b4f;
-  --lawn-accent-soft: #c5d9c8;
-  --lawn-muted: #3f5a4b;
-  --lawn-hub-room-bg: rgba(255, 255, 255, 0.92);
-  --lawn-hub-room-border: rgba(47, 107, 79, 0.16);
+    radial-gradient(900px 420px at 0% 0%, #dce7ef 0%, transparent 55%),
+    linear-gradient(160deg, #eef3f7 0%, #e3ebf2 50%, #d5e0ea 100%);
+  --lawn-page-ink: #1c2430;
+  --lawn-shell-bg: rgba(250, 252, 253, 0.92);
+  --lawn-shell-border: rgba(28, 36, 48, 0.1);
+  --lawn-shell-radius: 0.2rem;
+  --lawn-shell-shadow: 0 22px 48px rgba(28, 36, 48, 0.08);
+  --lawn-accent: #b45309;
+  --lawn-accent-soft: #f3e0c8;
+  --lawn-muted: #5b6573;
+  --lawn-hub-room-bg: #fafcfd;
+  --lawn-hub-room-border: rgba(28, 36, 48, 0.12);
+}
+
+[data-lawn-theme='atelier'] .lawn-app-brand {
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+[data-lawn-theme='atelier'] .lawn-app-subhead {
+  letter-spacing: 0.22em;
+  color: #b45309;
+}
+
+[data-lawn-theme='atelier'] .lawn-app-shell {
+  border-left: 3px solid #b45309;
+}
+
+[data-lawn-theme='atelier'] .lawn-focus-highlight {
+  outline-color: #b45309;
+  box-shadow: 0 0 0 6px rgba(180, 83, 9, 0.18);
 }
 
 /* —— Signal: cool utility, bottom tabs + status grid —— */
@@ -5177,258 +5619,294 @@ export function useAuth() {
   box-shadow: 0 0 0 6px rgba(45, 212, 191, 0.2);
 }
 
-/* —— Canopy: immersive dark green, today-first —— */
+/* —— Canopy: bright daylight sky → meadow (light, not dark green) —— */
 [data-lawn-theme='canopy'] {
   --lawn-page-bg:
-    radial-gradient(800px 380px at 70% -5%, rgba(74, 222, 128, 0.18), transparent 55%),
-    linear-gradient(165deg, #03160d 0%, #052e16 45%, #0a1f14 100%);
-  --lawn-page-ink: #ecfdf5;
-  --lawn-shell-bg: transparent;
-  --lawn-shell-border: transparent;
-  --lawn-shell-radius: 0;
-  --lawn-shell-shadow: none;
-  --lawn-accent: #4ade80;
-  --lawn-accent-soft: #14532d;
-  --lawn-muted: #a7f3d0;
-  --lawn-hub-room-bg: rgba(6, 40, 23, 0.72);
-  --lawn-hub-room-border: rgba(74, 222, 128, 0.22);
+    radial-gradient(700px 340px at 80% -10%, rgba(255, 255, 255, 0.55), transparent 50%),
+    linear-gradient(180deg, #7eb8d9 0%, #a8cfe0 28%, #d5e8c4 68%, #e8f5d8 100%);
+  --lawn-page-ink: #1a2f22;
+  --lawn-shell-bg: rgba(255, 255, 255, 0.55);
+  --lawn-shell-border: rgba(255, 255, 255, 0.65);
+  --lawn-shell-radius: 1.75rem;
+  --lawn-shell-shadow: 0 24px 50px rgba(47, 107, 58, 0.12);
+  --lawn-accent: #2f6b3a;
+  --lawn-accent-soft: #d7ecc8;
+  --lawn-muted: #3d5a48;
+  --lawn-hub-room-bg: rgba(255, 255, 255, 0.88);
+  --lawn-hub-room-border: rgba(47, 107, 58, 0.16);
 }
 
-[data-lawn-theme='canopy'] .lawn-app-brand,
-[data-lawn-theme='canopy'] .lawn-app-subhead,
-[data-lawn-theme='canopy'] .lawn-app-footer,
-[data-lawn-theme='canopy'] .lawn-sign-out {
-  color: #ecfdf5;
+[data-lawn-theme='canopy'] .lawn-app-brand {
+  color: #0f2418;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 [data-lawn-theme='canopy'] .lawn-app-subhead {
-  color: #86efac;
+  color: #1f4d2c;
 }
 
 [data-lawn-theme='canopy'] .lawn-sign-out {
-  border-color: rgba(236, 253, 245, 0.22);
-  background: rgba(5, 46, 22, 0.45);
+  border-color: rgba(47, 107, 58, 0.22);
+  background: rgba(255, 255, 255, 0.7);
+  color: #2f6b3a;
 }
 
 [data-lawn-theme='canopy'] .lawn-app-footer {
-  color: rgba(236, 253, 245, 0.5);
+  color: rgba(26, 47, 34, 0.55);
 }
 
 [data-lawn-theme='canopy'] .lawn-app-shell {
-  color: #ecfdf5;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  padding-left: 0.25rem;
-  padding-right: 0.25rem;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 [data-lawn-theme='canopy'] .lawn-focus-highlight {
-  outline-color: #4ade80;
-  box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.25);
+  outline-color: #2f6b3a;
+  box-shadow: 0 0 0 6px rgba(47, 107, 58, 0.2);
 }
 
-/* —— Hub / rooms (Atelier) —— */
-.lawn-hub__hero {
-  margin-bottom: 1.25rem;
+/* —— Atelier journal spine layout —— */
+.lawn-atelier-shell {
+  min-height: 24rem;
+}
+
+.lawn-atelier {
+  display: grid;
+  grid-template-columns: 3.4rem 1fr;
+  gap: 0.75rem;
+  min-height: 26rem;
   animation: lawn-rise 420ms ease-out both;
 }
 
-.lawn-hub__title {
-  font-family: var(--lawn-font-display);
-  font-size: 1.55rem;
-  font-weight: 750;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  color: inherit;
-}
-
-.lawn-hub__lede {
-  margin-top: 0.5rem;
+.lawn-atelier__spine {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.35rem 0.2rem;
+  border-right: 1px solid rgba(28, 36, 48, 0.12);
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent,
+      transparent 11px,
+      rgba(28, 36, 48, 0.04) 11px,
+      rgba(28, 36, 48, 0.04) 12px
+    );
 }
 
-.lawn-hub__sqm {
+.lawn-atelier__spine-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 3.6rem;
+  padding: 0.4rem 0.15rem;
+  border: 1px solid transparent;
+  border-radius: 0.15rem;
+  color: #5b6573;
+  writing-mode: horizontal-tb;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.lawn-atelier__spine-btn.is-active {
+  color: #1c2430;
+  background: #fafcfd;
+  border-color: rgba(180, 83, 9, 0.45);
+  box-shadow: inset 3px 0 0 #b45309;
+}
+
+.lawn-atelier__spine-short {
+  font-family: var(--lawn-font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.lawn-atelier__spine-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lawn-atelier__spine-badge {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.15rem;
+  min-width: 0.95rem;
+  height: 0.95rem;
+  padding: 0 0.2rem;
+  border-radius: 999px;
+  background: #b45309;
+  color: #fff;
+  font-size: 0.55rem;
   font-weight: 800;
-  font-size: 0.95rem;
+  line-height: 0.95rem;
+  text-align: center;
 }
 
-.lawn-hub__dims {
-  font-size: 0.8rem;
-  color: var(--lawn-muted);
+.lawn-atelier__page {
+  min-width: 0;
+  padding: 0.15rem 0.1rem 0.5rem;
 }
 
-.lawn-hub__weather,
-.lawn-hub__rooms,
-.lawn-hub__tools,
-.lawn-hub__notices {
-  margin-bottom: 1.15rem;
+.lawn-atelier__cover {
   animation: lawn-rise 480ms ease-out both;
 }
 
-.lawn-hub__rooms {
-  animation-delay: 60ms;
+.lawn-atelier__kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #5b6573;
 }
 
-.lawn-hub__tools {
-  animation-delay: 120ms;
+.lawn-atelier__season {
+  margin-top: 0.35rem;
+  font-family: var(--lawn-font-display);
+  font-size: clamp(2rem, 8vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+  color: #1c2430;
 }
 
-.lawn-hub__weather {
-  border: 1px solid var(--lawn-hub-room-border);
-  background: color-mix(in srgb, var(--lawn-accent-soft) 35%, white);
-  border-radius: 0.9rem;
-  padding: 0.85rem 1rem;
+.lawn-atelier__size {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #5b6573;
 }
 
-.lawn-hub__weather-text {
+.lawn-atelier__weather {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border-left: 2px solid #b45309;
+  background: rgba(243, 224, 200, 0.35);
   font-size: 0.8rem;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
-.lawn-hub__room-grid,
-.lawn-hub__tool-grid {
+.lawn-atelier__notices {
+  margin: 0.85rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9a3412;
+  line-height: 1.4;
+}
+
+.lawn-atelier__ledger {
+  margin-top: 1.15rem;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.35rem;
 }
 
-.lawn-hub__room {
+.lawn-atelier__line {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 0.75rem;
   align-items: center;
+  gap: 0.55rem;
+  width: 100%;
   text-align: left;
-  border: 1px solid var(--lawn-hub-room-border);
-  background: var(--lawn-hub-room-bg);
-  border-radius: 1rem;
-  padding: 0.95rem 1rem;
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  padding: 0.55rem 0.15rem;
+  border-bottom: 1px solid rgba(28, 36, 48, 0.1);
+  color: inherit;
+  animation: lawn-rise 500ms ease-out both;
 }
 
-.lawn-hub__room:hover,
-.lawn-hub__room:focus-visible {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--lawn-accent) 45%, var(--lawn-hub-room-border));
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-  outline: none;
-}
-
-.lawn-hub__room--alert {
-  border-color: #f59e0b;
-  background: #fffbeb;
-}
-
-.lawn-hub__room--warn {
-  border-color: #fbbf24;
-  background: #fffbeb;
-}
-
-.lawn-hub__room-icon {
-  font-size: 1.25rem;
-  line-height: 1;
-}
-
-.lawn-hub__room-title {
-  display: block;
-  font-family: var(--lawn-font-display);
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.lawn-hub__room-meta {
-  font-size: 0.65rem;
+.lawn-atelier__line.is-due .lawn-atelier__line-state {
+  color: #b45309;
   font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--lawn-accent);
+}
+
+.lawn-atelier__line-label {
+  font-family: var(--lawn-font-display);
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.lawn-atelier__line-rule {
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(28, 36, 48, 0.22),
+    rgba(28, 36, 48, 0.22) 2px,
+    transparent 2px,
+    transparent 5px
+  );
+}
+
+.lawn-atelier__line-state {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #5b6573;
   white-space: nowrap;
 }
 
-.lawn-hub__tool-grid {
-  grid-template-columns: 1fr 1fr;
-}
-
-.lawn-hub__tool {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  min-height: 2.6rem;
-  border-radius: 0.85rem;
-  border: 1px solid var(--lawn-hub-room-border);
-  background: var(--lawn-hub-room-bg);
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: inherit;
-  transition: background 140ms ease, border-color 140ms ease;
-}
-
-.lawn-hub__tool:hover {
-  border-color: color-mix(in srgb, var(--lawn-accent) 40%, var(--lawn-hub-room-border));
-  background: color-mix(in srgb, var(--lawn-accent-soft) 45%, white);
-}
-
-.lawn-hub__notice {
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 0.75rem;
-  padding: 0.65rem 0.8rem;
-  margin-bottom: 0.5rem;
-}
-
-.lawn-hub__notice--alert {
-  background: #fff7ed;
-  border: 1px solid #fdba74;
-  color: #9a3412;
-}
-
-.lawn-hub__notice--warn {
-  background: #fffbeb;
-  border: 1px solid #fcd34d;
-  color: #92400e;
-}
-
-.lawn-room__bar {
+.lawn-atelier__cover-actions {
+  margin-top: 1.25rem;
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
   gap: 0.5rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--lawn-hub-room-border);
 }
 
-.lawn-room__back,
-.lawn-room__setup {
-  font-size: 0.72rem;
+.lawn-atelier__open {
+  min-height: 2.65rem;
+  border-radius: 0.15rem;
+  border: 1px solid #1c2430;
+  background: #1c2430;
+  color: #fafcfd;
+  font-size: 0.78rem;
   font-weight: 700;
-  padding: 0.45rem 0.7rem;
-  border-radius: 0.65rem;
-  border: 1px solid var(--lawn-hub-room-border);
-  background: color-mix(in srgb, var(--lawn-accent-soft) 40%, white);
-  color: inherit;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.lawn-room__back--spacer {
-  visibility: hidden;
-  pointer-events: none;
+.lawn-atelier__open--ghost {
+  background: transparent;
+  color: #1c2430;
 }
 
-.lawn-room__title {
+.lawn-atelier__studio {
+  display: grid;
+  gap: 0.45rem;
+  animation: lawn-rise 420ms ease-out both;
+}
+
+.lawn-atelier__studio-lede {
   font-family: var(--lawn-font-display);
-  text-align: center;
-  font-size: 1.05rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.35rem;
 }
 
-[data-lawn-theme='atelier'] .lawn-hub__room {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+.lawn-atelier__studio-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  min-height: 3rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(28, 36, 48, 0.12);
+  border-radius: 0.15rem;
+  background: #fafcfd;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.lawn-atelier__studio-row:disabled {
+  opacity: 0.55;
+}
+
+.lawn-atelier__chapter {
+  animation: lawn-rise 360ms ease-out both;
 }
 
 /* —— Signal status board + tabs —— */
@@ -5629,9 +6107,10 @@ export function useAuth() {
 }
 
 [data-lawn-theme='canopy'] .lawn-panel-surface {
-  background: rgba(236, 253, 245, 0.96);
-  border-color: rgba(167, 243, 208, 0.35);
-  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(47, 107, 58, 0.16);
+  border-radius: 1.15rem;
+  color: #1a2f22;
 }
 
 /* Signal panels that still use light utility cards (maintenance) */
@@ -5641,120 +6120,235 @@ export function useAuth() {
   border-radius: 0.35rem;
 }
 
-/* —— Canopy today layout —— */
-.lawn-today-layout__segments {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.35rem;
-  margin-bottom: 1rem;
-  padding: 0.3rem;
-  border-radius: 999px;
-  background: rgba(4, 47, 28, 0.75);
-  border: 1px solid rgba(74, 222, 128, 0.2);
+[data-lawn-theme='atelier'] .lawn-panel-surface {
+  background: #fafcfd;
+  border-color: rgba(28, 36, 48, 0.12);
+  border-radius: 0.15rem;
 }
 
-.lawn-today-layout__seg {
-  min-height: 2.35rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #a7f3d0;
-}
-
-.lawn-today-layout__seg.is-active {
-  background: #4ade80;
-  color: #052e16;
-}
-
-.lawn-canopy__hero {
-  margin-bottom: 1.25rem;
-  padding: 1.1rem 1rem 1.25rem;
-  border-radius: 1.25rem;
-  background:
-    linear-gradient(145deg, rgba(20, 83, 45, 0.55), rgba(6, 40, 23, 0.35));
-  border: 1px solid rgba(74, 222, 128, 0.18);
+/* —— Canopy daylight timeline —— */
+.lawn-canopy__sky {
+  position: relative;
+  overflow: hidden;
+  margin: -0.25rem -0.15rem 1rem;
+  padding: 1.25rem 1.05rem 1.15rem;
+  border-radius: 1.35rem;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.12));
+  border: 1px solid rgba(255, 255, 255, 0.55);
   animation: lawn-rise 450ms ease-out both;
 }
 
+.lawn-canopy__sky-glow {
+  position: absolute;
+  top: -2.5rem;
+  right: -1.5rem;
+  width: 8rem;
+  height: 8rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 244, 180, 0.7), transparent 68%);
+  animation: lawn-glow 4.5s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
 .lawn-canopy__date {
+  position: relative;
   font-size: 0.7rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #86efac;
+  color: #1f4d2c;
 }
 
 .lawn-canopy__place {
-  margin-top: 0.35rem;
+  position: relative;
+  margin-top: 0.3rem;
   font-family: var(--lawn-font-display);
-  font-size: 1.85rem;
+  font-size: 1.7rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   line-height: 1.05;
+  color: #0f2418;
 }
 
 .lawn-canopy__weather {
-  margin-top: 0.55rem;
+  position: relative;
+  margin-top: 0.5rem;
   font-size: 0.85rem;
-  color: #bbf7d0;
+  font-weight: 600;
+  color: #2f4a3a;
   line-height: 1.35;
 }
 
-.lawn-canopy__queue {
+.lawn-canopy__vitals {
+  position: relative;
+  margin-top: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.lawn-canopy__vitals span {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #2f6b3a;
+  border: 1px solid rgba(47, 107, 58, 0.14);
+}
+
+.lawn-canopy__ribbon {
+  margin-bottom: 5.5rem;
+}
+
+.lawn-canopy__ribbon-title {
+  font-family: var(--lawn-font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.65rem;
+  color: #1a2f22;
+}
+
+.lawn-canopy__timeline {
   list-style: none;
-  margin: 0 0 1rem;
-  padding: 0;
+  margin: 0;
+  padding: 0 0 0 0.85rem;
+  border-left: 2px solid rgba(47, 107, 58, 0.28);
   display: grid;
   gap: 0.55rem;
 }
 
-.lawn-canopy__item {
+.lawn-canopy__timeline > li {
+  animation: lawn-rise 520ms ease-out both;
+}
+
+.lawn-canopy__node {
+  position: relative;
   width: 100%;
   text-align: left;
-  padding: 1rem 1.05rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(167, 243, 208, 0.18);
-  background: rgba(6, 40, 23, 0.65);
   display: grid;
-  gap: 0.25rem;
-  animation: lawn-rise 500ms ease-out both;
+  grid-template-columns: auto 1fr;
+  gap: 0.7rem;
+  align-items: start;
+  padding: 0.85rem 0.9rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(47, 107, 58, 0.14);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 8px 20px rgba(47, 107, 58, 0.06);
 }
 
-.lawn-canopy__item.is-urgent {
-  border-color: rgba(250, 204, 21, 0.45);
-  background: rgba(66, 32, 6, 0.55);
+.lawn-canopy__node.is-urgent {
+  border-color: rgba(180, 83, 9, 0.4);
+  background: rgba(255, 251, 235, 0.95);
 }
 
-.lawn-canopy__item-title {
+.lawn-canopy__node-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-top: 0.3rem;
+  margin-left: -1.55rem;
+  border-radius: 999px;
+  background: #2f6b3a;
+  border: 2px solid #e8f5d8;
+  box-shadow: 0 0 0 2px rgba(47, 107, 58, 0.25);
+}
+
+.lawn-canopy__node.is-urgent .lawn-canopy__node-dot {
+  background: #b45309;
+  box-shadow: 0 0 0 2px rgba(180, 83, 9, 0.25);
+}
+
+.lawn-canopy__node-copy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.lawn-canopy__node-title {
   font-family: var(--lawn-font-display);
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
-.lawn-canopy__item-detail {
+.lawn-canopy__node-detail {
   font-size: 0.78rem;
-  color: #a7f3d0;
+  font-weight: 600;
+  color: #3d5a48;
 }
 
 .lawn-canopy__dock {
+  position: sticky;
+  bottom: 0.35rem;
+  z-index: 6;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.45rem;
+  grid-template-columns: 1.2fr 1.2fr repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0.45rem;
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(47, 107, 58, 0.16);
+  box-shadow: 0 14px 30px rgba(26, 47, 34, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+@media (max-width: 380px) {
+  .lawn-canopy__dock {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .lawn-atelier {
+    grid-template-columns: 2.85rem 1fr;
+  }
 }
 
 .lawn-canopy__dock button {
-  min-height: 2.5rem;
-  border-radius: 0.85rem;
-  border: 1px solid rgba(167, 243, 208, 0.2);
-  background: rgba(4, 47, 28, 0.7);
-  color: #ecfdf5;
-  font-size: 0.72rem;
-  font-weight: 700;
+  min-height: 2.45rem;
+  border-radius: 0.9rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #2f4a3a;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.lawn-canopy__dock-main {
+  background: #2f6b3a !important;
+  color: #f3faf0 !important;
 }
 
 .lawn-canopy__dock button:disabled {
   opacity: 0.55;
+}
+
+.lawn-canopy-sheet__bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.lawn-canopy-sheet__back,
+.lawn-canopy-sheet__setup {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.5rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(47, 107, 58, 0.18);
+  background: rgba(255, 255, 255, 0.85);
+  color: #1a2f22;
+}
+
+.lawn-canopy-sheet__title {
+  text-align: center;
+  font-family: var(--lawn-font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 /* Stack maintenance trackers in sectioned layouts */
@@ -5762,11 +6356,6 @@ export function useAuth() {
 [data-lawn-layout='tabs'] #maintenance-panel .grid.lg\:grid-cols-3,
 [data-lawn-layout='today'] #maintenance-panel .grid.lg\:grid-cols-3 {
   grid-template-columns: 1fr;
-}
-
-/* Canopy: keep dense forms readable on dark shell */
-[data-lawn-theme='canopy'] .lawn-panel-surface {
-  color: #0f172a;
 }
 
 @keyframes lawn-rise {
@@ -5780,17 +6369,96 @@ export function useAuth() {
   }
 }
 
+@keyframes lawn-glow {
+  from {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+  to {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .lawn-hub__hero,
-  .lawn-hub__weather,
-  .lawn-hub__rooms,
-  .lawn-hub__tools,
-  .lawn-hub__notices,
-  .lawn-canopy__hero,
-  .lawn-canopy__item {
+  .lawn-atelier,
+  .lawn-atelier__cover,
+  .lawn-atelier__line,
+  .lawn-atelier__studio,
+  .lawn-atelier__chapter,
+  .lawn-canopy__sky,
+  .lawn-canopy__timeline > li,
+  .lawn-canopy__sky-glow {
     animation: none;
   }
 }
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <script>
+      (function () {
+        var key = 'lawn-app-sw-reset-v1';
+        try {
+          if (localStorage.getItem(key) === '1') return;
+          localStorage.setItem(key, '1');
+        } catch (e) {
+          return;
+        }
+        var reloadAfterReset = function () {
+          window.location.reload();
+        };
+        var clearCaches = function () {
+          if (!('caches' in window)) {
+            reloadAfterReset();
+            return;
+          }
+          caches
+            .keys()
+            .then(function (keys) {
+              return Promise.all(keys.map(function (cacheKey) { return caches.delete(cacheKey); }));
+            })
+            .finally(reloadAfterReset);
+        };
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (regs) {
+              return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+            })
+            .then(clearCaches)
+            .catch(clearCaches);
+        } else {
+          clearCaches();
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14532d" />
+    <meta name="description" content="The Lawn Pack Companion — seasonal lawn workflow, mowing, watering, and reminders." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Lawn Pack" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=Literata:opsz,wght@7..72,600;7..72,700&family=Nunito+Sans:wght@400;600;700;800&family=Sora:wght@600;700&family=Source+Sans+3:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>The Lawn Pack Companion</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
 </file>
 
 <file path="vite.config.js">
@@ -5994,6 +6662,278 @@ export default function LawnCareApp() {
 }
 </file>
 
+<file path="src/services/lawnTaskInboundSync.js">
+import { SEASONS, makeStepKey } from '../data/LawnPackData';
+import {
+  MOW_TASK_NAME,
+  WATER_TASK_NAME,
+  VERTICUT_TASK_NAME,
+  WATERING_SESSION_NAMES,
+  pickLatestIsoDate,
+} from './lawnMaintenanceSync';
+
+export const GYPSUM_TASK_NAME = 'Apply Liquid Gypsum';
+export const GYPSUM_LOG_KEY = 'lastGypsumDate';
+export const GYPSUM_POSTPONE_KEY = 'gypsumPostponedUntil';
+export const TASK_SKIPS_LOG_KEY = 'taskSkips';
+
+/** @type {Array<{ label: string, days: number }>} */
+export const GYPSUM_POSTPONE_OPTIONS = [
+  { label: '4 weeks', days: 28 },
+  { label: '3 months', days: 91 },
+  { label: '6 months', days: 182 },
+];
+
+/** @type {Map<string, string> | null} */
+let taskNameToStepKey = null;
+
+function getTaskNameToStepKeyMap() {
+  if (!taskNameToStepKey) {
+    taskNameToStepKey = new Map();
+    for (const seasonKey of Object.keys(SEASONS)) {
+      for (const step of SEASONS[seasonKey].steps) {
+        taskNameToStepKey.set(step.label, makeStepKey(seasonKey, step.id));
+      }
+    }
+    taskNameToStepKey.set(
+      'Step 2: Apply Deeper Green Iron Sulphate',
+      makeStepKey('WINTER', 'iron1')
+    );
+  }
+  return taskNameToStepKey;
+}
+
+/**
+ * @typedef {Object} InboundTaskRow
+ * @property {string} task_name
+ * @property {string} due_date
+ * @property {boolean} is_completed
+ * @property {string | null} [last_completed_date]
+ * @property {string | null} [skipped_on]
+ */
+
+/**
+ * @typedef {{ taskName: string, skippedOn: string }} TaskSkipEntry
+ */
+
+/** @param {Record<string, string>} userLogs */
+export function parseTaskSkips(userLogs) {
+  const raw = userLogs[TASK_SKIPS_LOG_KEY];
+  if (!raw) return /** @type {TaskSkipEntry[]} */ ([]);
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * @param {InboundTaskRow[]} rows
+ * @param {Record<string, string>} userLogs
+ */
+export function applyInboundTaskSkips(rows, userLogs) {
+  /** @type {Record<string, string>} */
+  const nextLogs = { ...userLogs };
+  const existing = parseTaskSkips(nextLogs);
+  const seen = new Set(existing.map((entry) => `${entry.taskName}:${entry.skippedOn}`));
+  let updated = false;
+
+  for (const row of rows) {
+    if (!row.skipped_on) continue;
+    const key = `${row.task_name}:${row.skipped_on}`;
+    if (seen.has(key)) continue;
+    existing.push({ taskName: row.task_name, skippedOn: row.skipped_on });
+    seen.add(key);
+    updated = true;
+  }
+
+  if (updated) {
+    nextLogs[TASK_SKIPS_LOG_KEY] = JSON.stringify(existing);
+  }
+
+  return nextLogs;
+}
+
+/**
+ * @param {string} todayStr
+ * @param {string} fromIso
+ */
+function daysBetweenIso(todayStr, fromIso) {
+  const start = new Date(`${fromIso}T12:00:00`);
+  const end = new Date(`${todayStr}T12:00:00`);
+  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * @param {Record<string, string>} userLogs
+ * @param {string} todayStr
+ * @param {number} [withinDays]
+ */
+export function countRecentWateringSkips(userLogs, todayStr, withinDays = 7) {
+  const skips = parseTaskSkips(userLogs);
+  let count = 0;
+
+  for (const skip of skips) {
+    if (
+      skip.taskName !== WATER_TASK_NAME &&
+      !skip.taskName.startsWith('Water lawn (')
+    ) {
+      continue;
+    }
+    const days = daysBetweenIso(todayStr, skip.skippedOn);
+    if (days >= 0 && days <= withinDays) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+/**
+ * @param {Record<string, string>} userLogs
+ * @param {string} todayStr
+ * @param {number} [withinDays]
+ */
+export function countFullySkippedWateringDays(userLogs, todayStr, withinDays = 7) {
+  const skips = parseTaskSkips(userLogs);
+  /** @type {Map<string, Set<string>>} */
+  const byDate = new Map();
+
+  for (const skip of skips) {
+    if (!skip.taskName.startsWith('Water lawn (')) continue;
+    const days = daysBetweenIso(todayStr, skip.skippedOn);
+    if (days < 0 || days > withinDays) continue;
+    if (!byDate.has(skip.skippedOn)) byDate.set(skip.skippedOn, new Set());
+    byDate.get(skip.skippedOn)?.add(skip.taskName);
+  }
+
+  let fullDays = 0;
+  for (const names of byDate.values()) {
+    if (WATERING_SESSION_NAMES.every((name) => names.has(name))) {
+      fullDays += 1;
+    }
+  }
+
+  return fullDays;
+}
+
+/**
+ * Merge Tasks app / Supabase completions into lawn pack logs and maintenance dates.
+ * @param {InboundTaskRow[]} rows
+ * @param {string} todayStr
+ * @param {Record<string, string>} userLogs
+ * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
+ */
+export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenance = {}) {
+  const stepMap = getTaskNameToStepKeyMap();
+  /** @type {Record<string, string>} */
+  const nextLogs = { ...userLogs };
+  let lastMowedDate = maintenance.lastMowedDate ?? null;
+  let lastWateredDate = maintenance.lastWateredDate ?? null;
+  let lastVerticutDate = maintenance.lastVerticutDate ?? null;
+  let packStepsUpdated = 0;
+  let maintenanceUpdated = false;
+
+  for (const row of rows) {
+    // Tasks app keeps recurring lawn rows open (is_completed=false) and writes
+    // last_completed_date instead — treat that as a real completion.
+    const completionDate =
+      row.last_completed_date ??
+      (row.is_completed && row.due_date && row.due_date <= todayStr ? row.due_date : null);
+    if (!completionDate) continue;
+
+    if (row.task_name === MOW_TASK_NAME) {
+      const merged = pickLatestIsoDate(lastMowedDate, completionDate);
+      if (merged !== lastMowedDate) {
+        lastMowedDate = merged;
+        maintenanceUpdated = true;
+      }
+      continue;
+    }
+
+    if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith('Water lawn (')) {
+      const merged = pickLatestIsoDate(lastWateredDate, completionDate);
+      if (merged !== lastWateredDate) {
+        lastWateredDate = merged;
+        maintenanceUpdated = true;
+      }
+      continue;
+    }
+
+    if (row.task_name === VERTICUT_TASK_NAME) {
+      const merged = pickLatestIsoDate(lastVerticutDate, completionDate);
+      if (merged !== lastVerticutDate) {
+        lastVerticutDate = merged;
+        maintenanceUpdated = true;
+      }
+      continue;
+    }
+
+    if (row.task_name === GYPSUM_TASK_NAME) {
+      const merged = pickLatestIsoDate(nextLogs[GYPSUM_LOG_KEY], completionDate);
+      if (merged && merged !== nextLogs[GYPSUM_LOG_KEY]) {
+        nextLogs[GYPSUM_LOG_KEY] = merged;
+        packStepsUpdated += 1;
+      }
+      continue;
+    }
+
+    const stepKey = stepMap.get(row.task_name);
+    if (stepKey) {
+      const merged = pickLatestIsoDate(nextLogs[stepKey], completionDate);
+      if (merged && merged !== nextLogs[stepKey]) {
+        nextLogs[stepKey] = merged;
+        packStepsUpdated += 1;
+      }
+    }
+  }
+
+  return {
+    userLogs: nextLogs,
+    lastMowedDate,
+    lastWateredDate,
+    lastVerticutDate,
+    packStepsUpdated,
+    maintenanceUpdated,
+  };
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "lawn-care-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "node scripts/generate-pwa-icons.mjs && node scripts/bundle-sync-api.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
+    "mammoth": "^1.12.0",
+    "pdfjs-dist": "^6.0.227",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "husky": "^9.1.7",
+    "postcss": "^8.5.6",
+    "sharp": "^0.34.2",
+    "tailwindcss": "^3.4.17",
+    "vite": "^5.4.19",
+    "vite-plugin-pwa": "^0.21.1"
+  }
+}
+</file>
+
 <file path="src/components/lawn/LawnSettings.jsx">
 import React, { useEffect, useRef, useState } from 'react';
 import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
@@ -6134,9 +7074,9 @@ export default function LawnSettings({ app }) {
         <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
           <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
           <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
-            Classic is the original long page. Signal is the sectioned status-board layout with
-            bottom tabs. Changes apply while you browse — use Cancel to undo, or Save to keep
-            them.
+            Four completely different layouts: Classic (long page), Atelier (journal spine),
+            Signal (status board + bottom tabs), and Canopy (daylight today timeline). Changes
+            apply while you browse — use Cancel to undo, or Save to keep them.
           </p>
           <div className="grid gap-2">
             {LAWN_THEMES.map((theme) => {
@@ -7478,278 +8418,6 @@ export default function MaintenancePanel({ app }) {
       )}
     </section>
   );
-}
-</file>
-
-<file path="src/services/lawnTaskInboundSync.js">
-import { SEASONS, makeStepKey } from '../data/LawnPackData';
-import {
-  MOW_TASK_NAME,
-  WATER_TASK_NAME,
-  VERTICUT_TASK_NAME,
-  WATERING_SESSION_NAMES,
-  pickLatestIsoDate,
-} from './lawnMaintenanceSync';
-
-export const GYPSUM_TASK_NAME = 'Apply Liquid Gypsum';
-export const GYPSUM_LOG_KEY = 'lastGypsumDate';
-export const GYPSUM_POSTPONE_KEY = 'gypsumPostponedUntil';
-export const TASK_SKIPS_LOG_KEY = 'taskSkips';
-
-/** @type {Array<{ label: string, days: number }>} */
-export const GYPSUM_POSTPONE_OPTIONS = [
-  { label: '4 weeks', days: 28 },
-  { label: '3 months', days: 91 },
-  { label: '6 months', days: 182 },
-];
-
-/** @type {Map<string, string> | null} */
-let taskNameToStepKey = null;
-
-function getTaskNameToStepKeyMap() {
-  if (!taskNameToStepKey) {
-    taskNameToStepKey = new Map();
-    for (const seasonKey of Object.keys(SEASONS)) {
-      for (const step of SEASONS[seasonKey].steps) {
-        taskNameToStepKey.set(step.label, makeStepKey(seasonKey, step.id));
-      }
-    }
-    taskNameToStepKey.set(
-      'Step 2: Apply Deeper Green Iron Sulphate',
-      makeStepKey('WINTER', 'iron1')
-    );
-  }
-  return taskNameToStepKey;
-}
-
-/**
- * @typedef {Object} InboundTaskRow
- * @property {string} task_name
- * @property {string} due_date
- * @property {boolean} is_completed
- * @property {string | null} [last_completed_date]
- * @property {string | null} [skipped_on]
- */
-
-/**
- * @typedef {{ taskName: string, skippedOn: string }} TaskSkipEntry
- */
-
-/** @param {Record<string, string>} userLogs */
-export function parseTaskSkips(userLogs) {
-  const raw = userLogs[TASK_SKIPS_LOG_KEY];
-  if (!raw) return /** @type {TaskSkipEntry[]} */ ([]);
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * @param {InboundTaskRow[]} rows
- * @param {Record<string, string>} userLogs
- */
-export function applyInboundTaskSkips(rows, userLogs) {
-  /** @type {Record<string, string>} */
-  const nextLogs = { ...userLogs };
-  const existing = parseTaskSkips(nextLogs);
-  const seen = new Set(existing.map((entry) => `${entry.taskName}:${entry.skippedOn}`));
-  let updated = false;
-
-  for (const row of rows) {
-    if (!row.skipped_on) continue;
-    const key = `${row.task_name}:${row.skipped_on}`;
-    if (seen.has(key)) continue;
-    existing.push({ taskName: row.task_name, skippedOn: row.skipped_on });
-    seen.add(key);
-    updated = true;
-  }
-
-  if (updated) {
-    nextLogs[TASK_SKIPS_LOG_KEY] = JSON.stringify(existing);
-  }
-
-  return nextLogs;
-}
-
-/**
- * @param {string} todayStr
- * @param {string} fromIso
- */
-function daysBetweenIso(todayStr, fromIso) {
-  const start = new Date(`${fromIso}T12:00:00`);
-  const end = new Date(`${todayStr}T12:00:00`);
-  return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-/**
- * @param {Record<string, string>} userLogs
- * @param {string} todayStr
- * @param {number} [withinDays]
- */
-export function countRecentWateringSkips(userLogs, todayStr, withinDays = 7) {
-  const skips = parseTaskSkips(userLogs);
-  let count = 0;
-
-  for (const skip of skips) {
-    if (
-      skip.taskName !== WATER_TASK_NAME &&
-      !skip.taskName.startsWith('Water lawn (')
-    ) {
-      continue;
-    }
-    const days = daysBetweenIso(todayStr, skip.skippedOn);
-    if (days >= 0 && days <= withinDays) {
-      count += 1;
-    }
-  }
-
-  return count;
-}
-
-/**
- * @param {Record<string, string>} userLogs
- * @param {string} todayStr
- * @param {number} [withinDays]
- */
-export function countFullySkippedWateringDays(userLogs, todayStr, withinDays = 7) {
-  const skips = parseTaskSkips(userLogs);
-  /** @type {Map<string, Set<string>>} */
-  const byDate = new Map();
-
-  for (const skip of skips) {
-    if (!skip.taskName.startsWith('Water lawn (')) continue;
-    const days = daysBetweenIso(todayStr, skip.skippedOn);
-    if (days < 0 || days > withinDays) continue;
-    if (!byDate.has(skip.skippedOn)) byDate.set(skip.skippedOn, new Set());
-    byDate.get(skip.skippedOn)?.add(skip.taskName);
-  }
-
-  let fullDays = 0;
-  for (const names of byDate.values()) {
-    if (WATERING_SESSION_NAMES.every((name) => names.has(name))) {
-      fullDays += 1;
-    }
-  }
-
-  return fullDays;
-}
-
-/**
- * Merge Tasks app / Supabase completions into lawn pack logs and maintenance dates.
- * @param {InboundTaskRow[]} rows
- * @param {string} todayStr
- * @param {Record<string, string>} userLogs
- * @param {{ lastMowedDate?: string | null, lastWateredDate?: string | null, lastVerticutDate?: string | null }} maintenance
- */
-export function applyInboundTaskCompletions(rows, todayStr, userLogs, maintenance = {}) {
-  const stepMap = getTaskNameToStepKeyMap();
-  /** @type {Record<string, string>} */
-  const nextLogs = { ...userLogs };
-  let lastMowedDate = maintenance.lastMowedDate ?? null;
-  let lastWateredDate = maintenance.lastWateredDate ?? null;
-  let lastVerticutDate = maintenance.lastVerticutDate ?? null;
-  let packStepsUpdated = 0;
-  let maintenanceUpdated = false;
-
-  for (const row of rows) {
-    // Tasks app keeps recurring lawn rows open (is_completed=false) and writes
-    // last_completed_date instead — treat that as a real completion.
-    const completionDate =
-      row.last_completed_date ??
-      (row.is_completed && row.due_date && row.due_date <= todayStr ? row.due_date : null);
-    if (!completionDate) continue;
-
-    if (row.task_name === MOW_TASK_NAME) {
-      const merged = pickLatestIsoDate(lastMowedDate, completionDate);
-      if (merged !== lastMowedDate) {
-        lastMowedDate = merged;
-        maintenanceUpdated = true;
-      }
-      continue;
-    }
-
-    if (row.task_name === WATER_TASK_NAME || row.task_name.startsWith('Water lawn (')) {
-      const merged = pickLatestIsoDate(lastWateredDate, completionDate);
-      if (merged !== lastWateredDate) {
-        lastWateredDate = merged;
-        maintenanceUpdated = true;
-      }
-      continue;
-    }
-
-    if (row.task_name === VERTICUT_TASK_NAME) {
-      const merged = pickLatestIsoDate(lastVerticutDate, completionDate);
-      if (merged !== lastVerticutDate) {
-        lastVerticutDate = merged;
-        maintenanceUpdated = true;
-      }
-      continue;
-    }
-
-    if (row.task_name === GYPSUM_TASK_NAME) {
-      const merged = pickLatestIsoDate(nextLogs[GYPSUM_LOG_KEY], completionDate);
-      if (merged && merged !== nextLogs[GYPSUM_LOG_KEY]) {
-        nextLogs[GYPSUM_LOG_KEY] = merged;
-        packStepsUpdated += 1;
-      }
-      continue;
-    }
-
-    const stepKey = stepMap.get(row.task_name);
-    if (stepKey) {
-      const merged = pickLatestIsoDate(nextLogs[stepKey], completionDate);
-      if (merged && merged !== nextLogs[stepKey]) {
-        nextLogs[stepKey] = merged;
-        packStepsUpdated += 1;
-      }
-    }
-  }
-
-  return {
-    userLogs: nextLogs,
-    lastMowedDate,
-    lastWateredDate,
-    lastVerticutDate,
-    packStepsUpdated,
-    maintenanceUpdated,
-  };
-}
-</file>
-
-<file path="package.json">
-{
-  "name": "lawn-care-app",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "prebuild": "node scripts/generate-pwa-icons.mjs && node scripts/bundle-sync-api.mjs",
-    "build": "vite build",
-    "preview": "vite preview",
-    "prepare": "husky"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.106.2",
-    "mammoth": "^1.12.0",
-    "pdfjs-dist": "^6.0.227",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
-    "husky": "^9.1.7",
-    "postcss": "^8.5.6",
-    "sharp": "^0.34.2",
-    "tailwindcss": "^3.4.17",
-    "vite": "^5.4.19",
-    "vite-plugin-pwa": "^0.21.1"
-  }
 }
 </file>
 
