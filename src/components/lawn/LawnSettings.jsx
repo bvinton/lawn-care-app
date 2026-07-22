@@ -1,7 +1,25 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { EQUIPMENT_OPTIONS, SPRINKLER_OPTIONS } from '../../data/LawnPackData';
 import { MOWER_OPTIONS, LAWN_SURFACE_OPTIONS, LEVELLING_GUIDE_METHODS } from '../../data/lawnUiConfig';
 import { LAWN_THEMES } from '../../data/lawnThemes';
+
+/**
+ * Snapshot of Setup fields that apply immediately while editing.
+ * Cancel restores this; Save keeps the current values and leaves Setup.
+ * @param {ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>} app
+ */
+function captureSettingsSnapshot(app) {
+  return {
+    length: app.length,
+    width: app.width,
+    mowerModel: app.mowerModel,
+    lawnSurface: app.lawnSurface,
+    selectedEquipment: app.selectedEquipment,
+    selectedSprinkler: app.selectedSprinkler,
+    themeId: app.themeId,
+    activeRoom: app.activeRoom,
+  };
+}
 
 /** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
 export default function LawnSettings({ app }) {
@@ -41,10 +59,66 @@ export default function LawnSettings({ app }) {
     setActiveRoom,
   } = app;
 
+  const snapshotRef = useRef(/** @type {ReturnType<typeof captureSettingsSnapshot> | null} */ (null));
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    snapshotRef.current = captureSettingsSnapshot(app);
+    setDirty(false);
+    // Capture once when Setup opens — intentional empty deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount snapshot only
+  }, []);
+
+  useEffect(() => {
+    const snap = snapshotRef.current;
+    if (!snap) return;
+    setDirty(
+      length !== snap.length ||
+        width !== snap.width ||
+        mowerModel !== snap.mowerModel ||
+        lawnSurface !== snap.lawnSurface ||
+        selectedEquipment !== snap.selectedEquipment ||
+        selectedSprinkler !== snap.selectedSprinkler ||
+        themeId !== snap.themeId
+    );
+  }, [
+    length,
+    width,
+    mowerModel,
+    lawnSurface,
+    selectedEquipment,
+    selectedSprinkler,
+    themeId,
+  ]);
+
+  const leaveSetup = () => {
+    setShowLevellingGuide(false);
+    setActiveScreen('main');
+  };
+
+  const handleCancel = () => {
+    const snap = snapshotRef.current;
+    if (snap) {
+      setLength(snap.length);
+      setWidth(snap.width);
+      setMowerModel(snap.mowerModel);
+      setLawnSurface(snap.lawnSurface);
+      setSelectedEquipment(snap.selectedEquipment);
+      setSelectedSprinkler(snap.selectedSprinkler);
+      setThemeId(snap.themeId);
+      setActiveRoom(snap.activeRoom);
+    }
+    leaveSetup();
+  };
+
+  const handleSave = () => {
+    leaveSetup();
+  };
+
   return (
     <>
-      <div className="flex justify-between items-center mb-6 border-b pb-4">
-        <div>
+      <div className="flex justify-between items-center mb-6 border-b pb-4 gap-3">
+        <div className="min-w-0">
           <h2 className="text-xl font-black text-green-800">⚙️ Lawn Setup</h2>
           <p className="text-sm text-green-700 mt-1">
             Configure appearance, lawn size, equipment, and surface profile.
@@ -52,19 +126,20 @@ export default function LawnSettings({ app }) {
         </div>
         <button
           type="button"
-          onClick={() => setActiveScreen('main')}
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
+          onClick={handleCancel}
+          className="shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-1.5 px-3 rounded-lg transition-all"
         >
           ← Back
         </button>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-5 pb-24">
         <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
           <h3 className="text-sm font-bold text-emerald-950 mb-1">Appearance</h3>
           <p className="text-xs text-emerald-900/80 mb-3 leading-snug">
-            Try a different look and layout. Sectioned themes put Maintenance and Seasonal Pack in
-            their own rooms. Classic keeps the original long page — you can always switch back.
+            Classic is the original long page. Signal is the sectioned status-board layout with
+            bottom tabs. Changes apply while you browse — use Cancel to undo, or Save to keep
+            them.
           </p>
           <div className="grid gap-2">
             {LAWN_THEMES.map((theme) => {
@@ -266,7 +341,8 @@ export default function LawnSettings({ app }) {
           <p className="text-sm font-bold text-sky-950 mb-1">🌦️ Weather location</p>
           <p className="text-[11px] text-sky-900/80 mb-3 leading-snug">
             Rain and soil temperature forecasts use this postcode. Defaults to the Wallsend area
-            until you set your own.
+            until you set your own. This section saves on its own (separate from Cancel / Save
+            below).
           </p>
           <label htmlFor="weather-postcode" className="block text-xs font-semibold text-sky-950 mb-1">
             UK postcode
@@ -386,6 +462,23 @@ export default function LawnSettings({ app }) {
             {jsonCopied ? 'Copied!' : '📋 Copy Live JSON Payload to Clipboard'}
           </button>
         </div>
+      </div>
+
+      <div className="sticky bottom-0 -mx-1 mt-4 border-t border-emerald-200 bg-white/95 backdrop-blur px-1 pt-3 pb-1 flex gap-2">
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="flex-1 text-sm font-bold py-2.5 px-3 rounded-xl bg-green-700 text-white hover:bg-green-800 transition-all"
+        >
+          {dirty ? 'Save changes' : 'Done'}
+        </button>
       </div>
     </>
   );

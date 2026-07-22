@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { addDaysToDateString } from '../../data/LawnPackData';
 import { LAWN_APP_SOURCE, skipLawnTaskByName } from '../../services/lawnTasks';
 import {
@@ -29,7 +29,13 @@ import {
   VERTICUT_MOW_PAIRING_NOTE,
   VERTICUT_RENOVATION_HOLD_DAYS,
 } from '../../services/lawnScheduleEngine';
+import {
+  getFocusFromUrl,
+  resolveMaintenanceTabFromFocus,
+} from '../../utils/lawnDeepLink';
 import { UkDateInput } from './UkDateInput';
+
+/** @typedef {'mowing' | 'watering' | 'verticut' | 'gypsum'} MaintenanceItemTab */
 
 /** @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props */
 export default function MaintenancePanel({ app }) {
@@ -117,6 +123,17 @@ export default function MaintenancePanel({ app }) {
     setLastVerticutDate,
   } = app;
 
+  const [activeItemTab, setActiveItemTab] = useState(
+    /** @type {MaintenanceItemTab} */ (
+      resolveMaintenanceTabFromFocus(getFocusFromUrl()) ?? 'mowing'
+    )
+  );
+
+  useEffect(() => {
+    const fromFocus = resolveMaintenanceTabFromFocus(getFocusFromUrl());
+    if (fromFocus) setActiveItemTab(fromFocus);
+  }, []);
+
   const mowingDaysOverdue =
     mowingNextDueIso && mowingDue ? daysBetween(mowingNextDueIso, todayStr) : null;
   const verticutDaysOverdue =
@@ -145,6 +162,18 @@ export default function MaintenancePanel({ app }) {
         📊 {dynamicMowingDays}-day interval: {scheduleReason.mow}
       </p>
     ) : null;
+
+  /** @type {{ id: MaintenanceItemTab, label: string, due: boolean }[]} */
+  const itemTabs = [
+    { id: 'mowing', label: 'Mowing', due: Boolean(mowingDue && !isDormantSeason && !seedEstablishmentActive) },
+    {
+      id: 'watering',
+      label: 'Watering',
+      due: Boolean(wateringDue && !isDormantSeason && !isNatureProvidingFullSoak),
+    },
+    { id: 'verticut', label: 'Verticut', due: Boolean(verticutDue && isVerticutSeason) },
+    { id: 'gypsum', label: 'Gypsum', due: Boolean(gypsumDue) },
+  ];
 
   return (
     <section
@@ -230,9 +259,45 @@ export default function MaintenancePanel({ app }) {
         Regular Maintenance
       </p>
 
-      <div className="grid gap-3 lg:grid-cols-3 sm:grid-cols-2 sm:items-stretch">
+      <div
+        className="mb-3 flex gap-1 overflow-x-auto rounded-lg border border-sky-200 bg-white/80 p-1"
+        role="tablist"
+        aria-label="Maintenance items"
+      >
+        {itemTabs.map((tab) => {
+          const selected = activeItemTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setActiveItemTab(tab.id)}
+              className={`relative shrink-0 flex-1 min-w-[4.5rem] rounded-md px-2 py-2 text-[11px] font-bold transition-all ${
+                selected
+                  ? 'bg-sky-700 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-sky-50 hover:text-sky-900'
+              }`}
+            >
+              {tab.label}
+              {tab.due && (
+                <span
+                  className={`absolute top-1 right-1 h-1.5 w-1.5 rounded-full ${
+                    selected ? 'bg-amber-300' : 'bg-amber-500'
+                  }`}
+                  aria-label="Due"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-3">
         <div
           id="maintenance-mowing-tracker"
+          role="tabpanel"
+          hidden={activeItemTab !== 'mowing'}
           data-maintenance-due-dates={JSON.stringify(maintenanceDueDates)}
           data-next-mow-due={mowingNextDueIso ?? ''}
           data-mow-locked-until={mowingLockedUntilIso ?? ''}
@@ -404,6 +469,8 @@ export default function MaintenancePanel({ app }) {
 
         <div
           id="maintenance-watering-tracker"
+          role="tabpanel"
+          hidden={activeItemTab !== 'watering'}
           data-next-water-due={wateringNextDueIso ?? ''}
           data-water-minutes={dynamicMinutes}
           data-forecasted-rain-sum={forecastedRainSum}
@@ -592,11 +659,13 @@ export default function MaintenancePanel({ app }) {
 
         <div
           id="maintenance-verticut-tracker"
+          role="tabpanel"
+          hidden={activeItemTab !== 'verticut'}
           data-next-verticut-due={verticutNextDueIso ?? ''}
           data-verticut-locked-until={verticutLockedUntilIso ?? ''}
           data-verticut-status={maintenanceDueDates.verticutStatus}
           data-verticut-paired-with-mow={verticutPairedWithMow ? 'true' : 'false'}
-          className={`flex flex-col rounded-lg border p-3 sm:col-span-2 lg:col-span-1 ${
+          className={`flex flex-col rounded-lg border p-3 ${
             !isVerticutSeason
               ? 'bg-gray-100 border-gray-300 text-gray-500'
               : renovationHoldActive
@@ -761,6 +830,8 @@ export default function MaintenancePanel({ app }) {
 
       <div
         id="soil-treatments-tracker"
+        role="tabpanel"
+        hidden={activeItemTab !== 'gypsum'}
         data-last-gypsum-date={lastGypsumDate ?? ''}
         data-gypsum-days-remaining={gypsumDaysRemaining}
         data-gypsum-due={gypsumDue ? 'true' : 'false'}
@@ -899,7 +970,7 @@ export default function MaintenancePanel({ app }) {
         </div>
       </div>
 
-      {summerGranularRepeat && (
+      {summerGranularRepeat && activeItemTab === 'gypsum' && (
         <div
           className={`mt-3 rounded-lg border p-3 text-xs ${
             granularRepeatDue

@@ -81,6 +81,7 @@ import { applyLawnFocusFromUrl, getFocusFromUrl, parsePackStepFocus } from '../u
 import {
   getLawnTheme,
   LAWN_THEME_STORAGE_KEY,
+  normalizeLawnThemeId,
   readStoredLawnThemeId,
   resolveFocusRoom,
   isSectionedLayout,
@@ -108,10 +109,30 @@ import {
   LAWN_SURFACE_OPTIONS,
 } from '../data/lawnUiConfig';
 
+function readStoredInt(key, fallback, min, max) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < min || n > max) return fallback;
+    return n;
+  } catch {
+    return fallback;
+  }
+}
+
 export function useLawnCareApp() {
-  const [length, setLength] = useState(INITIAL_LAWN_CONFIG.defaultLength);
-  const [width, setWidth] = useState(INITIAL_LAWN_CONFIG.defaultWidth);
-  const [sqm, setSqm] = useState(INITIAL_LAWN_CONFIG.defaultSqm);
+  const [length, setLength] = useState(() =>
+    readStoredInt('lawnPackLength', INITIAL_LAWN_CONFIG.defaultLength, 1, 30)
+  );
+  const [width, setWidth] = useState(() =>
+    readStoredInt('lawnPackWidth', INITIAL_LAWN_CONFIG.defaultWidth, 1, 30)
+  );
+  const [sqm, setSqm] = useState(() => {
+    const l = readStoredInt('lawnPackLength', INITIAL_LAWN_CONFIG.defaultLength, 1, 30);
+    const w = readStoredInt('lawnPackWidth', INITIAL_LAWN_CONFIG.defaultWidth, 1, 30);
+    return l * w;
+  });
   const [userLogs, setUserLogs] = useState(() =>
     migrateUserLogs(
       stripStalePetLockout(
@@ -130,7 +151,10 @@ export function useLawnCareApp() {
     return getWorkflowSeasonForDate(formatInputDate(new Date()), logs);
   });
   const [seasonManuallySelected, setSeasonManuallySelected] = useState(false);
-  const [selectedEquipment, setSelectedEquipment] = useState('BIRCHMEIER');
+  const [selectedEquipment, setSelectedEquipment] = useState(() => {
+    const saved = localStorage.getItem('lawnPackSelectedEquipment');
+    return saved && EQUIPMENT_OPTIONS[saved] ? saved : 'BIRCHMEIER';
+  });
   const [selectedSprinkler, setSelectedSprinkler] = useState(() => {
     const saved = localStorage.getItem('lawnPackSelectedSprinkler');
     return saved && SPRINKLER_OPTIONS[saved] ? saved : 'OSCILLATING';
@@ -159,10 +183,11 @@ export function useLawnCareApp() {
   const activeTheme = getLawnTheme(themeId);
 
   const setThemeId = useCallback((nextId) => {
-    setThemeIdState(nextId);
+    const normalized = normalizeLawnThemeId(nextId);
+    setThemeIdState(normalized);
     try {
       window.dispatchEvent(
-        new CustomEvent('lawn-theme-change', { detail: { themeId: nextId } })
+        new CustomEvent('lawn-theme-change', { detail: { themeId: normalized } })
       );
     } catch {
       /* ignore */
@@ -943,6 +968,30 @@ export function useLawnCareApp() {
   useEffect(() => {
     setSqm(length * width);
   }, [length, width]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('lawnPackLength', String(length));
+    } catch {
+      /* ignore */
+    }
+  }, [length]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('lawnPackWidth', String(width));
+    } catch {
+      /* ignore */
+    }
+  }, [width]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('lawnPackSelectedEquipment', selectedEquipment);
+    } catch {
+      /* ignore */
+    }
+  }, [selectedEquipment]);
 
   useEffect(() => {
     if (seasonManuallySelected) return;

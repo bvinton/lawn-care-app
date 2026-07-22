@@ -57,6 +57,21 @@ export function resolveLawnFocusTarget(raw) {
 }
 
 /**
+ * Map a focus target to a Maintenance Panel item tab.
+ * @param {string | null | undefined} raw
+ * @returns {'mowing' | 'watering' | 'verticut' | 'gypsum' | null}
+ */
+export function resolveMaintenanceTabFromFocus(raw) {
+  const target = resolveLawnFocusTarget(raw)?.toLowerCase() ?? '';
+  if (!target) return null;
+  if (target.includes('mowing') || target === 'mow') return 'mowing';
+  if (target.includes('watering') || target === 'water') return 'watering';
+  if (target.includes('verticut')) return 'verticut';
+  if (target.includes('soil') || target.includes('gypsum')) return 'gypsum';
+  return null;
+}
+
+/**
  * @returns {string | null}
  */
 export function getFocusFromUrl() {
