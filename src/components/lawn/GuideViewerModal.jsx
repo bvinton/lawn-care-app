@@ -111,7 +111,7 @@ function PdfViewer({ fileUrl, title }) {
   if (error) return <ErrorState title={title} message={error} />;
 
   return (
-    <div className="flex-1 overflow-y-auto px-2 py-4 space-y-3 bg-gray-50">
+    <div className="flex-1 overflow-y-auto px-2 py-4 space-y-3 bg-gray-50 md:px-6 md:py-6">
       <div className="mx-auto w-full max-w-md space-y-3 md:max-w-lg">
         {pageImages.map((src, index) => (
           <img
