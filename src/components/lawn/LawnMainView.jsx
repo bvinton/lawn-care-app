@@ -2,10 +2,45 @@ import React from 'react';
 import MaintenancePanel from './MaintenancePanel';
 import SeasonTimeline from './SeasonTimeline';
 import LawnWorkflow from './LawnWorkflow';
+import LawnHub from './LawnHub';
 import LawnAlerts from './LawnAlerts';
 import LawnStatusBoard, { LawnSignalMore } from './LawnStatusBoard';
-import LawnAtelierBoard from './LawnAtelierBoard';
+import LawnFolioBoard from './LawnFolioBoard';
 import LawnCanopyBoard from './LawnCanopyBoard';
+
+/**
+ * @param {{
+ *   app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp>,
+ *   title: string,
+ *   onBack?: (() => void) | null,
+ *   children: React.ReactNode,
+ * }} props
+ */
+function LawnRoomFrame({ app, title, onBack = null, children }) {
+  return (
+    <div className="lawn-room">
+      <div className="lawn-room__bar">
+        {onBack ? (
+          <button type="button" className="lawn-room__back" onClick={onBack}>
+            ← Back
+          </button>
+        ) : (
+          <span className="lawn-room__back lawn-room__back--spacer" aria-hidden="true" />
+        )}
+        <h2 className="lawn-room__title">{title}</h2>
+        <button
+          type="button"
+          className="lawn-room__setup"
+          onClick={() => app.setActiveScreen('settings')}
+        >
+          Setup
+        </button>
+      </div>
+      <LawnAlerts app={app} />
+      <div className="lawn-room__body">{children}</div>
+    </div>
+  );
+}
 
 /**
  * Signal — bottom tabs (unchanged).
@@ -72,20 +107,51 @@ function LawnTabsLayout({ app }) {
 }
 
 /**
- * Atelier — journal spine + chapter page.
+ * Atelier — original moss home hub with separate rooms.
  * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
  */
 function LawnRoomsLayout({ app }) {
+  const { activeRoom, setActiveRoom } = app;
+
+  if (activeRoom === 'maintenance') {
+    return (
+      <LawnRoomFrame app={app} title="Maintenance" onBack={() => setActiveRoom('hub')}>
+        <MaintenancePanel app={app} />
+      </LawnRoomFrame>
+    );
+  }
+
+  if (activeRoom === 'seasonal') {
+    return (
+      <LawnRoomFrame app={app} title="Seasonal Pack" onBack={() => setActiveRoom('hub')}>
+        <SeasonTimeline app={app} />
+      </LawnRoomFrame>
+    );
+  }
+
   return (
-    <div className="lawn-atelier-shell">
+    <>
       <LawnAlerts app={app} />
-      <LawnAtelierBoard app={app} />
+      <LawnHub app={app} />
+    </>
+  );
+}
+
+/**
+ * Folio — paper desk with folder tabs.
+ * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
+ */
+function LawnDeskLayout({ app }) {
+  return (
+    <div className="lawn-folio-shell">
+      <LawnAlerts app={app} />
+      <LawnFolioBoard app={app} />
     </div>
   );
 }
 
 /**
- * Canopy — daylight timeline + sheet overlays for Care/Pack.
+ * Canopy — neon yard board + sheet overlays for Care/Pack.
  * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
  */
 function LawnTodayLayout({ app }) {
@@ -125,7 +191,7 @@ function LawnTodayLayout({ app }) {
 }
 
 /**
- * Main content switcher across classic / rooms / tabs / today.
+ * Main content switcher across classic / rooms / tabs / today / desk.
  * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
  */
 export default function LawnMainView({ app }) {
@@ -138,6 +204,10 @@ export default function LawnMainView({ app }) {
 
   if (layout === 'rooms') {
     return <LawnRoomsLayout app={app} />;
+  }
+
+  if (layout === 'desk') {
+    return <LawnDeskLayout app={app} />;
   }
 
   if (layout === 'today') {

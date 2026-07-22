@@ -1,4 +1,4 @@
-/** @typedef {'classic' | 'rooms' | 'tabs' | 'today'} LawnThemeLayout */
+/** @typedef {'classic' | 'rooms' | 'tabs' | 'today' | 'desk'} LawnThemeLayout */
 
 /**
  * @typedef {Object} LawnTheme
@@ -30,13 +30,13 @@ export const LAWN_THEMES = [
   {
     id: 'atelier',
     name: 'Atelier',
-    tagline: 'Folder tabs · paper desk',
+    tagline: 'Home hub · separate rooms',
     description:
-      'Editorial paper desk. Top folder tabs (Index / Care / Pack / Studio), huge season title, dotted ledger lines — calm cobalt on white, nothing like Signal’s dark board.',
+      'Calm moss look. Home screen with Maintenance and Seasonal Pack as separate rooms you open one at a time.',
     layout: 'rooms',
-    swatches: ['#f7f5f0', '#111827', '#ffffff', '#1d4ed8'],
-    fontDisplay: '"Literata", Georgia, serif',
-    fontBody: '"Source Sans 3", "Segoe UI", sans-serif',
+    swatches: ['#1a3a2a', '#c5d9c8', '#f3f7f4', '#2f6b4f'],
+    fontDisplay: '"Bricolage Grotesque", Georgia, serif',
+    fontBody: '"Figtree", "Segoe UI", sans-serif',
   },
   {
     id: 'signal',
@@ -60,12 +60,23 @@ export const LAWN_THEMES = [
     fontDisplay: '"Archivo Black", "Arial Black", sans-serif',
     fontBody: '"DM Sans", "Segoe UI", sans-serif',
   },
+  {
+    id: 'folio',
+    name: 'Folio',
+    tagline: 'Folder tabs · paper desk',
+    description:
+      'Editorial paper desk. Top folder tabs (Index / Care / Pack / Studio), huge season title, dotted ledger lines — cobalt on paper white.',
+    layout: 'desk',
+    swatches: ['#f7f5f0', '#111827', '#ffffff', '#1d4ed8'],
+    fontDisplay: '"Literata", Georgia, serif',
+    fontBody: '"Source Sans 3", "Segoe UI", sans-serif',
+  },
 ];
 
 export const DEFAULT_LAWN_THEME_ID = 'classic';
 
 /** Layouts that use section navigation via activeRoom (not the classic long page). */
-export const SECTIONED_LAYOUTS = new Set(['rooms', 'tabs', 'today']);
+export const SECTIONED_LAYOUTS = new Set(['rooms', 'tabs', 'today', 'desk']);
 
 /** @param {string | null | undefined} id */
 export function normalizeLawnThemeId(id) {

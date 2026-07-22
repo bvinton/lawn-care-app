@@ -84,8 +84,25 @@
   --lawn-accent-soft: #dcfce7;
 }
 
-/* —— Atelier: paper desk · top folder tabs (cobalt, not amber/green/dark) —— */
+/* —— Atelier: calm moss workshop, sectioned (restored) —— */
 [data-lawn-theme='atelier'] {
+  --lawn-page-bg:
+    radial-gradient(1200px 500px at 10% -10%, #d7e8db 0%, transparent 55%),
+    linear-gradient(165deg, #eef5f0 0%, #dce8df 48%, #cfdfd3 100%);
+  --lawn-page-ink: #1a3a2a;
+  --lawn-shell-bg: rgba(255, 255, 255, 0.82);
+  --lawn-shell-border: rgba(47, 107, 79, 0.18);
+  --lawn-shell-radius: 1.25rem;
+  --lawn-shell-shadow: 0 18px 40px rgba(26, 58, 42, 0.1);
+  --lawn-accent: #2f6b4f;
+  --lawn-accent-soft: #c5d9c8;
+  --lawn-muted: #3f5a4b;
+  --lawn-hub-room-bg: rgba(255, 255, 255, 0.92);
+  --lawn-hub-room-border: rgba(47, 107, 79, 0.16);
+}
+
+/* —— Folio: paper desk · top folder tabs —— */
+[data-lawn-theme='folio'] {
   --lawn-page-bg:
     radial-gradient(800px 360px at 100% 0%, rgba(29, 78, 216, 0.08), transparent 55%),
     linear-gradient(180deg, #efebe3 0%, #f7f5f0 45%, #ebe6dc 100%);
@@ -101,25 +118,228 @@
   --lawn-hub-room-border: rgba(17, 24, 39, 0.14);
 }
 
-[data-lawn-theme='atelier'] .lawn-app-brand {
+[data-lawn-theme='folio'] .lawn-app-brand {
   font-weight: 700;
   letter-spacing: -0.05em;
   font-style: italic;
 }
 
-[data-lawn-theme='atelier'] .lawn-app-subhead {
+[data-lawn-theme='folio'] .lawn-app-subhead {
   letter-spacing: 0.28em;
   color: #1d4ed8;
 }
 
-[data-lawn-theme='atelier'] .lawn-app-shell {
+[data-lawn-theme='folio'] .lawn-app-shell {
   border: 1px solid rgba(17, 24, 39, 0.18);
   border-top: 4px solid #1d4ed8;
 }
 
-[data-lawn-theme='atelier'] .lawn-focus-highlight {
+[data-lawn-theme='folio'] .lawn-focus-highlight {
   outline-color: #1d4ed8;
   box-shadow: 0 0 0 6px rgba(29, 78, 216, 0.18);
+}
+
+/* —— Hub / rooms (Atelier) —— */
+.lawn-hub__hero {
+  margin-bottom: 1.25rem;
+  animation: lawn-rise 420ms ease-out both;
+}
+
+.lawn-hub__title {
+  font-family: var(--lawn-font-display);
+  font-size: 1.55rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: inherit;
+}
+
+.lawn-hub__lede {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lawn-hub__sqm {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.lawn-hub__dims {
+  font-size: 0.8rem;
+  color: var(--lawn-muted);
+}
+
+.lawn-hub__weather,
+.lawn-hub__rooms,
+.lawn-hub__tools,
+.lawn-hub__notices {
+  margin-bottom: 1.15rem;
+  animation: lawn-rise 480ms ease-out both;
+}
+
+.lawn-hub__rooms {
+  animation-delay: 60ms;
+}
+
+.lawn-hub__tools {
+  animation-delay: 120ms;
+}
+
+.lawn-hub__weather {
+  border: 1px solid var(--lawn-hub-room-border);
+  background: color-mix(in srgb, var(--lawn-accent-soft) 35%, white);
+  border-radius: 0.9rem;
+  padding: 0.85rem 1rem;
+}
+
+.lawn-hub__weather-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.lawn-hub__room-grid,
+.lawn-hub__tool-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lawn-hub__room {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: var(--lawn-hub-room-bg);
+  border-radius: 1rem;
+  padding: 0.95rem 1rem;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.lawn-hub__room:hover,
+.lawn-hub__room:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lawn-accent) 45%, var(--lawn-hub-room-border));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  outline: none;
+}
+
+.lawn-hub__room--alert {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.lawn-hub__room--warn {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.lawn-hub__room-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.lawn-hub__room-title {
+  display: block;
+  font-family: var(--lawn-font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lawn-hub__room-meta {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--lawn-accent);
+  white-space: nowrap;
+}
+
+.lawn-hub__tool-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.lawn-hub__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.6rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: var(--lawn-hub-room-bg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: inherit;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.lawn-hub__tool:hover {
+  border-color: color-mix(in srgb, var(--lawn-accent) 40%, var(--lawn-hub-room-border));
+  background: color-mix(in srgb, var(--lawn-accent-soft) 45%, white);
+}
+
+.lawn-hub__notice {
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.lawn-hub__notice--alert {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+}
+
+.lawn-hub__notice--warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.lawn-room__bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--lawn-hub-room-border);
+}
+
+.lawn-room__back,
+.lawn-room__setup {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--lawn-hub-room-border);
+  background: color-mix(in srgb, var(--lawn-accent-soft) 40%, white);
+  color: inherit;
+}
+
+.lawn-room__back--spacer {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.lawn-room__title {
+  font-family: var(--lawn-font-display);
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+[data-lawn-theme='atelier'] .lawn-hub__room {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 /* —— Signal: cool utility, bottom tabs + status grid —— */
@@ -221,11 +441,11 @@
 }
 
 /* —— Atelier paper desk · folder tabs —— */
-.lawn-atelier-shell {
+.lawn-folio-shell {
   min-height: 24rem;
 }
 
-.lawn-atelier {
+.lawn-folio {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -233,7 +453,7 @@
   animation: lawn-rise 420ms ease-out both;
 }
 
-.lawn-atelier__folders {
+.lawn-folio__folders {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0.3rem;
@@ -242,7 +462,7 @@
   z-index: 2;
 }
 
-.lawn-atelier__folder {
+.lawn-folio__folder {
   position: relative;
   min-height: 2.6rem;
   padding: 0.45rem 0.35rem;
@@ -257,13 +477,13 @@
   letter-spacing: 0.02em;
 }
 
-.lawn-atelier__folder.is-active {
+.lawn-folio__folder.is-active {
   background: #fffcf7;
   color: #111827;
   box-shadow: inset 0 3px 0 #1d4ed8;
 }
 
-.lawn-atelier__folder-badge {
+.lawn-folio__folder-badge {
   display: inline-block;
   margin-left: 0.3rem;
   min-width: 1rem;
@@ -277,7 +497,7 @@
   vertical-align: middle;
 }
 
-.lawn-atelier__desk {
+.lawn-folio__desk {
   border: 1px solid rgba(17, 24, 39, 0.18);
   background:
     linear-gradient(#fffcf7, #fffcf7) padding-box,
@@ -292,17 +512,17 @@
   min-height: 22rem;
 }
 
-.lawn-atelier__cover {
+.lawn-folio__cover {
   animation: lawn-rise 480ms ease-out both;
 }
 
-.lawn-atelier__masthead {
+.lawn-folio__masthead {
   border-bottom: 2px solid #111827;
   padding-bottom: 0.85rem;
   margin-bottom: 0.9rem;
 }
 
-.lawn-atelier__kicker {
+.lawn-folio__kicker {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.2em;
@@ -310,7 +530,7 @@
   color: #1d4ed8;
 }
 
-.lawn-atelier__season {
+.lawn-folio__season {
   margin-top: 0.2rem;
   font-family: var(--lawn-font-display);
   font-size: clamp(2.4rem, 11vw, 3.4rem);
@@ -321,7 +541,7 @@
   color: #111827;
 }
 
-.lawn-atelier__size {
+.lawn-folio__size {
   margin-top: 0.45rem;
   font-size: 0.8rem;
   font-weight: 700;
@@ -330,7 +550,7 @@
   color: #4b5563;
 }
 
-.lawn-atelier__weather {
+.lawn-folio__weather {
   margin: 0 0 0.9rem;
   padding: 0.7rem 0.8rem;
   border: 1px dashed rgba(29, 78, 216, 0.45);
@@ -340,7 +560,7 @@
   line-height: 1.4;
 }
 
-.lawn-atelier__notices {
+.lawn-folio__notices {
   margin: 0 0 0.9rem;
   padding-left: 1.1rem;
   font-size: 0.75rem;
@@ -349,12 +569,12 @@
   line-height: 1.4;
 }
 
-.lawn-atelier__ledger {
+.lawn-folio__ledger {
   display: grid;
   gap: 0;
 }
 
-.lawn-atelier__ledger-title {
+.lawn-folio__ledger-title {
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.18em;
@@ -363,7 +583,7 @@
   margin-bottom: 0.35rem;
 }
 
-.lawn-atelier__line {
+.lawn-folio__line {
   display: grid;
   grid-template-columns: 2rem 1fr auto;
   align-items: baseline;
@@ -376,25 +596,25 @@
   animation: lawn-rise 500ms ease-out both;
 }
 
-.lawn-atelier__line.is-due .lawn-atelier__line-state,
-.lawn-atelier__line.is-due .lawn-atelier__line-label {
+.lawn-folio__line.is-due .lawn-folio__line-state,
+.lawn-folio__line.is-due .lawn-folio__line-label {
   color: #1d4ed8;
 }
 
-.lawn-atelier__line-num {
+.lawn-folio__line-num {
   font-family: var(--lawn-font-display);
   font-size: 0.75rem;
   font-weight: 700;
   color: #9ca3af;
 }
 
-.lawn-atelier__line-label {
+.lawn-folio__line-label {
   font-family: var(--lawn-font-display);
   font-size: 1.05rem;
   font-weight: 650;
 }
 
-.lawn-atelier__line-state {
+.lawn-folio__line-state {
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -403,13 +623,13 @@
   white-space: nowrap;
 }
 
-.lawn-atelier__studio {
+.lawn-folio__studio {
   display: grid;
   gap: 0.45rem;
   animation: lawn-rise 420ms ease-out both;
 }
 
-.lawn-atelier__studio-lede {
+.lawn-folio__studio-lede {
   font-family: var(--lawn-font-display);
   font-size: 1.6rem;
   font-style: italic;
@@ -418,7 +638,7 @@
   margin-bottom: 0.35rem;
 }
 
-.lawn-atelier__studio-row {
+.lawn-folio__studio-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -434,11 +654,11 @@
   font-weight: 650;
 }
 
-.lawn-atelier__studio-row:disabled {
+.lawn-folio__studio-row:disabled {
   opacity: 0.55;
 }
 
-.lawn-atelier__sheet {
+.lawn-folio__sheet {
   animation: lawn-rise 360ms ease-out both;
 }
 
@@ -654,7 +874,7 @@
   border-radius: 0.35rem;
 }
 
-[data-lawn-theme='atelier'] .lawn-panel-surface {
+[data-lawn-theme='folio'] .lawn-panel-surface {
   background: transparent;
   border: none;
   border-radius: 0;
@@ -826,7 +1046,8 @@
 /* Stack maintenance trackers in sectioned layouts */
 [data-lawn-layout='rooms'] #maintenance-panel .grid.lg\:grid-cols-3,
 [data-lawn-layout='tabs'] #maintenance-panel .grid.lg\:grid-cols-3,
-[data-lawn-layout='today'] #maintenance-panel .grid.lg\:grid-cols-3 {
+[data-lawn-layout='today'] #maintenance-panel .grid.lg\:grid-cols-3,
+[data-lawn-layout='desk'] #maintenance-panel .grid.lg\:grid-cols-3 {
   grid-template-columns: 1fr;
 }
 
@@ -853,11 +1074,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lawn-atelier,
-  .lawn-atelier__cover,
-  .lawn-atelier__line,
-  .lawn-atelier__studio,
-  .lawn-atelier__sheet,
+  .lawn-hub__hero,
+  .lawn-hub__weather,
+  .lawn-hub__rooms,
+  .lawn-hub__tools,
+  .lawn-hub__notices,
+  .lawn-folio,
+  .lawn-folio__cover,
+  .lawn-folio__line,
+  .lawn-folio__studio,
+  .lawn-folio__sheet,
   .lawn-canopy__boardhead,
   .lawn-canopy__bill {
     animation: none;

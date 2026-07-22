@@ -6,10 +6,10 @@ import MaintenancePanel from './MaintenancePanel';
 import SeasonTimeline from './SeasonTimeline';
 
 /**
- * Atelier — paper desk with top folder tabs (not a left spine, not bottom tabs).
+ * Folio — paper desk with top folder tabs (not a left spine, not bottom tabs).
  * @param {{ app: ReturnType<import('../../hooks/useLawnCareApp').useLawnCareApp> }} props
  */
-export default function LawnAtelierBoard({ app }) {
+export default function LawnFolioBoard({ app }) {
   const {
     sqm,
     length,
@@ -81,23 +81,23 @@ export default function LawnAtelierBoard({ app }) {
   let page = null;
   if (chapter === 'maintenance') {
     page = (
-      <div className="lawn-atelier__sheet lawn-panel-surface">
+      <div className="lawn-folio__sheet lawn-panel-surface">
         <MaintenancePanel app={app} />
       </div>
     );
   } else if (chapter === 'seasonal') {
     page = (
-      <div className="lawn-atelier__sheet lawn-panel-surface">
+      <div className="lawn-folio__sheet lawn-panel-surface">
         <SeasonTimeline app={app} />
       </div>
     );
   } else if (chapter === 'more') {
     page = (
-      <div className="lawn-atelier__studio">
-        <p className="lawn-atelier__studio-lede">Studio</p>
+      <div className="lawn-folio__studio">
+        <p className="lawn-folio__studio-lede">Studio</p>
         <button
           type="button"
-          className="lawn-atelier__studio-row"
+          className="lawn-folio__studio-row"
           onClick={() => void runFullCloudSync()}
           disabled={syncBusy}
         >
@@ -106,7 +106,7 @@ export default function LawnAtelierBoard({ app }) {
         </button>
         <button
           type="button"
-          className="lawn-atelier__studio-row"
+          className="lawn-folio__studio-row"
           onClick={() => setActiveScreen('materials')}
         >
           <span className="inline-flex items-center gap-2">
@@ -116,7 +116,7 @@ export default function LawnAtelierBoard({ app }) {
         </button>
         <button
           type="button"
-          className="lawn-atelier__studio-row"
+          className="lawn-folio__studio-row"
           onClick={() => setActiveScreen('guides')}
         >
           <span>Guides</span>
@@ -124,7 +124,7 @@ export default function LawnAtelierBoard({ app }) {
         </button>
         <button
           type="button"
-          className="lawn-atelier__studio-row"
+          className="lawn-folio__studio-row"
           onClick={() => setActiveScreen('settings')}
         >
           <span>Setup</span>
@@ -134,19 +134,19 @@ export default function LawnAtelierBoard({ app }) {
     );
   } else {
     page = (
-      <div className="lawn-atelier__cover">
-        <div className="lawn-atelier__masthead">
-          <p className="lawn-atelier__kicker">{weatherLocationLabel}</p>
-          <h2 className="lawn-atelier__season">{SEASONS[currentSeason]?.name ?? 'Season'}</h2>
-          <p className="lawn-atelier__size">
+      <div className="lawn-folio__cover">
+        <div className="lawn-folio__masthead">
+          <p className="lawn-folio__kicker">{weatherLocationLabel}</p>
+          <h2 className="lawn-folio__season">{SEASONS[currentSeason]?.name ?? 'Season'}</h2>
+          <p className="lawn-folio__size">
             Vol. {sqm} m² · {length}×{width}m
           </p>
         </div>
 
-        <p className="lawn-atelier__weather">{weatherStatusText}</p>
+        <p className="lawn-folio__weather">{weatherStatusText}</p>
 
         {(petLockoutActive || seedEstablishmentActive || springPackIncomplete) && (
-          <ul className="lawn-atelier__notices">
+          <ul className="lawn-folio__notices">
             {petLockoutActive && <li>Pets off the lawn — chemical drying.</li>}
             {seedEstablishmentActive && <li>Seed lock — no mowing while establishing.</li>}
             {springPackIncomplete && (
@@ -158,19 +158,19 @@ export default function LawnAtelierBoard({ app }) {
           </ul>
         )}
 
-        <div className="lawn-atelier__ledger" aria-label="Care ledger">
-          <p className="lawn-atelier__ledger-title">Ledger</p>
+        <div className="lawn-folio__ledger" aria-label="Care ledger">
+          <p className="lawn-folio__ledger-title">Ledger</p>
           {dueLines.map((line, index) => (
             <button
               key={line.id}
               type="button"
-              className={`lawn-atelier__line${line.due ? ' is-due' : ''}`}
+              className={`lawn-folio__line${line.due ? ' is-due' : ''}`}
               style={{ animationDelay: `${90 + index * 70}ms` }}
               onClick={() => setActiveRoom('maintenance')}
             >
-              <span className="lawn-atelier__line-num">{String(index + 1).padStart(2, '0')}</span>
-              <span className="lawn-atelier__line-label">{line.label}</span>
-              <span className="lawn-atelier__line-state">
+              <span className="lawn-folio__line-num">{String(index + 1).padStart(2, '0')}</span>
+              <span className="lawn-folio__line-label">{line.label}</span>
+              <span className="lawn-folio__line-state">
                 {line.due ? 'Due' : line.next ? line.next : '—'}
               </span>
             </button>
@@ -181,24 +181,24 @@ export default function LawnAtelierBoard({ app }) {
   }
 
   return (
-    <div className="lawn-atelier" data-atelier-chapter={chapter}>
-      <nav className="lawn-atelier__folders" aria-label="Desk folders">
+    <div className="lawn-folio" data-folio-chapter={chapter}>
+      <nav className="lawn-folio__folders" aria-label="Desk folders">
         {folders.map((item) => (
           <button
             key={item.id}
             type="button"
-            className={`lawn-atelier__folder${chapter === item.id ? ' is-active' : ''}`}
+            className={`lawn-folio__folder${chapter === item.id ? ' is-active' : ''}`}
             onClick={() =>
               setActiveRoom(/** @type {'hub' | 'maintenance' | 'seasonal' | 'more'} */ (item.id))
             }
             aria-current={chapter === item.id ? 'page' : undefined}
           >
             {item.label}
-            {item.badge ? <span className="lawn-atelier__folder-badge">{item.badge}</span> : null}
+            {item.badge ? <span className="lawn-folio__folder-badge">{item.badge}</span> : null}
           </button>
         ))}
       </nav>
-      <div className="lawn-atelier__desk">{page}</div>
+      <div className="lawn-folio__desk">{page}</div>
     </div>
   );
 }
