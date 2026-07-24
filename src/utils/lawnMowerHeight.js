@@ -1,11 +1,55 @@
 import { SEED_ESTABLISHMENT_DAYS } from '../data/lawnUiConfig.jsx';
+import { MOWER_OPTIONS } from '../data/mowerOptions.js';
 
+/** @deprecated Prefer getMowerHeightLabel(mowerModel, settingNumber) */
 export const MOWER_SETTING_LABELS = {
   1: 'Setting 1 (25mm)',
   2: 'Setting 2 (35mm)',
   3: 'Setting 3 (45mm)',
   4: 'Setting 4 (50mm)',
 };
+
+/**
+ * @param {string | undefined} mowerModel
+ */
+export function getMowerOption(mowerModel) {
+  return MOWER_OPTIONS[mowerModel] ?? MOWER_OPTIONS.RYOBI_33;
+}
+
+/**
+ * Resolve recommended cut height in mm for a care level on the selected mower.
+ * @param {string | undefined} mowerModel
+ * @param {number} settingNumber
+ * @returns {number}
+ */
+export function getMowerHeightMm(mowerModel, settingNumber) {
+  const mower = getMowerOption(mowerModel);
+  const mapped = mower.heightBySetting?.[settingNumber];
+  if (typeof mapped === 'number') {
+    const min = typeof mower.minMm === 'number' ? mower.minMm : mapped;
+    const max = typeof mower.maxMm === 'number' ? mower.maxMm : mapped;
+    return Math.min(max, Math.max(min, mapped));
+  }
+  // Fallback for unknown levels: Ryobi-style defaults
+  const fallback = { 1: 25, 2: 35, 3: 45, 4: 50 };
+  return fallback[settingNumber] ?? 35;
+}
+
+/**
+ * Human-readable height for the selected mower (settings label or mm only).
+ * @param {string | undefined} mowerModel
+ * @param {number} settingNumber
+ */
+export function getMowerHeightLabel(mowerModel, settingNumber) {
+  const mower = getMowerOption(mowerModel);
+  const mm = getMowerHeightMm(mowerModel, settingNumber);
+
+  if (mower.heightMode === 'mm') {
+    return `${mm}mm`;
+  }
+
+  return `Setting ${settingNumber} (${mm}mm)`;
+}
 
 /**
  * Normal maintenance height for current weather and lawn surface (not post-seed recovery).
@@ -15,6 +59,7 @@ export const MOWER_SETTING_LABELS = {
  *   isOnScarificationPrepStep: boolean,
  *   currentSoilTemp: number | null,
  *   lawnSurface: string,
+ *   mowerModel?: string,
  * }} input
  * @returns {number | null}
  */
@@ -33,9 +78,10 @@ export function getSeasonalMowerSettingNumber(input) {
 /**
  * @param {number} settingNumber
  * @param {string} reasonSuffix
+ * @param {string | undefined} mowerModel
  */
-export function formatMowerHeightRecommendation(settingNumber, reasonSuffix) {
-  const label = MOWER_SETTING_LABELS[settingNumber] ?? `Setting ${settingNumber}`;
+export function formatMowerHeightRecommendation(settingNumber, reasonSuffix, mowerModel) {
+  const label = getMowerHeightLabel(mowerModel, settingNumber);
   return `Height: ${label} - ${reasonSuffix}`;
 }
 
@@ -45,6 +91,7 @@ export function formatMowerHeightRecommendation(settingNumber, reasonSuffix) {
  *   isOnScarificationPrepStep: boolean,
  *   currentSoilTemp: number | null,
  *   lawnSurface: string,
+ *   mowerModel?: string,
  * }} input
  */
 export function getSeasonalMowerHeightRecommendation(input) {
@@ -54,7 +101,7 @@ export function getSeasonalMowerHeightRecommendation(input) {
   }
 
   if (input.isOnScarificationPrepStep) {
-    return formatMowerHeightRecommendation(1, 'Scalp for renovation');
+    return formatMowerHeightRecommendation(1, 'Scalp for renovation', input.mowerModel);
   }
 
   if (input.currentSoilTemp !== null && input.currentSoilTemp >= 22) {
@@ -63,14 +110,19 @@ export function getSeasonalMowerHeightRecommendation(input) {
       input.lawnSurface === 'FLAT'
         ? 'Hot spell: leave slightly longer to reduce stress'
         : 'Hot spell: leave longer on uneven turf',
+      input.mowerModel,
     );
   }
 
   if (input.lawnSurface === 'FLAT') {
-    return formatMowerHeightRecommendation(2, 'Standard low maintenance cut');
+    return formatMowerHeightRecommendation(2, 'Standard low maintenance cut', input.mowerModel);
   }
 
-  return formatMowerHeightRecommendation(3, 'Standard safe maintenance cut to prevent scalping');
+  return formatMowerHeightRecommendation(
+    3,
+    'Standard safe maintenance cut to prevent scalping',
+    input.mowerModel,
+  );
 }
 
 /**
@@ -82,6 +134,7 @@ export function getSeasonalMowerHeightRecommendation(input) {
  *   isOnScarificationPrepStep: boolean,
  *   currentSoilTemp: number | null,
  *   lawnSurface: string,
+ *   mowerModel?: string,
  * }} input
  */
 export function getPostSeedRecoveryMowerHeightRecommendation(input) {
@@ -106,5 +159,5 @@ export function getPostSeedRecoveryMowerHeightRecommendation(input) {
     reason = 'Gradually lowering after seeding';
   }
 
-  return formatMowerHeightRecommendation(effectiveSetting, reason);
+  return formatMowerHeightRecommendation(effectiveSetting, reason, input.mowerModel);
 }
