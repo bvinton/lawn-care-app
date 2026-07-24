@@ -416,6 +416,7 @@ export function useLawnCareApp() {
     isOnScarificationPrepStep,
     currentSoilTemp,
     lawnSurface,
+    mowerModel,
   };
 
   let recommendedSetting;

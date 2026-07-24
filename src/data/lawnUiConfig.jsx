@@ -5,12 +5,7 @@ export const SEED_GERMINATION_SOIL_TEMP_MAX_C = 25;
 export const PET_LOCKOUT_KEY = 'petLockoutUntil';
 export const PET_LOCKOUT_HOURS = 24;
 
-export const MOWER_OPTIONS = {
-  RYOBI_33: {
-    id: 'RYOBI_33',
-    name: 'Ryobi 18V ONE+ 33cm (5-Height System)',
-  },
-};
+export { MOWER_OPTIONS } from './mowerOptions.js';
 
 export const LAWN_SURFACE_OPTIONS = {
   UNEVEN: {
